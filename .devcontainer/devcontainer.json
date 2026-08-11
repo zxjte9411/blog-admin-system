@@ -1,0 +1,111 @@
+{
+  "name": "Blog Admin System",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "25",
+      "jdkDistro": "ms",
+      "installMaven": true,
+      "installGradle": false
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "24",
+      "nodeGypDependencies": true,
+      "pnpmVersion": "latest"
+    },
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "configureZshAsDefaultShell": true,
+      "installOhMyZsh": false,
+      "installOhMyZshConfig": false,
+      "upgradePackages": true,
+      "username": "root",
+      "userUid": "0",
+      "userGid": "0"
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "moby": true,
+      "installDockerBuildx": true,
+      "installDockerComposeSwitch": true,
+      "version": "latest",
+      "dockerDashComposeVersion": "v2"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "latest",
+      "installTools": true,
+      "toolsToInstall": [
+        "uv"
+      ]
+    },
+    "ghcr.io/devcontainers-extra/features/springboot-sdkman:2": {
+      "version": "latest",
+      "jdkVersion": "25",
+      "jdkDistro": "ms"
+    },
+    "ghcr.io/devcontainers-extra/features/vscode-cli:1": {},
+    "ghcr.io/devcontainers-extra/features/npm-package:1": {
+      "package": "typescript",
+      "version": "latest"
+    }
+  },
+  "forwardPorts": [4200, 8080],
+  "portsAttributes": {
+    "4200": {
+      "label": "Frontend (Angular)"
+    },
+    "8080": {
+      "label": "Backend (Spring Boot)"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "java.configuration.runtimes": [
+          {
+            "name": "JavaSE-25",
+            "path": "/usr/local/sdkman/candidates/java/current",
+            "javadoc": "https://docs.oracle.com/en/java/javase/25/docs/api"
+          }
+        ]
+      },
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "vmware.vscode-boot-dev-pack",
+        "angular.ng-template",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "editorconfig.editorconfig",
+        "ms-azuretools.vscode-docker",
+        "ms-azuretools.vscode-containers",
+        "eamodio.gitlens",
+        "mhutchie.git-graph",
+        "yzhang.markdown-all-in-one",
+        "bierner.markdown-mermaid",
+        "ms-ceintl.vscode-language-pack-zh-hant"
+      ]
+    }
+  },
+  "remoteUser": "root",
+  "postCreateCommand": [
+    "bash",
+    ".devcontainer/setup.sh"
+  ],
+  "mounts": [
+    "source=${localWorkspaceFolderBasename}-local,target=/root/.local,type=volume",
+    "source=${localWorkspaceFolderBasename}-pnpm-store,target=/root/.local/share/pnpm/store,type=volume",
+    "source=${localWorkspaceFolderBasename}-extensions,target=/root/.vscode-server/extensions,type=volume",
+    "source=root-agents,target=/root/.agents,type=volume",
+    "source=root-config,target=/root/.config,type=volume",
+    "source=linuxbrew,target=/home/linuxbrew,type=volume",
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/root/.ssh,type=bind,consistency=cached",
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.m2,target=/root/.m2,type=bind,consistency=cached",
+    "source=${localWorkspaceFolder}/.devcontainer/.gitconfig,target=/root/.gitconfig,type=bind,consistency=cached",
+    "source=${localWorkspaceFolder}/.devcontainer/.zshrc,target=/root/.zshrc,type=bind,consistency=cached"
+  ]
+}
