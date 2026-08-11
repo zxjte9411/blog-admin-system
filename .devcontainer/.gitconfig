@@ -1,0 +1,9 @@
+[user]
+	email = a5852241@gmail.com
+	name = zxjte9411
+[core]
+	autocrlf = input
+	eol = lf
+	safecrlf = true
+	editor = code --wait
+	; fileMode = false

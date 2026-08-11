@@ -1,0 +1,21 @@
+# Minimal Brewfile (user-installed leaves)
+tap "anomalyco/tap", trusted: true
+tap "oven-sh/bun", trusted: true
+
+brew "gcc"
+brew "oven-sh/bun/bun"
+brew "anomalyco/tap/opencode"
+brew "ast-grep"
+brew "bind"
+brew "glab"
+brew "iputils"
+brew "jdtls"
+brew "kubernetes-cli"
+brew "ripgrep"
+brew "tmux"
+brew "whois"
+brew "rtk"
+brew "gh"
+brew "herdr"
+npm "corepack"
+npm "pnpm"
