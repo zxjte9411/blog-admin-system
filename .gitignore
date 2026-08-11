@@ -1,0 +1,18 @@
+# Local environment
+.env
+.DS_Store
+
+# Java and Maven
+backend/target/
+*.log
+
+# Node and Angular
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# Editor and Dev Container state
+.vscode/
+.devcontainer/devcontainer-lock.json
+.devcontainer/.zsh_history
+.devcontainer/.zsh_secrets
