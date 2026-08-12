@@ -19,6 +19,8 @@ spring:
       mail.smtp.timeout: 1000
       mail.smtp.writetimeout: 1000
 app:
+  security:
+    jwt-secret: ${APP_SECURITY_JWT_SECRET}
   mail:
     from: ${APP_MAIL_FROM:dev@example.com}
   frontend-base-url: ${APP_FRONTEND_BASE_URL:http://localhost:4200}

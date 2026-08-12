@@ -1,0 +1,2 @@
+CREATE TABLE refresh_sessions (id UUID PRIMARY KEY, user_id UUID NOT NULL REFERENCES users(id), token_hash BYTEA NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL, last_used_at TIMESTAMPTZ NOT NULL, expires_at TIMESTAMPTZ NOT NULL, revoked_at TIMESTAMPTZ, access_token_version INTEGER NOT NULL DEFAULT 0, user_access_token_version INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX refresh_sessions_user_id ON refresh_sessions(user_id);

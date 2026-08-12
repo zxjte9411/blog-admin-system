@@ -5,3 +5,15 @@ databaseChangeLog:
       changes:
         - sqlFile:
             path: db/changelog/001-auth.sql
+  - changeSet:
+      id: 2
+      author: blog-admin
+      changes:
+        - sqlFile:
+            path: db/changelog/002-sessions.sql
+  - changeSet:
+      id: 3
+      author: blog-admin
+      changes:
+        - sqlFile:
+            path: db/changelog/003-user-access-token-version.sql

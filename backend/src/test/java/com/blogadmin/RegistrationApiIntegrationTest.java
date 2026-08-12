@@ -42,6 +42,7 @@ class RegistrationApiIntegrationTest {
     registry.add("spring.datasource.url", postgres::getJdbcUrl);
     registry.add("spring.datasource.username", postgres::getUsername);
     registry.add("spring.datasource.password", postgres::getPassword);
+    registry.add("app.security.jwt-secret", () -> "test-secret-that-is-at-least-32-bytes-long");
   }
 
   @Test

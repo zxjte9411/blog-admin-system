@@ -6,6 +6,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 @Entity
@@ -23,6 +24,7 @@ public class User {
 
   private boolean enabled;
   private Instant verifiedAt;
+  private int accessTokenVersion;
 
   protected User() {}
 
@@ -67,7 +69,35 @@ public class User {
     return verifiedAt;
   }
 
+  public String getPasswordHash() {
+    return passwordHash;
+  }
+
+  public UserRole getRole() {
+    return role;
+  }
+
+  public boolean isEnabled() {
+    return enabled;
+  }
+
+  public int getAccessTokenVersion() {
+    return accessTokenVersion;
+  }
+
   public void verify(Instant at) {
     verifiedAt = at;
+  }
+
+  public void disable() {
+    enabled = false;
+  }
+
+  public void changeRole(UserRole newRole) {
+    newRole = Objects.requireNonNull(newRole);
+    if (role != newRole) {
+      role = newRole;
+      accessTokenVersion++;
+    }
   }
 }

@@ -25,6 +25,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-blog_admin}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-blog_admin}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-blog_admin}
+      APP_SECURITY_JWT_SECRET: ${APP_SECURITY_JWT_SECRET:?Set a randomly generated value of at least 32 bytes}
       SPRING_LIQUIBASE_ENABLED: "true"
       SPRING_MAIL_HOST: mailpit
       SPRING_MAIL_PORT: 1025

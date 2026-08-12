@@ -15,13 +15,15 @@ import org.springframework.http.HttpStatus;
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
-      "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.liquibase.LiquibaseAutoConfiguration"
+      "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.liquibase.LiquibaseAutoConfiguration",
+      "app.security.jwt-secret=test-secret-that-is-at-least-32-bytes-long"
     })
 class BlogAdminApplicationTests {
 
   @MockBean private com.blogadmin.identity.domain.UserRepository users;
   @MockBean private com.blogadmin.identity.domain.EmailVerificationTokenRepository tokens;
   @MockBean private com.blogadmin.identity.domain.RateLimitEventRepository limits;
+  @MockBean private com.blogadmin.identity.domain.RefreshSessionRepository sessions;
 
   @LocalServerPort private int port;
 

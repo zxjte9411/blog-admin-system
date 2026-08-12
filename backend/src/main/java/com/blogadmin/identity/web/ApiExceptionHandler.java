@@ -1,5 +1,6 @@
 package com.blogadmin.identity.web;
 
+import com.blogadmin.identity.application.AuthenticationService;
 import com.blogadmin.identity.application.RegistrationService;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -15,6 +16,22 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+  @ExceptionHandler(AuthenticationService.BadCredentialsException.class)
+  ResponseEntity<ProblemDetail> unauthorized() {
+    var p = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Authentication failed");
+    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+        .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+        .body(p);
+  }
+
+  @ExceptionHandler(AuthenticationService.SessionNotFoundException.class)
+  ResponseEntity<ProblemDetail> sessionNotFound() {
+    var p = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Session not found");
+    return ResponseEntity.status(HttpStatus.NOT_FOUND)
+        .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+        .body(p);
+  }
+
   @ExceptionHandler(HttpMessageNotReadableException.class)
   ResponseEntity<ProblemDetail> unreadable() {
     var problem =
