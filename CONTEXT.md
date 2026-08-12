@@ -5,19 +5,23 @@
 ## Language
 
 **User（使用者）**:
-可登入管理後台，且其帳號可被公開註冊或由 Admin 邀請建立、更新或停用的人員。
+以 Email 識別、可由公開註冊或 Admin 邀請建立，並可被啟用或停用的人員；僅 Verified 且 enabled 的 User 可登入管理後台。User 的 Display Name 長度為 1–100 字元；保存去除首尾空白的 Email 作顯示與寄信用途，另保存小寫正規化 Email 以實作唯一識別。
 _Avoid_: Account、Member
 
 **Verified User（已驗證使用者）**:
 已證實其 Email 所有權、在 enabled 時可登入管理後台的 User。
 _Avoid_: Activated User、Confirmed User
 
+**Email Verification Link（Email 驗證連結）**:
+寄往未驗證 User、用以證實其 Email 所有權的 24 小時一次性連結；重送後，先前連結立即失效。連結導向前端 `/verify-email`，由該頁面提交 token 完成驗證；token 為 32-byte URL-safe random 值，資料庫只保存其 SHA-256 雜湊。每位未驗證 User 同時只有一個有效連結，使用、過期或失效後仍保留其紀錄與狀態；使用與失效為原子狀態轉換，同一連結僅一個請求可成功，重送或驗證先完成者決定舊連結是否失效。
+_Avoid_: Activation Link、Confirmation Link
+
 **Preferred Language（偏好語言）**:
-User 選擇的介面與系統 Email 語言；支援繁體中文與英文。
+User 選擇的介面與系統 Email 語言；支援繁體中文與英文，API 與儲存值為 `zh-TW` 或 `en`，預設為 `zh-TW`。
 _Avoid_: Locale、Browser Language
 
 **Password Minimum Length（密碼最小長度）**:
-由 Admin 在執行期間設定、介於 8 至 128 的 Password 最小字元數；只套用至新設定或重設的 Password。
+由 Admin 在執行期間設定、介於 8 至 128 的 Password 最小字元數；只套用至新設定或重設的 Password。初始值為 8；公開註冊也拒絕版本庫維護的小型常見 Password 清單。
 _Avoid_: Password Complexity Policy、Password Configuration
 
 **Password Setting Change（密碼設定變更）**:
@@ -33,8 +37,12 @@ _Avoid_: Login Token、Device
 _Avoid_: Administrator、Superuser
 
 **Author（作者角色）**:
-只能管理自己文章的 User 角色。
+可管理自己文章的 User 角色；公開註冊的 User 在 Email 驗證前即為 Author，但仍不可登入。Email 驗證只將 User 設為 Verified，不改變角色或 enabled 狀態。
 _Avoid_: Editor、Writer
+
+**Public Registration（公開註冊）**:
+訪客以 Email、Display Name、Password 與 Preferred Language 建立 User 的流程。既有未驗證 User 再註冊時保留原有個人資料與 Password，只換發 Email Verification Link；既有 Verified User 不改資料也不寄信。註冊與重送一律回中性成功，只有未驗證 User 會在限流允許時收到新連結；Email Verification 信以 Display Name 稱呼收件者，並說明連結在 24 小時後失效。
+_Avoid_: Sign-up、Account Creation
 
 **Article（文章）**:
 由作者建立與維護的內容單位，具有標題、內容、標籤與發布狀態；它保留 owner User 以判斷管理權限，並獨立保留建立當時的 Author Attribution。
