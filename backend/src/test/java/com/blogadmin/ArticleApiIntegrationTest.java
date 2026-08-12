@@ -221,7 +221,8 @@ class ArticleApiIntegrationTest {
             Map.class);
 
     assertThat(pageOne.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(pageOne.getBody())
+    assertThat(pageOne.getBody()).containsKey("page");
+    assertThat((Map<String, Object>) pageOne.getBody().get("page"))
         .containsEntry("totalElements", 2)
         .containsEntry("totalPages", 2)
         .containsEntry("size", 1)
@@ -232,7 +233,7 @@ class ArticleApiIntegrationTest {
             article ->
                 assertThat((List<String>) article.get("tagIds")).containsExactly(tagId.toString()));
     assertThat(pageTwo.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(pageTwo.getBody()).containsEntry("number", 1);
+    assertThat((Map<String, Object>) pageTwo.getBody().get("page")).containsEntry("number", 1);
     assertThat(pageOne.getBody().get("content")).isNotEqualTo(pageTwo.getBody().get("content"));
     assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(second.getStatusCode()).isEqualTo(HttpStatus.CREATED);
