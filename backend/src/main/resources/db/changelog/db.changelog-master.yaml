@@ -42,3 +42,15 @@ databaseChangeLog:
         - sqlFile:
             path: db/changelog/007-password-setting-audit-immutable.sql
             splitStatements: false
+  - changeSet:
+      id: 008
+      author: blog-admin
+      changes:
+        - sqlFile:
+            path: db/changelog/008-article-created-at.sql
+  - changeSet:
+      id: 009
+      author: blog-admin
+      changes:
+        - sqlFile:
+            path: db/changelog/009-article-updated-at.sql

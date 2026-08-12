@@ -30,6 +30,12 @@ public class Article {
   @Column(name = "deleted_at")
   private Instant deletedAt;
 
+  @Column(name = "created_at", nullable = false, updatable = false)
+  private Instant createdAt;
+
+  @Column(name = "updated_at", nullable = false)
+  private Instant updatedAt;
+
   @Version private long version;
 
   @ManyToMany(fetch = FetchType.EAGER)
@@ -48,6 +54,8 @@ public class Article {
     this.title = title;
     this.content = content;
     this.status = PublicationStatus.DRAFT;
+    this.createdAt = Instant.now();
+    this.updatedAt = this.createdAt;
   }
 
   public UUID getId() {
@@ -82,6 +90,14 @@ public class Article {
     return deletedAt;
   }
 
+  public Instant getCreatedAt() {
+    return createdAt;
+  }
+
+  public Instant getUpdatedAt() {
+    return updatedAt;
+  }
+
   public long getVersion() {
     return version;
   }
@@ -95,9 +111,14 @@ public class Article {
     this.title = title;
     this.content = content;
     this.status = status;
+    updatedAt = Instant.now();
   }
 
   public void delete() {
     deletedAt = Instant.now();
+  }
+
+  public void restore() {
+    deletedAt = null;
   }
 }

@@ -1,34 +1,47 @@
 package com.blogadmin.publishing.web;
 
 import com.blogadmin.identity.domain.User;
-import com.blogadmin.publishing.domain.*;
+import com.blogadmin.publishing.application.ArticleService;
+import com.blogadmin.publishing.domain.PublicationStatus;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.*;
-import java.util.*;
-import org.springframework.data.domain.*;
-import org.springframework.http.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import java.time.Instant;
+import java.util.Set;
+import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/articles")
 public class ArticleController {
-  private final ArticleRepository articles;
-  private final TagRepository tags;
+  private final ArticleService service;
 
-  public ArticleController(ArticleRepository articles, TagRepository tags) {
-    this.articles = articles;
-    this.tags = tags;
+  public ArticleController(ArticleService service) {
+    this.service = service;
   }
 
   @PostMapping
   public ResponseEntity<View> create(
-      @AuthenticationPrincipal User user, @Valid @RequestBody Request r) {
-    Article a = new Article(UUID.randomUUID(), user, r.title(), r.content());
-    if (r.status() != null) a.update(r.title(), r.content(), r.status());
-    replaceTags(a, r.tagIds());
-    return ResponseEntity.status(201).body(View.of(articles.save(a)));
+      @AuthenticationPrincipal User u, @Valid @RequestBody Request r) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(
+            View.of(
+                service.create(u, r.title(), r.content(), r.status(), r.tagIds(), r.tagNames())));
   }
 
   @GetMapping
@@ -36,64 +49,37 @@ public class ArticleController {
       @RequestParam(required = false) String title,
       @RequestParam(required = false) PublicationStatus status,
       @RequestParam(required = false) UUID tagId,
-      Pageable page) {
-    return articles
-        .search(title == null || title.isBlank() ? "" : title, status, tagId, page)
-        .map(View::of);
+      Pageable p) {
+    return service.list(title, status, tagId, p).map(View::of);
   }
 
   @GetMapping("/{id}")
   public View get(@PathVariable UUID id) {
-    return View.of(
-        articles
-            .findById(id)
-            .filter(a -> a.getDeletedAt() == null)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND)));
+    return View.of(service.get(id));
   }
 
   @PutMapping("/{id}")
   public View update(
-      @AuthenticationPrincipal User user,
-      @PathVariable UUID id,
-      @Valid @RequestBody UpdateRequest r) {
-    Article a =
-        articles
-            .findById(id)
-            .filter(x -> x.getDeletedAt() == null)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-    if (user.getRole().name().equals("AUTHOR") && !a.getOwner().getId().equals(user.getId()))
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-    if (!r.version().equals(a.getVersion()))
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "Optimistic locking conflict");
-    a.update(r.title(), r.content(), r.status());
-    replaceTags(a, r.tagIds());
-    return View.of(articles.save(a));
+      @AuthenticationPrincipal User u, @PathVariable UUID id, @Valid @RequestBody UpdateRequest r) {
+    return View.of(
+        service.update(
+            u, id, r.title(), r.content(), r.status(), r.version(), r.tagIds(), r.tagNames()));
   }
 
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  public void delete(@AuthenticationPrincipal User user, @PathVariable UUID id) {
-    Article a =
-        articles.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-    if (user.getRole().name().equals("AUTHOR") && !a.getOwner().getId().equals(user.getId()))
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-    if (a.getDeletedAt() != null) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-    a.delete();
-    articles.save(a);
+  public void delete(@AuthenticationPrincipal User u, @PathVariable UUID id) {
+    service.delete(u, id);
   }
 
-  private void apply(Article a, Request r) {
-    if (r.status() != null) a.update(r.title(), r.content(), r.status());
-    replaceTags(a, r.tagIds());
+  @GetMapping("/deleted")
+  public Page<View> deleted(@AuthenticationPrincipal User u, Pageable p) {
+    return service.deleted(u, p).map(View::of);
   }
 
-  private void replaceTags(Article a, Set<UUID> ids) {
-    if (ids == null) return;
-    Set<Tag> found = new LinkedHashSet<>(tags.findAllById(ids));
-    if (found.size() != ids.size())
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown tag");
-    a.getTags().clear();
-    a.getTags().addAll(found);
+  @PostMapping("/{id}/restore")
+  public View restore(@AuthenticationPrincipal User u, @PathVariable UUID id) {
+    return View.of(service.restore(u, id));
   }
 
   public record Request(
@@ -101,14 +87,16 @@ public class ArticleController {
       @NotBlank @Size(max = 100000) String content,
       PublicationStatus status,
       Long version,
-      @Size(max = 10) Set<UUID> tagIds) {}
+      @Size(max = 10) Set<UUID> tagIds,
+      @Size(max = 10) Set<@NotBlank @Size(max = 100) String> tagNames) {}
 
   public record UpdateRequest(
       @NotBlank @Size(max = 200) String title,
       @NotBlank @Size(max = 100000) String content,
       @NotNull PublicationStatus status,
       @NotNull Long version,
-      @Size(max = 10) Set<UUID> tagIds) {}
+      @Size(max = 10) Set<UUID> tagIds,
+      @Size(max = 10) Set<@NotBlank @Size(max = 100) String> tagNames) {}
 
   public record View(
       UUID id,
@@ -117,20 +105,20 @@ public class ArticleController {
       String title,
       String content,
       PublicationStatus status,
-      java.time.Instant publishedAt,
+      Instant publishedAt,
       long version,
       Set<UUID> tagIds) {
-    static View of(Article a) {
+    static View of(ArticleService.ArticleView a) {
       return new View(
-          a.getId(),
-          a.getOwner().getId(),
-          a.getAuthorAttribution(),
-          a.getTitle(),
-          a.getContent(),
-          a.getStatus(),
-          a.getPublishedAt(),
-          a.getVersion(),
-          a.getTags().stream().map(Tag::getId).collect(java.util.stream.Collectors.toSet()));
+          a.id(),
+          a.owner(),
+          a.authorAttribution(),
+          a.title(),
+          a.content(),
+          a.status(),
+          a.publishedAt(),
+          a.version(),
+          a.tagIds());
     }
   }
 }
