@@ -18,36 +18,39 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
-      "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.liquibase.LiquibaseAutoConfiguration",
+      "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.liquibase.LiquibaseAutoConfiguration,org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration",
       "app.security.jwt-secret=test-secret-that-is-at-least-32-bytes-long"
     })
 class BlogAdminApplicationTests {
 
-  @MockBean private UserRepository users;
-  @MockBean private EmailVerificationTokenRepository tokens;
-  @MockBean private EmailChangeTokenRepository emailChangeTokens;
-  @MockBean private RateLimitEventRepository limits;
-  @MockBean private RefreshSessionRepository sessions;
-  @MockBean private InvitationRepository invitations;
-  @MockBean private PasswordSettingChangeRepository passwordSettingChanges;
-  @MockBean private PasswordSettingRepository passwordSettings;
-  @MockBean private PasswordResetTokenRepository passwordResetTokens;
-  @MockBean private ArticleRepository articles;
-  @MockBean private TagRepository tags;
-  @MockBean private JavaMailSender mail;
+  @MockitoBean private UserRepository users;
+  @MockitoBean private EmailVerificationTokenRepository tokens;
+  @MockitoBean private EmailChangeTokenRepository emailChangeTokens;
+  @MockitoBean private RateLimitEventRepository limits;
+  @MockitoBean private RefreshSessionRepository sessions;
+  @MockitoBean private InvitationRepository invitations;
+  @MockitoBean private PasswordSettingChangeRepository passwordSettingChanges;
+  @MockitoBean private PasswordSettingRepository passwordSettings;
+  @MockitoBean private PasswordResetTokenRepository passwordResetTokens;
+  @MockitoBean private ArticleRepository articles;
+  @MockitoBean private TagRepository tags;
+  @MockitoBean private JavaMailSender mail;
 
   @LocalServerPort private int port;
 
   @Autowired private TestRestTemplate restTemplate;
+
+  @Autowired private Environment environment;
 
   @Test
   void contextAndHealthEndpointStart() {
@@ -62,5 +65,10 @@ class BlogAdminApplicationTests {
   void liquibaseMasterChangelogExists() {
     assertThat(Files.exists(Path.of("src/main/resources/db/changelog/db.changelog-master.yaml")))
         .isTrue();
+  }
+
+  @Test
+  void disablesOpenEntityManagerInView() {
+    assertThat(environment.getProperty("spring.jpa.open-in-view", Boolean.class)).isFalse();
   }
 }

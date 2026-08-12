@@ -99,8 +99,14 @@ class PublishingIssuesIntegrationTest {
             Map.of("title", "two", "content", "c", "status", "PUBLISHED", "tagIds", Set.of(tagId)));
     delete(a, one);
     delete(b, two);
-    assertThat(get("/api/v1/articles/deleted", a).getBody().get("totalElements")).isEqualTo(1);
-    assertThat(get("/api/v1/articles/deleted", admin).getBody().get("totalElements")).isEqualTo(2);
+    assertThat(
+            ((Map<String, Object>) get("/api/v1/articles/deleted", a).getBody().get("page"))
+                .get("totalElements"))
+        .isEqualTo(1);
+    assertThat(
+            ((Map<String, Object>) get("/api/v1/articles/deleted", admin).getBody().get("page"))
+                .get("totalElements"))
+        .isEqualTo(2);
     ResponseEntity<Map> restored =
         exchange(
             "/api/v1/articles/" + one.get("id") + "/restore", HttpMethod.POST, a, null, Map.class);
@@ -323,7 +329,9 @@ class PublishingIssuesIntegrationTest {
                     null,
                     Map.class)
                 .getBody()
-                .get("totalElements"))
+                .get("page"))
+        .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+        .extracting("totalElements")
         .isEqualTo(0);
     assertThat(
             exchange(
