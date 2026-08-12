@@ -1,8 +1,8 @@
 package com.blogadmin.publishing.application;
 
-import com.blogadmin.publishing.domain.ArticleRepository;
-import com.blogadmin.publishing.domain.Tag;
-import com.blogadmin.publishing.domain.TagRepository;
+import com.blogadmin.publishing.domain.article.ArticleRepository;
+import com.blogadmin.publishing.domain.tag.Tag;
+import com.blogadmin.publishing.domain.tag.TagRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashSet;

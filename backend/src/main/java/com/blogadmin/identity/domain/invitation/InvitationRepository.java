@@ -1,4 +1,4 @@
-package com.blogadmin.identity.domain;
+package com.blogadmin.identity.domain.invitation;
 
 import java.util.Optional;
 import java.util.UUID;

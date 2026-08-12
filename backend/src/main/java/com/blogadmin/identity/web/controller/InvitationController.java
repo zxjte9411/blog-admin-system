@@ -1,7 +1,7 @@
 package com.blogadmin.identity.web.controller;
 
 import com.blogadmin.identity.application.AdminUserService;
-import com.blogadmin.identity.domain.User;
+import com.blogadmin.identity.domain.user.User;
 import com.blogadmin.identity.web.dto.InvitationRedeemRequest;
 import com.blogadmin.identity.web.dto.InvitationUserResponse;
 import lombok.RequiredArgsConstructor;

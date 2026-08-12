@@ -1,11 +1,11 @@
 package com.blogadmin.publishing.application;
 
-import com.blogadmin.identity.domain.User;
-import com.blogadmin.publishing.domain.Article;
-import com.blogadmin.publishing.domain.ArticleRepository;
-import com.blogadmin.publishing.domain.PublicationStatus;
-import com.blogadmin.publishing.domain.Tag;
-import com.blogadmin.publishing.domain.TagRepository;
+import com.blogadmin.identity.domain.user.User;
+import com.blogadmin.publishing.domain.article.Article;
+import com.blogadmin.publishing.domain.article.ArticleRepository;
+import com.blogadmin.publishing.domain.article.PublicationStatus;
+import com.blogadmin.publishing.domain.tag.Tag;
+import com.blogadmin.publishing.domain.tag.TagRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayDeque;

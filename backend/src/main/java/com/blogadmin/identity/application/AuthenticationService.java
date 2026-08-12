@@ -1,9 +1,9 @@
 package com.blogadmin.identity.application;
 
-import com.blogadmin.identity.domain.RefreshSession;
-import com.blogadmin.identity.domain.RefreshSessionRepository;
-import com.blogadmin.identity.domain.User;
-import com.blogadmin.identity.domain.UserRepository;
+import com.blogadmin.identity.domain.session.RefreshSession;
+import com.blogadmin.identity.domain.session.RefreshSessionRepository;
+import com.blogadmin.identity.domain.user.User;
+import com.blogadmin.identity.domain.user.UserRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;

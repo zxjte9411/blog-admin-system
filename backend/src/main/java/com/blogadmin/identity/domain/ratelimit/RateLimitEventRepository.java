@@ -1,4 +1,4 @@
-package com.blogadmin.identity.domain;
+package com.blogadmin.identity.domain.ratelimit;
 
 import java.time.Instant;
 import java.util.Optional;

@@ -1,7 +1,7 @@
 package com.blogadmin.identity.application;
 
-import com.blogadmin.identity.domain.RateLimitEvent;
-import com.blogadmin.identity.domain.RateLimitEventRepository;
+import com.blogadmin.identity.domain.ratelimit.RateLimitEvent;
+import com.blogadmin.identity.domain.ratelimit.RateLimitEventRepository;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

@@ -1,35 +1,29 @@
-package com.blogadmin.identity.domain;
+package com.blogadmin.identity.domain.password;
 
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "email_change_tokens")
-public class EmailChangeToken {
+@Table(name = "password_reset_tokens")
+public class PasswordResetToken {
   @Id private UUID id;
   private UUID userId;
-  private String newEmail;
   private byte[] tokenHash;
   private Instant expiresAt;
   private Instant usedAt;
 
-  protected EmailChangeToken() {}
+  protected PasswordResetToken() {}
 
-  public EmailChangeToken(UUID id, UUID userId, String email, byte[] hash, Instant expiry) {
+  public PasswordResetToken(UUID id, UUID userId, byte[] hash, Instant expiry) {
     this.id = id;
     this.userId = userId;
-    newEmail = email;
     tokenHash = hash;
     expiresAt = expiry;
   }
 
   public UUID getUserId() {
     return userId;
-  }
-
-  public String getNewEmail() {
-    return newEmail;
   }
 
   public Instant getExpiresAt() {

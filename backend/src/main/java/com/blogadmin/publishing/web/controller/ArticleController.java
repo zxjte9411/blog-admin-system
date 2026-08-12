@@ -1,8 +1,8 @@
 package com.blogadmin.publishing.web.controller;
 
-import com.blogadmin.identity.domain.User;
+import com.blogadmin.identity.domain.user.User;
 import com.blogadmin.publishing.application.ArticleService;
-import com.blogadmin.publishing.domain.PublicationStatus;
+import com.blogadmin.publishing.domain.article.PublicationStatus;
 import com.blogadmin.publishing.web.dto.ArticleView;
 import com.blogadmin.publishing.web.dto.CreateArticleRequest;
 import com.blogadmin.publishing.web.dto.UpdateArticleRequest;

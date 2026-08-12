@@ -1,7 +1,7 @@
 package com.blogadmin.identity.web.config;
 
-import com.blogadmin.identity.domain.RefreshSessionRepository;
-import com.blogadmin.identity.domain.UserRepository;
+import com.blogadmin.identity.domain.session.RefreshSessionRepository;
+import com.blogadmin.identity.domain.user.UserRepository;
 import com.blogadmin.identity.web.security.AccessTokenFilter;
 import com.blogadmin.identity.web.security.JwtToken;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -1,6 +1,6 @@
 package com.blogadmin.publishing.web.dto;
 
-import com.blogadmin.publishing.domain.PublicationStatus;
+import com.blogadmin.publishing.domain.article.PublicationStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.Set;

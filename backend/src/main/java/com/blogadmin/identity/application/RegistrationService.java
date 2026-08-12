@@ -1,10 +1,10 @@
 package com.blogadmin.identity.application;
 
-import com.blogadmin.identity.domain.EmailVerificationToken;
-import com.blogadmin.identity.domain.EmailVerificationTokenRepository;
-import com.blogadmin.identity.domain.PasswordSettingRepository;
-import com.blogadmin.identity.domain.User;
-import com.blogadmin.identity.domain.UserRepository;
+import com.blogadmin.identity.domain.password.PasswordSettingRepository;
+import com.blogadmin.identity.domain.user.User;
+import com.blogadmin.identity.domain.user.UserRepository;
+import com.blogadmin.identity.domain.verification.EmailVerificationToken;
+import com.blogadmin.identity.domain.verification.EmailVerificationTokenRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;

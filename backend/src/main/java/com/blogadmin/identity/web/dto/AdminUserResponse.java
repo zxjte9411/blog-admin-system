@@ -1,7 +1,7 @@
 package com.blogadmin.identity.web.dto;
 
-import com.blogadmin.identity.domain.User;
-import com.blogadmin.identity.domain.UserRole;
+import com.blogadmin.identity.domain.user.User;
+import com.blogadmin.identity.domain.user.UserRole;
 import java.time.Instant;
 import java.util.UUID;
 

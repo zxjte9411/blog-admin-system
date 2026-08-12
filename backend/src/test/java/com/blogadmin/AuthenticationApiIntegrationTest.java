@@ -2,12 +2,12 @@ package com.blogadmin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.blogadmin.identity.domain.EmailVerificationTokenRepository;
-import com.blogadmin.identity.domain.RateLimitEventRepository;
-import com.blogadmin.identity.domain.RefreshSessionRepository;
-import com.blogadmin.identity.domain.User;
-import com.blogadmin.identity.domain.UserRepository;
-import com.blogadmin.identity.domain.UserRole;
+import com.blogadmin.identity.domain.ratelimit.RateLimitEventRepository;
+import com.blogadmin.identity.domain.session.RefreshSessionRepository;
+import com.blogadmin.identity.domain.user.User;
+import com.blogadmin.identity.domain.user.UserRepository;
+import com.blogadmin.identity.domain.user.UserRole;
+import com.blogadmin.identity.domain.verification.EmailVerificationTokenRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;

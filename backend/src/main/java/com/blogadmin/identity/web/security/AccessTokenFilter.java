@@ -1,7 +1,7 @@
 package com.blogadmin.identity.web.security;
 
-import com.blogadmin.identity.domain.RefreshSessionRepository;
-import com.blogadmin.identity.domain.UserRepository;
+import com.blogadmin.identity.domain.session.RefreshSessionRepository;
+import com.blogadmin.identity.domain.user.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

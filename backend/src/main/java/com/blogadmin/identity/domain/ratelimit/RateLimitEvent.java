@@ -1,4 +1,4 @@
-package com.blogadmin.identity.domain;
+package com.blogadmin.identity.domain.ratelimit;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;

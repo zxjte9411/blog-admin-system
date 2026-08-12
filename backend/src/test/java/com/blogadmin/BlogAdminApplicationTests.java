@@ -2,17 +2,17 @@ package com.blogadmin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.blogadmin.identity.domain.EmailChangeTokenRepository;
-import com.blogadmin.identity.domain.EmailVerificationTokenRepository;
-import com.blogadmin.identity.domain.InvitationRepository;
-import com.blogadmin.identity.domain.PasswordResetTokenRepository;
-import com.blogadmin.identity.domain.PasswordSettingChangeRepository;
-import com.blogadmin.identity.domain.PasswordSettingRepository;
-import com.blogadmin.identity.domain.RateLimitEventRepository;
-import com.blogadmin.identity.domain.RefreshSessionRepository;
-import com.blogadmin.identity.domain.UserRepository;
-import com.blogadmin.publishing.domain.ArticleRepository;
-import com.blogadmin.publishing.domain.TagRepository;
+import com.blogadmin.identity.domain.emailchange.EmailChangeTokenRepository;
+import com.blogadmin.identity.domain.invitation.InvitationRepository;
+import com.blogadmin.identity.domain.password.PasswordResetTokenRepository;
+import com.blogadmin.identity.domain.password.PasswordSettingChangeRepository;
+import com.blogadmin.identity.domain.password.PasswordSettingRepository;
+import com.blogadmin.identity.domain.ratelimit.RateLimitEventRepository;
+import com.blogadmin.identity.domain.session.RefreshSessionRepository;
+import com.blogadmin.identity.domain.user.UserRepository;
+import com.blogadmin.identity.domain.verification.EmailVerificationTokenRepository;
+import com.blogadmin.publishing.domain.article.ArticleRepository;
+import com.blogadmin.publishing.domain.tag.TagRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;

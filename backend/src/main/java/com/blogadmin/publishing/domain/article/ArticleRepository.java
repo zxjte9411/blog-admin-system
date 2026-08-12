@@ -1,4 +1,4 @@
-package com.blogadmin.publishing.domain;
+package com.blogadmin.publishing.domain.article;
 
 import java.time.Instant;
 import java.util.List;
@@ -34,7 +34,7 @@ public interface ArticleRepository extends JpaRepository<Article, UUID> {
       Pageable pageable);
 
   @Query(
-      "select distinct a from Article a left join a.tags t where a.deletedAt is null and a.status = com.blogadmin.publishing.domain.PublicationStatus.PUBLISHED and lower(a.title) like lower(concat('%', :title, '%')) and (:tagId is null or t.id = :tagId)")
+      "select distinct a from Article a left join a.tags t where a.deletedAt is null and a.status = com.blogadmin.publishing.domain.article.PublicationStatus.PUBLISHED and lower(a.title) like lower(concat('%', :title, '%')) and (:tagId is null or t.id = :tagId)")
   Page<Article> searchPublic(
       @Param("title") String title, @Param("tagId") UUID tagId, Pageable pageable);
 }

@@ -1,4 +1,4 @@
-package com.blogadmin.publishing.domain;
+package com.blogadmin.publishing.domain.tag;
 
 import jakarta.persistence.*;
 import java.util.UUID;

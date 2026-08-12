@@ -1,4 +1,4 @@
-package com.blogadmin.identity.domain;
+package com.blogadmin.identity.domain.session;
 
 import jakarta.persistence.LockModeType;
 import java.time.Instant;

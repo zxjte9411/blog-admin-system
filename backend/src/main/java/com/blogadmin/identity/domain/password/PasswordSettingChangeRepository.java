@@ -1,4 +1,4 @@
-package com.blogadmin.identity.domain;
+package com.blogadmin.identity.domain.password;
 
 import java.util.List;
 import java.util.UUID;

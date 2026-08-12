@@ -2,11 +2,11 @@ package com.blogadmin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.blogadmin.identity.domain.User;
-import com.blogadmin.identity.domain.UserRepository;
-import com.blogadmin.identity.domain.UserRole;
-import com.blogadmin.publishing.domain.Tag;
-import com.blogadmin.publishing.domain.TagRepository;
+import com.blogadmin.identity.domain.user.User;
+import com.blogadmin.identity.domain.user.UserRepository;
+import com.blogadmin.identity.domain.user.UserRole;
+import com.blogadmin.publishing.domain.tag.Tag;
+import com.blogadmin.publishing.domain.tag.TagRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;

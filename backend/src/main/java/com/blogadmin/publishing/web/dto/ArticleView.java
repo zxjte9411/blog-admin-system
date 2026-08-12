@@ -1,7 +1,7 @@
 package com.blogadmin.publishing.web.dto;
 
 import com.blogadmin.publishing.application.ArticleService;
-import com.blogadmin.publishing.domain.PublicationStatus;
+import com.blogadmin.publishing.domain.article.PublicationStatus;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;

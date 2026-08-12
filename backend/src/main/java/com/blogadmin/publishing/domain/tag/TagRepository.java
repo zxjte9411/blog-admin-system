@@ -1,4 +1,4 @@
-package com.blogadmin.publishing.domain;
+package com.blogadmin.publishing.domain.tag;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -15,6 +15,6 @@ public interface TagRepository extends JpaRepository<Tag, UUID> {
   }
 
   @Query(
-      "select distinct t from Tag t join Article a on t member of a.tags where a.deletedAt is null and a.status = com.blogadmin.publishing.domain.PublicationStatus.PUBLISHED")
+      "select distinct t from Tag t join Article a on t member of a.tags where a.deletedAt is null and a.status = com.blogadmin.publishing.domain.article.PublicationStatus.PUBLISHED")
   Page<Tag> findPublic(Pageable pageable);
 }

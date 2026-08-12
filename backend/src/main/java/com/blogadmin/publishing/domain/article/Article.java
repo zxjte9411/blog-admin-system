@@ -1,6 +1,7 @@
-package com.blogadmin.publishing.domain;
+package com.blogadmin.publishing.domain.article;
 
-import com.blogadmin.identity.domain.User;
+import com.blogadmin.identity.domain.user.User;
+import com.blogadmin.publishing.domain.tag.Tag;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.*;

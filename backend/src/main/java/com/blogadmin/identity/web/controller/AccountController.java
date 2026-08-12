@@ -1,7 +1,7 @@
 package com.blogadmin.identity.web.controller;
 
 import com.blogadmin.identity.application.AccountService;
-import com.blogadmin.identity.domain.User;
+import com.blogadmin.identity.domain.user.User;
 import com.blogadmin.identity.web.dto.AccountEmailRequest;
 import com.blogadmin.identity.web.dto.AccountPasswordRequest;
 import com.blogadmin.identity.web.dto.AccountProfileRequest;

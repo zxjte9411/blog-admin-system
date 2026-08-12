@@ -1,6 +1,6 @@
 package com.blogadmin.identity.web.security;
 
-import com.blogadmin.identity.domain.User;
+import com.blogadmin.identity.domain.user.User;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
