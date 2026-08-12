@@ -17,3 +17,28 @@ databaseChangeLog:
       changes:
         - sqlFile:
             path: db/changelog/003-user-access-token-version.sql
+  - changeSet:
+      id: 004
+      author: blog-admin
+      changes:
+        - sqlFile:
+            path: db/changelog/004-admin.sql
+  - changeSet:
+      id: 005
+      author: blog-admin
+      changes:
+        - sqlFile:
+            path: db/changelog/005-publishing.sql
+  - changeSet:
+      id: 006
+      author: blog-admin
+      changes:
+        - sqlFile:
+            path: db/changelog/006-account.sql
+  - changeSet:
+      id: 007
+      author: blog-admin
+      changes:
+        - sqlFile:
+            path: db/changelog/007-password-setting-audit-immutable.sql
+            splitStatements: false

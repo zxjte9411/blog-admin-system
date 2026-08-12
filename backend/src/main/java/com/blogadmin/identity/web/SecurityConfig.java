@@ -15,7 +15,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.crypto.password.Pbkdf2PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 @Configuration
 public class SecurityConfig {
@@ -32,16 +31,7 @@ public class SecurityConfig {
       JwtToken jwt,
       ObjectMapper objectMapper)
       throws Exception {
-    return http.csrf(
-            csrf ->
-                csrf.ignoringRequestMatchers(
-                    new AntPathRequestMatcher("/api/v1/auth/registrations", "POST"),
-                    new AntPathRequestMatcher("/api/v1/auth/email-verifications", "POST"),
-                    new AntPathRequestMatcher("/api/v1/auth/email-verifications/resend", "POST"),
-                    new AntPathRequestMatcher("/api/v1/auth/login", "POST"),
-                    new AntPathRequestMatcher("/api/v1/auth/refresh", "POST"),
-                    new AntPathRequestMatcher("/api/v1/auth/logout", "POST"),
-                    new AntPathRequestMatcher("/api/v1/auth/sessions/*", "DELETE")))
+    return http.csrf(csrf -> csrf.disable())
         .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .addFilterBefore(
             new AccessTokenFilter(users, jwt, sessions), UsernamePasswordAuthenticationFilter.class)
@@ -60,6 +50,10 @@ public class SecurityConfig {
                     .requestMatchers("/actuator/health")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/**")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.PUT, "/api/v1/auth/password-resets/**")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/v1/auth/email-changes/**")
                     .permitAll()
                     .requestMatchers("/api/v1/admin/**")
                     .hasRole("ADMIN")

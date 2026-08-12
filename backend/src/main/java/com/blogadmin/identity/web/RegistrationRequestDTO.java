@@ -29,9 +29,7 @@ public class RegistrationRequestDTO {
     this.displayName = displayName == null ? null : displayName.trim();
   }
 
-  @NotBlank
-  @Size(min = 8, max = 128)
-  private String password;
+  @NotBlank private String password;
 
   @Pattern(regexp = "zh-TW|en")
   private String preferredLanguage;

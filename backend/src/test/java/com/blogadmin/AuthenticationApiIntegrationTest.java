@@ -77,10 +77,11 @@ class AuthenticationApiIntegrationTest {
     String oldAccessToken = (String) login.getBody().get("accessToken");
     assertThat(login.getBody()).containsKeys("accessToken", "accessTokenExpiresAt");
     assertThat(login.getHeaders().getFirst(HttpHeaders.SET_COOKIE))
-        .contains("HttpOnly", "Max-Age=604800");
+        .contains("HttpOnly", "Secure", "Max-Age=604800");
 
     ResponseEntity<Map> refresh = postWithCookie("/api/v1/auth/refresh", oldCookie, Map.class);
     assertThat(refresh.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(refresh.getHeaders().getFirst(HttpHeaders.SET_COOKIE)).contains("Secure");
     assertThat(cookie(refresh)).isNotEqualTo(oldCookie);
     assertThat(postWithCookie("/api/v1/auth/refresh", oldCookie, Map.class).getStatusCode())
         .isEqualTo(HttpStatus.UNAUTHORIZED);

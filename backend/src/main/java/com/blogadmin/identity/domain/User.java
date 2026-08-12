@@ -85,12 +85,38 @@ public class User {
     return accessTokenVersion;
   }
 
+  public void updateProfile(String name, String language) {
+    displayName = name;
+    preferredLanguage = language;
+  }
+
+  public void changePassword(String hash) {
+    passwordHash = hash;
+    accessTokenVersion++;
+  }
+
+  public void changePasswordKeepingSessions(String hash) {
+    passwordHash = hash;
+  }
+
+  public void changeEmail(String email) {
+    this.email = email;
+    this.normalizedEmail = email;
+  }
+
   public void verify(Instant at) {
     verifiedAt = at;
   }
 
   public void disable() {
     enabled = false;
+  }
+
+  public void setEnabled(boolean enabled) {
+    if (this.enabled != enabled) {
+      this.enabled = enabled;
+      accessTokenVersion++;
+    }
   }
 
   public void changeRole(UserRole newRole) {

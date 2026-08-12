@@ -1,0 +1,23 @@
+package com.blogadmin.publishing.domain;
+
+import java.util.*;
+import org.springframework.data.domain.*;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+public interface ArticleRepository extends JpaRepository<Article, UUID> {
+  Page<Article> findByDeletedAtIsNull(Pageable pageable);
+
+  Page<Article> findByDeletedAtIsNullAndStatus(PublicationStatus status, Pageable pageable);
+
+  Page<Article> findByDeletedAtIsNullAndTagsId(UUID tagId, Pageable pageable);
+
+  @Query(
+      "select distinct a from Article a left join a.tags t where a.deletedAt is null and lower(a.title) like lower(concat('%', :title, '%')) and (:status is null or a.status = :status) and (:tagId is null or t.id = :tagId)")
+  Page<Article> search(
+      @Param("title") String title,
+      @Param("status") PublicationStatus status,
+      @Param("tagId") UUID tagId,
+      Pageable pageable);
+}

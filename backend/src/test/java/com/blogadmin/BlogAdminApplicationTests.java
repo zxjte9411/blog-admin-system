@@ -2,10 +2,17 @@ package com.blogadmin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.blogadmin.identity.domain.EmailChangeTokenRepository;
 import com.blogadmin.identity.domain.EmailVerificationTokenRepository;
+import com.blogadmin.identity.domain.InvitationRepository;
+import com.blogadmin.identity.domain.PasswordResetTokenRepository;
+import com.blogadmin.identity.domain.PasswordSettingChangeRepository;
+import com.blogadmin.identity.domain.PasswordSettingRepository;
 import com.blogadmin.identity.domain.RateLimitEventRepository;
 import com.blogadmin.identity.domain.RefreshSessionRepository;
 import com.blogadmin.identity.domain.UserRepository;
+import com.blogadmin.publishing.domain.ArticleRepository;
+import com.blogadmin.publishing.domain.TagRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -15,6 +22,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
+import org.springframework.mail.javamail.JavaMailSender;
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -26,8 +34,16 @@ class BlogAdminApplicationTests {
 
   @MockBean private UserRepository users;
   @MockBean private EmailVerificationTokenRepository tokens;
+  @MockBean private EmailChangeTokenRepository emailChangeTokens;
   @MockBean private RateLimitEventRepository limits;
   @MockBean private RefreshSessionRepository sessions;
+  @MockBean private InvitationRepository invitations;
+  @MockBean private PasswordSettingChangeRepository passwordSettingChanges;
+  @MockBean private PasswordSettingRepository passwordSettings;
+  @MockBean private PasswordResetTokenRepository passwordResetTokens;
+  @MockBean private ArticleRepository articles;
+  @MockBean private TagRepository tags;
+  @MockBean private JavaMailSender mail;
 
   @LocalServerPort private int port;
 

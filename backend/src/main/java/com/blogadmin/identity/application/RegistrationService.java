@@ -2,6 +2,7 @@ package com.blogadmin.identity.application;
 
 import com.blogadmin.identity.domain.EmailVerificationToken;
 import com.blogadmin.identity.domain.EmailVerificationTokenRepository;
+import com.blogadmin.identity.domain.PasswordSettingRepository;
 import com.blogadmin.identity.domain.User;
 import com.blogadmin.identity.domain.UserRepository;
 import java.nio.charset.StandardCharsets;
@@ -31,6 +32,7 @@ public class RegistrationService {
   private final RateLimitService rateLimits;
   private final JavaMailSender mail;
   private final PasswordEncoder passwordEncoder;
+  private final PasswordSettingRepository passwordSettings;
   private final String from;
   private final String frontend;
 
@@ -40,6 +42,7 @@ public class RegistrationService {
       RateLimitService rateLimits,
       JavaMailSender mail,
       PasswordEncoder passwordEncoder,
+      PasswordSettingRepository passwordSettings,
       @Value("${app.mail.from:dev@example.com}") String from,
       @Value("${app.frontend-base-url:http://localhost:4200}") String frontend) {
     this.users = users;
@@ -47,6 +50,7 @@ public class RegistrationService {
     this.rateLimits = rateLimits;
     this.mail = mail;
     this.passwordEncoder = passwordEncoder;
+    this.passwordSettings = passwordSettings;
     this.from = from;
     this.frontend = frontend;
   }
@@ -57,7 +61,11 @@ public class RegistrationService {
     String normalized = normalize(email);
     checkRate("registration", ip, normalized);
     users.lockNormalizedEmail(normalized);
-    if (COMMON.contains(password.toLowerCase(Locale.ROOT)))
+    int minimum = passwordSettings.findById(true).orElseThrow().getMinimumLength();
+    if (password == null
+        || password.length() < minimum
+        || password.length() > 128
+        || COMMON.contains(password.toLowerCase(Locale.ROOT)))
       throw new InvalidRegistrationException();
     String trimmedDisplayName = displayName == null ? null : displayName.trim();
     if (trimmedDisplayName == null

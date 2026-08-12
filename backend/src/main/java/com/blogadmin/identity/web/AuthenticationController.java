@@ -89,6 +89,7 @@ public class AuthenticationController {
         ResponseCookie.from("refresh_token", token)
             .path("/api/v1/auth")
             .httpOnly(true)
+            .secure(true)
             .sameSite("Lax")
             .maxAge(604800)
             .build()

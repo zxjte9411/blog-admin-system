@@ -19,3 +19,6 @@ _site/
 .devcontainer/devcontainer-lock.json
 .devcontainer/.zsh_history
 .devcontainer/.zsh_secrets
+
+# Local deepwork state
+.slim/deepwork/

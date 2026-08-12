@@ -9,6 +9,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
+  @org.springframework.data.jpa.repository.Query(
+      value = "SELECT pg_advisory_xact_lock(9006)",
+      nativeQuery = true)
+  void lockAdminMutation();
+
+  java.util.List<User> findByRoleAndEnabled(UserRole role, boolean enabled);
+
+  long countByRoleAndEnabledTrueAndVerifiedAtIsNotNull(UserRole role);
+
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   Optional<User> findByNormalizedEmail(String email);
 

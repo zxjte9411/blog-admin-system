@@ -1,9 +1,12 @@
 package com.blogadmin.identity.web;
 
+import com.blogadmin.identity.application.AccountService.InvalidAccountException;
+import com.blogadmin.identity.application.AdminUserService.*;
 import com.blogadmin.identity.application.AuthenticationService.BadCredentialsException;
 import com.blogadmin.identity.application.AuthenticationService.SessionNotFoundException;
 import com.blogadmin.identity.application.RegistrationService.InvalidRegistrationException;
 import com.blogadmin.identity.application.RegistrationService.RateLimitedException;
+import jakarta.persistence.OptimisticLockException;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
@@ -11,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -18,6 +22,42 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+  @ExceptionHandler(InvalidAccountException.class)
+  ResponseEntity<ProblemDetail> invalidAccount() {
+    return problem(HttpStatus.BAD_REQUEST, "Request validation failed");
+  }
+
+  @ExceptionHandler(ForbiddenException.class)
+  ResponseEntity<ProblemDetail> forbidden() {
+    return problem(HttpStatus.FORBIDDEN, "Operation not allowed");
+  }
+
+  @ExceptionHandler(LastAdminException.class)
+  ResponseEntity<ProblemDetail> lastAdmin() {
+    return problem(HttpStatus.CONFLICT, "Last enabled verified Admin cannot be removed");
+  }
+
+  @ExceptionHandler(AlreadyExistsException.class)
+  ResponseEntity<ProblemDetail> exists() {
+    return problem(HttpStatus.CONFLICT, "User already exists");
+  }
+
+  @ExceptionHandler(InvalidMinimumException.class)
+  ResponseEntity<ProblemDetail> minimum() {
+    return problem(HttpStatus.BAD_REQUEST, "Password Minimum Length must be 8-128");
+  }
+
+  @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockException.class})
+  ResponseEntity<ProblemDetail> optimisticLockingConflict() {
+    return problem(HttpStatus.CONFLICT, "Optimistic locking conflict");
+  }
+
+  private ResponseEntity<ProblemDetail> problem(HttpStatus status, String detail) {
+    return ResponseEntity.status(status)
+        .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+        .body(ProblemDetail.forStatusAndDetail(status, detail));
+  }
+
   @ExceptionHandler(BadCredentialsException.class)
   ResponseEntity<ProblemDetail> unauthorized() {
     var p = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Authentication failed");
