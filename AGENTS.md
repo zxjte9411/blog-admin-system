@@ -15,3 +15,7 @@
 ## CodeGraph
 - 根目錄有 `.codegraph/` 時，先用 CodeGraph MCP `codegraph_explore`（或 `codegraph explore "..."`）定位與理解程式碼，再讀取或搜尋；沒有就略過。
 - 修改後若 CodeGraph 顯示索引尚未同步，直接讀取列出的檔案確認內容。
+
+## 子代理實作
+- 行為變更交由子代理實作時，先新增並執行一個預期失敗的行為測試，再以最小實作使其通過；回報 red 與 green 的測試命令及結果。純格式、機械重構或僅修正既有測試可例外，但須說明原因。
+- Java 使用明確 import；禁止使用萬用字元 `*` import。
