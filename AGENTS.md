@@ -1,28 +1,17 @@
 # 互動與範圍
-- 使用繁體中文台灣用語回覆；需要使用者回覆時，列出建議選項並透過提問工具詢問。
-- 本專案在開發容器內執行，請注意 IP 使用與互動。
+- 使用繁體中文台灣用語回覆；需要使用者回覆時，列出選項並透過提問工具詢問。
+- 本專案在開發容器內執行；注意容器與主機的 IP 及互動。
+- 架構邊界：`backend/` 是 Maven／Spring Boot；`frontend/` 是 Angular／npm。命令以各子目錄的 `AGENTS.md` 為準。
 
-## Agent skills
+## 開發環境
+- 修改 Compose 設定或啟動服務前，先執行 `docker compose config`。
+- 需要覆寫 Compose 預設值時，從 `.env.example` 建立 `.env`；`APP_SECURITY_JWT_SECRET` 必須是隨機產生且至少 32 bytes 的值，不要提交 `.env`。
 
-### Issue tracker
+## Issues 與文件
+- 議題與規格只使用 GitHub Issues，所有操作使用 `gh`；流程見 `docs/agents/issue-tracker.md`。
+- 執行涉及 triage 的工作時，依 `docs/agents/triage-labels.md` 對應標籤。
+- 探索或修改領域行為時，先依 `docs/agents/domain.md` 讀取 `CONTEXT.md` 與相關 ADR，並使用詞彙表用語。
 
-議題與規格存放於 GitHub Issues。見 `docs/agents/issue-tracker.md`。
-
-### Triage labels
-
-採用五個預設 triage 標籤。見 `docs/agents/triage-labels.md`。
-
-### Domain docs
-
-採單一領域上下文。見 `docs/agents/domain.md`。
-
-<!-- CODEGRAPH_START -->
 ## CodeGraph
-
-In repositories indexed by CodeGraph (a `.codegraph/` directory exists at the repo root), reach for it BEFORE grep/find or reading files when you need to understand or locate code:
-
-- **MCP tool** (when available): `codegraph_explore` answers most code questions in one call — the relevant symbols' verbatim source plus the call paths between them, including dynamic-dispatch hops grep can't follow. Name a file or symbol in the query to read its current line-numbered source. If it's listed but deferred, load it by name via tool search.
-- **Shell** (always works): `codegraph explore "<symbol names or question>"` prints the same output.
-
-If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is the user's decision.
-<!-- CODEGRAPH_END -->
+- 根目錄有 `.codegraph/` 時，先用 CodeGraph MCP `codegraph_explore`（或 `codegraph explore "..."`）定位與理解程式碼，再讀取或搜尋；沒有就略過。
+- 修改後若 CodeGraph 顯示索引尚未同步，直接讀取列出的檔案確認內容。
