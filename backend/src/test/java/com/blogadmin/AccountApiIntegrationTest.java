@@ -191,16 +191,13 @@ class AccountApiIntegrationTest {
     verify(mail, atLeastOnce()).send(sent.capture());
     SimpleMailMessage request =
         sent.getAllValues().stream()
-            .filter(
-                m ->
-                    newEmail.equals(m.getTo()[0]) && m.getText().contains("confirm-email"))
+            .filter(m -> newEmail.equals(m.getTo()[0]) && m.getText().contains("confirm-email"))
             .findFirst()
             .orElseThrow();
     String token = tokenFrom(request);
 
     assertThat(
-            rest.postForEntity(
-                    url("/api/v1/auth/email-changes/" + token), null, Void.class)
+            rest.postForEntity(url("/api/v1/auth/email-changes/" + token), null, Void.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.NO_CONTENT);
     assertThat(users.findById(u.getId()).orElseThrow().getEmail()).isEqualTo(newEmail);
@@ -216,9 +213,7 @@ class AccountApiIntegrationTest {
         .containsExactlyInAnyOrder(oldEmail, newEmail);
     assertThat(notifications)
         .allSatisfy(
-            m ->
-                assertThat(m.getText())
-                    .contains("Your email was changed.", "您的 Email 已變更。"));
+            m -> assertThat(m.getText()).contains("Your email was changed.", "您的 Email 已變更。"));
   }
 
   private User user() {
