@@ -161,6 +161,64 @@ class AccountApiIntegrationTest {
     assertThat(users.findById(u.getId()).orElseThrow().getEmail()).isEqualTo(u.getEmail());
   }
 
+  @Test
+  void emailChangeKeepsOldAccessTokenAndSendsBilingualNotifications() {
+    User u = user();
+    String oldEmail = u.getEmail();
+    String newEmail = "new-email@example.com";
+    String access = login(u);
+
+    assertThat(
+            exchange(
+                    "/api/v1/account/email",
+                    HttpMethod.POST,
+                    access,
+                    Map.of("email", newEmail),
+                    Void.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.ACCEPTED);
+    assertThat(
+            exchange(
+                    "/api/v1/account/profile",
+                    HttpMethod.PATCH,
+                    access,
+                    Map.of("displayName", "Still signed in", "preferredLanguage", "zh-TW"),
+                    Map.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+
+    ArgumentCaptor<SimpleMailMessage> sent = ArgumentCaptor.forClass(SimpleMailMessage.class);
+    verify(mail, atLeastOnce()).send(sent.capture());
+    SimpleMailMessage request =
+        sent.getAllValues().stream()
+            .filter(m -> newEmail.equals(m.getTo()[0]) && m.getText().contains("confirm-email"))
+            .findFirst()
+            .orElseThrow();
+    String token = tokenFrom(request);
+
+    assertThat(
+            rest.postForEntity(
+                    url("/api/v1/auth/email-changes/" + token), null, Void.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.NO_CONTENT);
+    assertThat(users.findById(u.getId()).orElseThrow().getEmail()).isEqualTo(newEmail);
+
+    verify(mail, times(3)).send(sent.capture());
+    List<SimpleMailMessage> notifications =
+        sent.getAllValues().stream()
+            .filter(m -> m.getText().contains("Your email was changed."))
+            .toList();
+    assertThat(notifications).hasSize(2);
+    assertThat(notifications)
+        .extracting(m -> m.getTo()[0])
+        .containsExactlyInAnyOrder(oldEmail, newEmail);
+    assertThat(notifications)
+        .allSatisfy(
+            m ->
+                assertThat(m.getText())
+                    .contains("Your email was changed.", "您的 Email 已變更。"));
+  }
+
   private User user() {
     UUID id = UUID.randomUUID();
     String e = id + "@example.com";
@@ -188,6 +246,14 @@ class AccountApiIntegrationTest {
     ArgumentCaptor<SimpleMailMessage> c = ArgumentCaptor.forClass(SimpleMailMessage.class);
     verify(mail, atLeastOnce()).send(c.capture());
     String text = c.getAllValues().get(c.getAllValues().size() - 1).getText();
+    return tokenFrom(text);
+  }
+
+  private String tokenFrom(SimpleMailMessage message) {
+    return tokenFrom(message.getText());
+  }
+
+  private String tokenFrom(String text) {
     return text.substring(text.indexOf("token=") + 6).split("[ &)]")[0];
   }
 

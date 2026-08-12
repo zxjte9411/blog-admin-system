@@ -5,9 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.blogadmin.identity.domain.User;
 import com.blogadmin.identity.domain.UserRepository;
 import com.blogadmin.identity.domain.UserRole;
+import com.blogadmin.publishing.domain.Tag;
+import com.blogadmin.publishing.domain.TagRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +40,7 @@ class ArticleApiIntegrationTest {
   @LocalServerPort int port;
   @Autowired TestRestTemplate rest;
   @Autowired UserRepository users;
+  @Autowired TagRepository tags;
   @Autowired PasswordEncoder passwords;
 
   @DynamicPropertySource
@@ -170,6 +175,107 @@ class ArticleApiIntegrationTest {
             Map.class);
     assertThat(filtered.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(filtered.getBody().get("content").toString()).doesNotContain(id);
+  }
+
+  @Test
+  void filtersArticlesByOneTagAndPaginatesResults() {
+    user(UserRole.AUTHOR, "tagged");
+    String token = login("tagged");
+    UUID tagId = UUID.randomUUID();
+    tags.saveAndFlush(new Tag(tagId, "integration"));
+
+    ResponseEntity<Map> first =
+        exchange(
+            "/api/v1/articles",
+            HttpMethod.POST,
+            token,
+            Map.of("title", "Tagged 1", "content", "C1", "tagIds", Set.of(tagId)),
+            Map.class);
+    ResponseEntity<Map> second =
+        exchange(
+            "/api/v1/articles",
+            HttpMethod.POST,
+            token,
+            Map.of("title", "Tagged 2", "content", "C2", "tagIds", Set.of(tagId)),
+            Map.class);
+    exchange(
+        "/api/v1/articles",
+        HttpMethod.POST,
+        token,
+        Map.of("title", "Other", "content", "C3"),
+        Map.class);
+
+    ResponseEntity<Map> pageOne =
+        exchange(
+            "/api/v1/articles?tagId=" + tagId + "&page=0&size=1",
+            HttpMethod.GET,
+            token,
+            null,
+            Map.class);
+    ResponseEntity<Map> pageTwo =
+        exchange(
+            "/api/v1/articles?tagId=" + tagId + "&page=1&size=1",
+            HttpMethod.GET,
+            token,
+            null,
+            Map.class);
+
+    assertThat(pageOne.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(pageOne.getBody())
+        .containsEntry("totalElements", 2)
+        .containsEntry("totalPages", 2)
+        .containsEntry("size", 1)
+        .containsEntry("number", 0);
+    assertThat((List<Map>) pageOne.getBody().get("content"))
+        .singleElement()
+        .satisfies(
+            article ->
+                assertThat((List<String>) article.get("tagIds"))
+                    .containsExactly(tagId.toString()));
+    assertThat(pageTwo.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(pageTwo.getBody()).containsEntry("number", 1);
+    assertThat(pageOne.getBody().get("content")).isNotEqualTo(pageTwo.getBody().get("content"));
+    assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    assertThat(second.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+  }
+
+  @Test
+  void adminCanUpdateAndDeleteAnotherAuthorsArticle() {
+    user(UserRole.AUTHOR, "owned");
+    user(UserRole.ADMIN, "admin");
+    String authorToken = login("owned");
+    String adminToken = login("admin");
+    ResponseEntity<Map> created =
+        exchange(
+            "/api/v1/articles",
+            HttpMethod.POST,
+            authorToken,
+            Map.of("title", "Author article", "content", "C"),
+            Map.class);
+    String id = (String) created.getBody().get("id");
+
+    ResponseEntity<Map> updated =
+        exchange(
+            "/api/v1/articles/" + id,
+            HttpMethod.PUT,
+            adminToken,
+            Map.of(
+                "title", "Admin updated",
+                "content", "Updated content",
+                "status", "DRAFT",
+                "version", created.getBody().get("version")),
+            Map.class);
+    assertThat(updated.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(updated.getBody()).containsEntry("title", "Admin updated");
+
+    assertThat(
+            exchange("/api/v1/articles/" + id, HttpMethod.DELETE, adminToken, null, Void.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.NO_CONTENT);
+    assertThat(
+            exchange("/api/v1/articles/" + id, HttpMethod.GET, adminToken, null, Map.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
   }
 
   private UUID user(UserRole role, String name) {
