@@ -1,6 +1,6 @@
 # Blog Admin System
 
-目前僅完成開發環境初始化；尚未建立 Angular、Spring Boot、Liquibase、資料表、API 或前端介面。
+Blog Admin System 的根目錄開發與 CI 交付設定。
 
 ## 技術基線
 
@@ -25,15 +25,19 @@
    uv --version
    ```
 
-## 啟動資料庫
+## 本機開發
 
-設定預設值已內建於 `compose.yaml`；若需要覆寫，先複製範例檔：
+設定預設值已內建於 `compose.yaml`；需要覆寫時先複製範例檔：
 
 ```bash
 cp .env.example .env
-docker compose up -d db
+docker compose up -d
 docker compose ps
 ```
+
+Compose 服務為 PostgreSQL、Spring Boot backend、Angular frontend 與 Mailpit。
+backend 僅在 db healthy 後啟動，frontend 僅在 backend healthy 後啟動。資料庫 schema
+只由 backend 的 Liquibase 設定與 migration 管理，不使用 Compose init script。
 
 停止資料庫：
 
@@ -47,6 +51,14 @@ docker compose down
 docker compose down --volumes
 ```
 
-## 下一階段
+## 驗證
 
-初始化 Angular 21 LTS、Spring Boot 3.5.16 與 Liquibase，再開始實作題目功能。
+```bash
+docker compose config
+(cd backend && ./mvnw --batch-mode verify)
+(cd frontend && npm ci && npm run lint && npm test && npm run build)
+```
+
+GitHub Actions 會在 backend 使用 Java 25 執行 Maven verify，在 frontend 使用 Node.js
+24 執行上述 npm 驗證；這些 CI 工作不需啟動本機服務。預設分支的 backend 驗證成功後，
+會將 JaCoCo HTML 報告發布至 GitHub Pages。

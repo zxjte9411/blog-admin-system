@@ -11,6 +11,9 @@ frontend/node_modules/
 frontend/dist/
 frontend/.angular/
 
+# GitHub Pages build output
+_site/
+
 # Editor and Dev Container state
 .vscode/
 .devcontainer/devcontainer-lock.json

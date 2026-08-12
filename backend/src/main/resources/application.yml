@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: blog-admin-backend
+  main:
+    banner-mode: "off"
+  jackson:
+    time-zone: UTC
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:${DATABASE_URL:jdbc:postgresql://localhost:5432/blog_admin}}
+    username: ${SPRING_DATASOURCE_USERNAME:${DATABASE_USERNAME:blog_admin}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DATABASE_PASSWORD:blog_admin}}
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+server:
+  error:
+    include-message: never
