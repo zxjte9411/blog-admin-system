@@ -234,7 +234,8 @@ class ArticleApiIntegrationTest {
                     .containsExactly(tagId.toString()));
     assertThat(pageTwo.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(pageTwo.getBody()).containsEntry("number", 1);
-    assertThat(pageOne.getBody().get("content")).isNotEqualTo(pageTwo.getBody().get("content"));
+    assertThat(pageOne.getBody().get("content"))
+        .isNotEqualTo(pageTwo.getBody().get("content"));
     assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     assertThat(second.getStatusCode()).isEqualTo(HttpStatus.CREATED);
   }
@@ -269,7 +270,12 @@ class ArticleApiIntegrationTest {
     assertThat(updated.getBody()).containsEntry("title", "Admin updated");
 
     assertThat(
-            exchange("/api/v1/articles/" + id, HttpMethod.DELETE, adminToken, null, Void.class)
+            exchange(
+                    "/api/v1/articles/" + id,
+                    HttpMethod.DELETE,
+                    adminToken,
+                    null,
+                    Void.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.NO_CONTENT);
     assertThat(

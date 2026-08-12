@@ -191,7 +191,9 @@ class AccountApiIntegrationTest {
     verify(mail, atLeastOnce()).send(sent.capture());
     SimpleMailMessage request =
         sent.getAllValues().stream()
-            .filter(m -> newEmail.equals(m.getTo()[0]) && m.getText().contains("confirm-email"))
+            .filter(
+                m ->
+                    newEmail.equals(m.getTo()[0]) && m.getText().contains("confirm-email"))
             .findFirst()
             .orElseThrow();
     String token = tokenFrom(request);
