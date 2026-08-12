@@ -99,6 +99,23 @@ class AccountApiIntegrationTest {
   }
 
   @Test
+  void currentAccountReturnsFrontendIdentityAndRoleWithoutSensitiveFields() {
+    User user = user();
+    user.changeRole(UserRole.ADMIN);
+    user.updateProfile("Current User", "en");
+    users.saveAndFlush(user);
+    String access = login(user);
+
+    ResponseEntity<Map> response =
+        exchange("/api/v1/account/me", HttpMethod.GET, access, null, Map.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody())
+        .containsExactlyInAnyOrderEntriesOf(
+            Map.of("displayName", "Current User", "preferredLanguage", "en", "role", "ADMIN"));
+  }
+
+  @Test
   void passwordResetResendAndEmailChangeUseOneTimeLocalizedTokens() {
     User u = user();
     String access = login(u);
