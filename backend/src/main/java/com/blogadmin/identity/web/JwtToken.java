@@ -1,6 +1,8 @@
 package com.blogadmin.identity.web;
 
 import com.blogadmin.identity.domain.User;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
@@ -9,35 +11,31 @@ import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.json.BasicJsonParser;
 import org.springframework.stereotype.Component;
 
 @Component
 final class JwtToken {
   private final byte[] key;
+  private final ObjectMapper objectMapper;
 
-  JwtToken(@Value("${app.security.jwt-secret}") String secret) {
+  JwtToken(@Value("${app.security.jwt-secret}") String secret, ObjectMapper objectMapper) {
     key = secret.getBytes(StandardCharsets.UTF_8);
+    this.objectMapper = objectMapper;
     if (key.length < 32) throw new IllegalStateException("JWT secret must be at least 32 bytes");
   }
 
   Token create(User user, UUID sessionId, int accessTokenVersion) {
     Instant expiresAt = Instant.now().plusSeconds(900);
     long exp = expiresAt.getEpochSecond();
-    String header = enc("{\"alg\":\"HS256\",\"typ\":\"JWT\"}"),
-        payload =
-            enc(
-                "{\"sub\":\""
-                    + user.getId()
-                    + "\",\"sid\":\""
-                    + sessionId
-                    + "\",\"ver\":"
-                    + accessTokenVersion
-                    + ",\"uver\":"
-                    + user.getAccessTokenVersion()
-                    + ",\"exp\":"
-                    + exp
-                    + "}");
+    String header = enc(new Header("HS256", "JWT"));
+    String payload =
+        enc(
+            new Payload(
+                user.getId().toString(),
+                sessionId,
+                accessTokenVersion,
+                user.getAccessTokenVersion(),
+                exp));
     return new Token(
         header + "." + payload + "." + sign(header + "." + payload), Instant.ofEpochSecond(exp));
   }
@@ -48,37 +46,27 @@ final class JwtToken {
       if (p.length != 3 || !MessageDigestCompat.constant(sign(p[0] + "." + p[1]), p[2]))
         throw new IllegalArgumentException();
       String body = new String(Base64.getUrlDecoder().decode(p[1]), StandardCharsets.UTF_8);
-      var json = new BasicJsonParser().parseMap(body);
-      Object subValue = json.get("sub");
-      Object expValue = json.get("exp");
-      Object sessionValue = json.get("sid");
-      Object versionValue = json.get("ver");
-      Object userVersionValue = json.get("uver");
-      if (!(subValue instanceof String)
-          || !(sessionValue instanceof String)
-          || !(versionValue instanceof Number)
-          || !(userVersionValue instanceof Number)
-          || !(expValue instanceof Number)) throw new IllegalArgumentException();
-      String sub = (String) subValue;
-      UUID sessionId = UUID.fromString((String) sessionValue);
-      int version = ((Number) versionValue).intValue();
-      int userVersion = ((Number) userVersionValue).intValue();
-      long exp = ((Number) expValue).longValue();
+      Payload payload = objectMapper.readValue(body, Payload.class);
+      long exp = payload.exp();
       if (exp <= Instant.now().getEpochSecond()) throw new IllegalArgumentException();
-      return new Claims(sub, sessionId, version, userVersion);
+      return new Claims(payload.sub(), payload.sid(), payload.ver(), payload.uver());
     } catch (IllegalArgumentException exception) {
       throw exception;
-    } catch (RuntimeException exception) {
+    } catch (RuntimeException | JsonProcessingException exception) {
       throw new IllegalArgumentException("Malformed access token", exception);
     }
   }
 
   record Token(String value, Instant expiresAt) {}
 
-  private static String enc(String s) {
-    return Base64.getUrlEncoder()
-        .withoutPadding()
-        .encodeToString(s.getBytes(StandardCharsets.UTF_8));
+  private String enc(Object value) {
+    try {
+      return Base64.getUrlEncoder()
+          .withoutPadding()
+          .encodeToString(objectMapper.writeValueAsBytes(value));
+    } catch (JsonProcessingException exception) {
+      throw new IllegalStateException("Unable to serialize JWT", exception);
+    }
   }
 
   private String sign(String s) {
@@ -95,6 +83,10 @@ final class JwtToken {
 
   record Claims(
       String userId, UUID sessionId, int accessTokenVersion, int userAccessTokenVersion) {}
+
+  private record Header(String alg, String typ) {}
+
+  private record Payload(String sub, UUID sid, int ver, int uver, long exp) {}
 
   private static final class MessageDigestCompat {
     static boolean constant(String a, String b) {

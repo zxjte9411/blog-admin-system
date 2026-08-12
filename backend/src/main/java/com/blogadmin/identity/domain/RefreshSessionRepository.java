@@ -1,6 +1,7 @@
 package com.blogadmin.identity.domain;
 
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,5 +16,5 @@ public interface RefreshSessionRepository extends JpaRepository<RefreshSession, 
 
   List<RefreshSession>
       findByUserIdAndRevokedAtIsNullAndExpiresAtAfterAndUserAccessTokenVersionEqualsOrderByCreatedAtDesc(
-          UUID userId, java.time.Instant now, int userAccessTokenVersion);
+          UUID userId, Instant now, int userAccessTokenVersion);
 }

@@ -1,5 +1,6 @@
 package com.blogadmin.identity.application;
 
+import com.blogadmin.identity.domain.RateLimitEvent;
 import com.blogadmin.identity.domain.RateLimitEventRepository;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +39,7 @@ public class RateLimitService {
                                 (at.plusSeconds(3600).toEpochMilli() - Instant.now().toEpochMilli())
                                     / 1000.0)))
             .orElse(1L);
-    repository.save(new com.blogadmin.identity.domain.RateLimitEvent(bucket, key, Instant.now()));
+    repository.save(new RateLimitEvent(bucket, key, Instant.now()));
     return new Decision(count < 3, retry);
   }
 

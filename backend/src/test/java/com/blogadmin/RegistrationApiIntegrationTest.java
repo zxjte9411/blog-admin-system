@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +37,7 @@ class RegistrationApiIntegrationTest {
 
   @LocalServerPort private int port;
   @Autowired private TestRestTemplate restTemplate;
+  @Autowired private ObjectMapper objectMapper;
   @Autowired private JdbcTemplate jdbc;
   @MockBean private JavaMailSender mail;
 
@@ -47,30 +51,29 @@ class RegistrationApiIntegrationTest {
 
   @Test
   void acceptsPublicRegistration() {
-    var headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_JSON);
-    var request =
-        new HttpEntity<>(
-            "{\"email\":\"User@Example.com\",\"displayName\":\"User\",\"password\":\"safe-password\"}",
-            headers);
-
     ResponseEntity<Void> response =
         restTemplate.postForEntity(
-            "http://localhost:" + port + "/api/v1/auth/registrations", request, Void.class);
+            url("/api/v1/auth/registrations"),
+            new HttpEntity<>(
+                json(
+                    Map.of(
+                        "email", "User@Example.com",
+                        "displayName", "User",
+                        "password", "safe-password")),
+                headers()),
+            Void.class);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
   }
 
   @Test
   void invalidRegistrationReturnsProblemWithFieldErrors() {
-    var headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_JSON);
     var response =
         restTemplate.postForEntity(
-            "http://localhost:" + port + "/api/v1/auth/registrations",
+            url("/api/v1/auth/registrations"),
             new HttpEntity<>(
-                "{\"email\":\"not-an-email\",\"displayName\":\"\",\"password\":\"short\"}",
-                headers),
+                json(Map.of("email", "not-an-email", "displayName", "", "password", "short")),
+                headers()),
             String.class);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -81,12 +84,10 @@ class RegistrationApiIntegrationTest {
 
   @Test
   void missingVerificationTokenReturnsProblemDetail() {
-    var headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_JSON);
     var response =
         restTemplate.postForEntity(
-            "http://localhost:" + port + "/api/v1/auth/email-verifications",
-            new HttpEntity<>("{\"token\":\"missing\"}", headers),
+            url("/api/v1/auth/email-verifications"),
+            new HttpEntity<>(json(Map.of("token", "missing")), headers()),
             String.class);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
@@ -100,14 +101,13 @@ class RegistrationApiIntegrationTest {
     String email = "verify-" + System.nanoTime() + "@example.com";
     post(
         "/api/v1/auth/registrations",
-        "{\"email\":\"" + email + "\",\"displayName\":\"Verify\",\"password\":\"safe-password\"}");
+        Map.of("email", email, "displayName", "Verify", "password", "safe-password"));
     var message = ArgumentCaptor.forClass(SimpleMailMessage.class);
     verify(mail, timeout(1000)).send(message.capture());
     String token = message.getValue().getText().replaceAll(".*token=", "");
-    ResponseEntity<Void> first =
-        post("/api/v1/auth/email-verifications", "{\"token\":\"" + token + "\"}");
+    ResponseEntity<Void> first = post("/api/v1/auth/email-verifications", Map.of("token", token));
     ResponseEntity<String> second =
-        postText("/api/v1/auth/email-verifications", "{\"token\":\"" + token + "\"}");
+        postText("/api/v1/auth/email-verifications", Map.of("token", token));
     assertThat(first.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     assertThat(second.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
   }
@@ -117,19 +117,30 @@ class RegistrationApiIntegrationTest {
     ResponseEntity<String> response =
         postText(
             "/api/v1/auth/registrations",
-            "{\"email\":\"common-"
-                + System.nanoTime()
-                + "@example.com\",\"displayName\":\"Common\",\"password\":\"password\"}");
+            Map.of(
+                "email", "common-" + System.nanoTime() + "@example.com",
+                "displayName", "Common",
+                "password", "password"));
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(response.getBody()).contains("fieldErrors").contains("password");
   }
 
-  private ResponseEntity<Void> post(String path, String body) {
-    return restTemplate.postForEntity(url(path), new HttpEntity<>(body, headers()), Void.class);
+  private ResponseEntity<Void> post(String path, Object body) {
+    return restTemplate.postForEntity(
+        url(path), new HttpEntity<>(json(body), headers()), Void.class);
   }
 
-  private ResponseEntity<String> postText(String path, String body) {
-    return restTemplate.postForEntity(url(path), new HttpEntity<>(body, headers()), String.class);
+  private ResponseEntity<String> postText(String path, Object body) {
+    return restTemplate.postForEntity(
+        url(path), new HttpEntity<>(json(body), headers()), String.class);
+  }
+
+  private String json(Object body) {
+    try {
+      return objectMapper.writeValueAsString(body);
+    } catch (JsonProcessingException exception) {
+      throw new IllegalStateException("Unable to serialize test request", exception);
+    }
   }
 
   private String url(String path) {

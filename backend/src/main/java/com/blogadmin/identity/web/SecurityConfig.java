@@ -2,6 +2,7 @@ package com.blogadmin.identity.web;
 
 import com.blogadmin.identity.domain.RefreshSessionRepository;
 import com.blogadmin.identity.domain.UserRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -25,7 +26,11 @@ public class SecurityConfig {
 
   @Bean
   SecurityFilterChain api(
-      HttpSecurity http, UserRepository users, RefreshSessionRepository sessions, JwtToken jwt)
+      HttpSecurity http,
+      UserRepository users,
+      RefreshSessionRepository sessions,
+      JwtToken jwt,
+      ObjectMapper objectMapper)
       throws Exception {
     return http.csrf(
             csrf ->
@@ -44,9 +49,10 @@ public class SecurityConfig {
             e ->
                 e.authenticationEntryPoint(
                         (request, response, exception) ->
-                            problem(response, 401, "Authentication required"))
+                            problem(response, objectMapper, 401, "Authentication required"))
                     .accessDeniedHandler(
-                        (request, response, exception) -> problem(response, 403, "Access denied")))
+                        (request, response, exception) ->
+                            problem(response, objectMapper, 403, "Access denied")))
         .authorizeHttpRequests(
             a ->
                 a.dispatcherTypeMatchers(DispatcherType.ERROR)
@@ -62,19 +68,14 @@ public class SecurityConfig {
         .build();
   }
 
-  private static void problem(HttpServletResponse response, int status, String detail)
+  private static void problem(
+      HttpServletResponse response, ObjectMapper objectMapper, int status, String detail)
       throws IOException {
     response.setStatus(status);
     response.setContentType("application/problem+json");
-    response
-        .getWriter()
-        .write(
-            "{\"type\":\"about:blank\",\"title\":\""
-                + detail
-                + "\",\"status\":"
-                + status
-                + ",\"detail\":\""
-                + detail
-                + "\"}");
+    objectMapper.writeValue(
+        response.getWriter(), new ProblemJson("about:blank", detail, status, detail));
   }
+
+  private record ProblemJson(String type, String title, int status, String detail) {}
 }

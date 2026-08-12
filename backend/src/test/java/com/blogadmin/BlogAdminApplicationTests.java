@@ -2,6 +2,10 @@ package com.blogadmin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.blogadmin.identity.domain.EmailVerificationTokenRepository;
+import com.blogadmin.identity.domain.RateLimitEventRepository;
+import com.blogadmin.identity.domain.RefreshSessionRepository;
+import com.blogadmin.identity.domain.UserRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -20,10 +24,10 @@ import org.springframework.http.HttpStatus;
     })
 class BlogAdminApplicationTests {
 
-  @MockBean private com.blogadmin.identity.domain.UserRepository users;
-  @MockBean private com.blogadmin.identity.domain.EmailVerificationTokenRepository tokens;
-  @MockBean private com.blogadmin.identity.domain.RateLimitEventRepository limits;
-  @MockBean private com.blogadmin.identity.domain.RefreshSessionRepository sessions;
+  @MockBean private UserRepository users;
+  @MockBean private EmailVerificationTokenRepository tokens;
+  @MockBean private RateLimitEventRepository limits;
+  @MockBean private RefreshSessionRepository sessions;
 
   @LocalServerPort private int port;
 

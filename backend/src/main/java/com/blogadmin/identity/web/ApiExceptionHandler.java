@@ -1,7 +1,9 @@
 package com.blogadmin.identity.web;
 
-import com.blogadmin.identity.application.AuthenticationService;
-import com.blogadmin.identity.application.RegistrationService;
+import com.blogadmin.identity.application.AuthenticationService.BadCredentialsException;
+import com.blogadmin.identity.application.AuthenticationService.SessionNotFoundException;
+import com.blogadmin.identity.application.RegistrationService.InvalidRegistrationException;
+import com.blogadmin.identity.application.RegistrationService.RateLimitedException;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
@@ -16,7 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
-  @ExceptionHandler(AuthenticationService.BadCredentialsException.class)
+  @ExceptionHandler(BadCredentialsException.class)
   ResponseEntity<ProblemDetail> unauthorized() {
     var p = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Authentication failed");
     return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -24,7 +26,7 @@ public class ApiExceptionHandler {
         .body(p);
   }
 
-  @ExceptionHandler(AuthenticationService.SessionNotFoundException.class)
+  @ExceptionHandler(SessionNotFoundException.class)
   ResponseEntity<ProblemDetail> sessionNotFound() {
     var p = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Session not found");
     return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -62,8 +64,8 @@ public class ApiExceptionHandler {
         .body(ProblemDetail.forStatusAndDetail(exception.getStatusCode(), exception.getReason()));
   }
 
-  @ExceptionHandler(RegistrationService.RateLimitedException.class)
-  ResponseEntity<ProblemDetail> limited(RegistrationService.RateLimitedException exception) {
+  @ExceptionHandler(RateLimitedException.class)
+  ResponseEntity<ProblemDetail> limited(RateLimitedException exception) {
     var problem =
         ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, "Too many requests");
     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
@@ -72,7 +74,7 @@ public class ApiExceptionHandler {
         .body(problem);
   }
 
-  @ExceptionHandler(RegistrationService.InvalidRegistrationException.class)
+  @ExceptionHandler(InvalidRegistrationException.class)
   ResponseEntity<ProblemDetail> commonPassword() {
     var problem =
         ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Request validation failed");
