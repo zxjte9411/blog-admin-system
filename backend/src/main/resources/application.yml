@@ -11,7 +11,21 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:${DATABASE_PASSWORD:blog_admin}}
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.yaml
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:25}
+    properties:
+      mail.smtp.connectiontimeout: 1000
+      mail.smtp.timeout: 1000
+      mail.smtp.writetimeout: 1000
+app:
+  mail:
+    from: ${APP_MAIL_FROM:dev@example.com}
+  frontend-base-url: ${APP_FRONTEND_BASE_URL:http://localhost:4200}
 management:
+  health:
+    mail:
+      enabled: false
   endpoints:
     web:
       exposure:

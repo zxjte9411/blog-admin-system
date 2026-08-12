@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
@@ -17,6 +18,10 @@ import org.springframework.http.HttpStatus;
       "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.liquibase.LiquibaseAutoConfiguration"
     })
 class BlogAdminApplicationTests {
+
+  @MockBean private com.blogadmin.identity.domain.UserRepository users;
+  @MockBean private com.blogadmin.identity.domain.EmailVerificationTokenRepository tokens;
+  @MockBean private com.blogadmin.identity.domain.RateLimitEventRepository limits;
 
   @LocalServerPort private int port;
 

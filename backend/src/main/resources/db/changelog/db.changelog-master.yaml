@@ -2,4 +2,6 @@ databaseChangeLog:
   - changeSet:
       id: 1
       author: blog-admin
-      changes: []
+      changes:
+        - sqlFile:
+            path: db/changelog/001-auth.sql
