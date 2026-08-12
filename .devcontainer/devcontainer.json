@@ -105,7 +105,7 @@
     "source=${localWorkspaceFolderBasename}-linuxbrew,target=/home/linuxbrew,type=volume",
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/root/.ssh,type=bind,consistency=cached",
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.m2,target=/root/.m2,type=bind,consistency=cached",
-    "source=${localWorkspaceFolder}/.devcontainer/.gitconfig,target=/root/.gitconfig,type=bind,consistency=cached",
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/root/.gitconfig,type=bind,consistency=cached",
     "source=${localWorkspaceFolder}/.devcontainer/.zshrc,target=/root/.zshrc,type=bind,consistency=cached"
   ]
 }
