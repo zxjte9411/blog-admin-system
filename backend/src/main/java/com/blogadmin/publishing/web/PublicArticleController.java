@@ -1,11 +1,10 @@
-package com.blogadmin.publishing.web;
+package com.blogadmin.publishing.web.controller;
 
 import com.blogadmin.publishing.application.ArticleService;
+import com.blogadmin.publishing.web.dto.PublicArticleView;
+import com.blogadmin.publishing.web.dto.PublicTagView;
 import jakarta.servlet.http.HttpServletRequest;
-import java.time.Instant;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -27,7 +26,7 @@ public class PublicArticleController {
   }
 
   @GetMapping("/articles")
-  ResponseEntity<Page<PublicView>> articles(
+  ResponseEntity<Page<PublicArticleView>> articles(
       @RequestParam(defaultValue = "") String title,
       @RequestParam(required = false) UUID tagId,
       Pageable p,
@@ -36,40 +35,23 @@ public class PublicArticleController {
         PageRequest.of(
             p.getPageNumber(), p.getPageSize(), Sort.by(Sort.Direction.DESC, "publishedAt"));
     return ResponseEntity.ok(
-        service.publicArticleViews(title, tagId, page, req.getRemoteAddr()).map(PublicView::of));
+        service
+            .publicArticleViews(title, tagId, page, req.getRemoteAddr())
+            .map(PublicArticleView::of));
   }
 
   @GetMapping("/articles/{id}")
-  ResponseEntity<PublicView> article(@PathVariable UUID id, HttpServletRequest req) {
-    return ResponseEntity.ok(PublicView.of(service.publicArticleView(id, req.getRemoteAddr())));
+  ResponseEntity<PublicArticleView> article(@PathVariable UUID id, HttpServletRequest req) {
+    return ResponseEntity.ok(
+        PublicArticleView.of(service.publicArticleView(id, req.getRemoteAddr())));
   }
 
   @GetMapping("/tags")
-  ResponseEntity<Page<TagView>> tagList(Pageable p, HttpServletRequest req) {
+  ResponseEntity<Page<PublicTagView>> tagList(Pageable p, HttpServletRequest req) {
     Pageable page = PageRequest.of(p.getPageNumber(), p.getPageSize(), Sort.by("name"));
     return ResponseEntity.ok(
-        service.publicTags(page, req.getRemoteAddr()).map(t -> new TagView(t.id(), t.name())));
+        service
+            .publicTags(page, req.getRemoteAddr())
+            .map(t -> new PublicTagView(t.id(), t.name())));
   }
-
-  public record PublicView(
-      String title,
-      String content,
-      Set<TagView> tags,
-      String authorAttribution,
-      Instant publishedAt,
-      Instant createdAt,
-      Instant updatedAt) {
-    static PublicView of(ArticleService.PublicArticle a) {
-      return new PublicView(
-          a.title(),
-          a.content(),
-          a.tags().stream().map(t -> new TagView(t.id(), t.name())).collect(Collectors.toSet()),
-          a.authorAttribution(),
-          a.publishedAt(),
-          a.createdAt(),
-          a.updatedAt());
-    }
-  }
-
-  public record TagView(UUID id, String name) {}
 }

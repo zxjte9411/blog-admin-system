@@ -1,12 +1,13 @@
-package com.blogadmin.identity.web;
+package com.blogadmin.identity.web.controller;
 
 import com.blogadmin.identity.application.AuthenticationService;
 import com.blogadmin.identity.domain.User;
+import com.blogadmin.identity.web.dto.LoginRequest;
+import com.blogadmin.identity.web.dto.LoginResponse;
+import com.blogadmin.identity.web.dto.SessionResponse;
+import com.blogadmin.identity.web.security.JwtToken;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -21,10 +22,6 @@ import org.springframework.web.server.ResponseStatusException;
 public class AuthenticationController {
   private final AuthenticationService service;
   private final JwtToken jwt;
-
-  public record LoginRequest(@Email @NotBlank String email, @NotBlank String password) {}
-
-  public record LoginResponse(String accessToken, Instant accessTokenExpiresAt) {}
 
   @PostMapping("/login")
   public LoginResponse login(
@@ -64,8 +61,6 @@ public class AuthenticationController {
     service.revokeOther(
         (User) authentication.getPrincipal(), id, (UUID) authentication.getDetails());
   }
-
-  public record SessionResponse(UUID id, boolean current, Instant createdAt, Instant lastUsedAt) {}
 
   @PostMapping("/logout")
   @ResponseStatus(HttpStatus.NO_CONTENT)

@@ -1,4 +1,4 @@
-package com.blogadmin.publishing.web;
+package com.blogadmin.publishing.web.filter;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

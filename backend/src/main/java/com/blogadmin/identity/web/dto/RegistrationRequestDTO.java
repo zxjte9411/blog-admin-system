@@ -1,4 +1,4 @@
-package com.blogadmin.identity.web;
+package com.blogadmin.identity.web.dto;
 
 import com.fasterxml.jackson.annotation.JsonSetter;
 import jakarta.validation.constraints.Email;

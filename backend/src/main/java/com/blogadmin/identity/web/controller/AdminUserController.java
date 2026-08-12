@@ -1,7 +1,10 @@
-package com.blogadmin.identity.web;
+package com.blogadmin.identity.web.controller;
 
 import com.blogadmin.identity.application.AdminUserService;
 import com.blogadmin.identity.domain.*;
+import com.blogadmin.identity.web.dto.AdminUserResponse;
+import com.blogadmin.identity.web.dto.AdminUserUpdateRequest;
+import com.blogadmin.identity.web.dto.PasswordMinimumRequest;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
@@ -14,40 +17,18 @@ import org.springframework.web.bind.annotation.*;
 public class AdminUserController {
   private final AdminUserService service;
 
-  public record UserResponse(
-      UUID id,
-      String email,
-      String displayName,
-      UserRole role,
-      boolean enabled,
-      java.time.Instant verifiedAt) {
-    static UserResponse of(User u) {
-      return new UserResponse(
-          u.getId(),
-          u.getEmail(),
-          u.getDisplayName(),
-          u.getRole(),
-          u.isEnabled(),
-          u.getVerifiedAt());
-    }
-  }
-
-  public record UpdateRequest(UserRole role, Boolean enabled) {}
-
-  public record MinimumRequest(int value) {}
-
   @GetMapping("/users")
-  public List<UserResponse> users(
+  public List<AdminUserResponse> users(
       @RequestParam(required = false) UserRole role,
       @RequestParam(required = false) Boolean enabled,
       @RequestParam(required = false) String q) {
-    return service.list(role, enabled, q).stream().map(UserResponse::of).toList();
+    return service.list(role, enabled, q).stream().map(AdminUserResponse::of).toList();
   }
 
   @PatchMapping("/users/{id}")
-  public UserResponse update(
-      @PathVariable UUID id, @RequestBody UpdateRequest r, Authentication a) {
-    return UserResponse.of(service.update((User) a.getPrincipal(), id, r.role(), r.enabled()));
+  public AdminUserResponse update(
+      @PathVariable UUID id, @RequestBody AdminUserUpdateRequest r, Authentication a) {
+    return AdminUserResponse.of(service.update((User) a.getPrincipal(), id, r.role(), r.enabled()));
   }
 
   @PostMapping("/invitations")
@@ -62,7 +43,7 @@ public class AdminUserController {
   }
 
   @PutMapping("/settings/password-minimum-length")
-  public Map<String, Integer> minimum(@RequestBody MinimumRequest r, Authentication a) {
+  public Map<String, Integer> minimum(@RequestBody PasswordMinimumRequest r, Authentication a) {
     return Map.of("value", service.setMinimum((User) a.getPrincipal(), r.value()));
   }
 

@@ -1,4 +1,4 @@
-package com.blogadmin.identity.web;
+package com.blogadmin.identity.web.security;
 
 import com.blogadmin.identity.domain.User;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -14,17 +14,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
-final class JwtToken {
+public final class JwtToken {
   private final byte[] key;
   private final ObjectMapper objectMapper;
 
-  JwtToken(@Value("${app.security.jwt-secret}") String secret, ObjectMapper objectMapper) {
+  public JwtToken(@Value("${app.security.jwt-secret}") String secret, ObjectMapper objectMapper) {
     key = secret.getBytes(StandardCharsets.UTF_8);
     this.objectMapper = objectMapper;
     if (key.length < 32) throw new IllegalStateException("JWT secret must be at least 32 bytes");
   }
 
-  Token create(User user, UUID sessionId, int accessTokenVersion) {
+  public Token create(User user, UUID sessionId, int accessTokenVersion) {
     Instant expiresAt = Instant.now().plusSeconds(900);
     long exp = expiresAt.getEpochSecond();
     String header = enc(new Header("HS256", "JWT"));
@@ -40,7 +40,7 @@ final class JwtToken {
         header + "." + payload + "." + sign(header + "." + payload), Instant.ofEpochSecond(exp));
   }
 
-  Claims verify(String token) {
+  public Claims verify(String token) {
     try {
       String[] p = token.split("\\.");
       if (p.length != 3 || !MessageDigestCompat.constant(sign(p[0] + "." + p[1]), p[2]))
@@ -57,7 +57,7 @@ final class JwtToken {
     }
   }
 
-  record Token(String value, Instant expiresAt) {}
+  public record Token(String value, Instant expiresAt) {}
 
   private String enc(Object value) {
     try {
@@ -81,7 +81,7 @@ final class JwtToken {
     }
   }
 
-  record Claims(
+  public record Claims(
       String userId, UUID sessionId, int accessTokenVersion, int userAccessTokenVersion) {}
 
   private record Header(String alg, String typ) {}

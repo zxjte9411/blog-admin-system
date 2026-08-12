@@ -1,4 +1,4 @@
-package com.blogadmin.identity.web;
+package com.blogadmin.identity.web.security;
 
 import com.blogadmin.identity.domain.RefreshSessionRepository;
 import com.blogadmin.identity.domain.UserRepository;

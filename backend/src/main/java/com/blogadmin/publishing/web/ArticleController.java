@@ -1,14 +1,12 @@
-package com.blogadmin.publishing.web;
+package com.blogadmin.publishing.web.controller;
 
 import com.blogadmin.identity.domain.User;
 import com.blogadmin.publishing.application.ArticleService;
 import com.blogadmin.publishing.domain.PublicationStatus;
+import com.blogadmin.publishing.web.dto.ArticleView;
+import com.blogadmin.publishing.web.dto.CreateArticleRequest;
+import com.blogadmin.publishing.web.dto.UpdateArticleRequest;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
-import java.time.Instant;
-import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -36,32 +34,34 @@ public class ArticleController {
   }
 
   @PostMapping
-  public ResponseEntity<View> create(
-      @AuthenticationPrincipal User u, @Valid @RequestBody Request r) {
+  public ResponseEntity<ArticleView> create(
+      @AuthenticationPrincipal User u, @Valid @RequestBody CreateArticleRequest r) {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
-            View.of(
+            ArticleView.of(
                 service.create(u, r.title(), r.content(), r.status(), r.tagIds(), r.tagNames())));
   }
 
   @GetMapping
-  public Page<View> list(
+  public Page<ArticleView> list(
       @RequestParam(required = false) String title,
       @RequestParam(required = false) PublicationStatus status,
       @RequestParam(required = false) UUID tagId,
       Pageable p) {
-    return service.list(title, status, tagId, p).map(View::of);
+    return service.list(title, status, tagId, p).map(ArticleView::of);
   }
 
   @GetMapping("/{id}")
-  public View get(@PathVariable UUID id) {
-    return View.of(service.get(id));
+  public ArticleView get(@PathVariable UUID id) {
+    return ArticleView.of(service.get(id));
   }
 
   @PutMapping("/{id}")
-  public View update(
-      @AuthenticationPrincipal User u, @PathVariable UUID id, @Valid @RequestBody UpdateRequest r) {
-    return View.of(
+  public ArticleView update(
+      @AuthenticationPrincipal User u,
+      @PathVariable UUID id,
+      @Valid @RequestBody UpdateArticleRequest r) {
+    return ArticleView.of(
         service.update(
             u, id, r.title(), r.content(), r.status(), r.version(), r.tagIds(), r.tagNames()));
   }
@@ -73,52 +73,12 @@ public class ArticleController {
   }
 
   @GetMapping("/deleted")
-  public Page<View> deleted(@AuthenticationPrincipal User u, Pageable p) {
-    return service.deleted(u, p).map(View::of);
+  public Page<ArticleView> deleted(@AuthenticationPrincipal User u, Pageable p) {
+    return service.deleted(u, p).map(ArticleView::of);
   }
 
   @PostMapping("/{id}/restore")
-  public View restore(@AuthenticationPrincipal User u, @PathVariable UUID id) {
-    return View.of(service.restore(u, id));
-  }
-
-  public record Request(
-      @NotBlank @Size(max = 200) String title,
-      @NotBlank @Size(max = 100000) String content,
-      PublicationStatus status,
-      Long version,
-      @Size(max = 10) Set<UUID> tagIds,
-      @Size(max = 10) Set<@NotBlank @Size(max = 100) String> tagNames) {}
-
-  public record UpdateRequest(
-      @NotBlank @Size(max = 200) String title,
-      @NotBlank @Size(max = 100000) String content,
-      @NotNull PublicationStatus status,
-      @NotNull Long version,
-      @Size(max = 10) Set<UUID> tagIds,
-      @Size(max = 10) Set<@NotBlank @Size(max = 100) String> tagNames) {}
-
-  public record View(
-      UUID id,
-      UUID owner,
-      String authorAttribution,
-      String title,
-      String content,
-      PublicationStatus status,
-      Instant publishedAt,
-      long version,
-      Set<UUID> tagIds) {
-    static View of(ArticleService.ArticleView a) {
-      return new View(
-          a.id(),
-          a.owner(),
-          a.authorAttribution(),
-          a.title(),
-          a.content(),
-          a.status(),
-          a.publishedAt(),
-          a.version(),
-          a.tagIds());
-    }
+  public ArticleView restore(@AuthenticationPrincipal User u, @PathVariable UUID id) {
+    return ArticleView.of(service.restore(u, id));
   }
 }

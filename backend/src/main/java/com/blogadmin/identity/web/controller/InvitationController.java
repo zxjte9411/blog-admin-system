@@ -1,8 +1,9 @@
-package com.blogadmin.identity.web;
+package com.blogadmin.identity.web.controller;
 
 import com.blogadmin.identity.application.AdminUserService;
 import com.blogadmin.identity.domain.User;
-import java.util.UUID;
+import com.blogadmin.identity.web.dto.InvitationRedeemRequest;
+import com.blogadmin.identity.web.dto.InvitationUserResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -14,10 +15,9 @@ import org.springframework.web.server.ResponseStatusException;
 public class InvitationController {
   private final AdminUserService service;
 
-  public record RedeemRequest(String displayName, String password, String preferredLanguage) {}
-
   @PostMapping("/{token}/redeem")
-  public UserResponse redeem(@PathVariable String token, @RequestBody RedeemRequest request) {
+  public InvitationUserResponse redeem(
+      @PathVariable String token, @RequestBody InvitationRedeemRequest request) {
     User user;
     try {
       user =
@@ -28,7 +28,7 @@ public class InvitationController {
     } catch (AdminUserService.AlreadyExistsException e) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "User already exists");
     }
-    return new UserResponse(
+    return new InvitationUserResponse(
         user.getId(),
         user.getEmail(),
         user.getDisplayName(),
@@ -36,12 +36,4 @@ public class InvitationController {
         user.isEnabled(),
         user.getVerifiedAt());
   }
-
-  public record UserResponse(
-      UUID id,
-      String email,
-      String displayName,
-      com.blogadmin.identity.domain.UserRole role,
-      boolean enabled,
-      java.time.Instant verifiedAt) {}
 }

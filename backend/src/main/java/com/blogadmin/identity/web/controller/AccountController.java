@@ -1,11 +1,12 @@
-package com.blogadmin.identity.web;
+package com.blogadmin.identity.web.controller;
 
 import com.blogadmin.identity.application.AccountService;
 import com.blogadmin.identity.domain.User;
+import com.blogadmin.identity.web.dto.AccountEmailRequest;
+import com.blogadmin.identity.web.dto.AccountPasswordRequest;
+import com.blogadmin.identity.web.dto.AccountProfileRequest;
+import com.blogadmin.identity.web.dto.AccountProfileResponse;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
@@ -18,26 +19,16 @@ import org.springframework.web.server.ResponseStatusException;
 public class AccountController {
   private final AccountService service;
 
-  public record Profile(
-      @NotBlank @Size(max = 100) String displayName,
-      @NotBlank @Pattern(regexp = "zh-TW|en") String preferredLanguage) {}
-
-  public record Password(
-      @NotBlank String currentPassword,
-      @NotBlank @Size(max = 128) String newPassword,
-      Boolean logoutCurrentSession) {}
-
-  public record Email(@NotBlank @jakarta.validation.constraints.Email String email) {}
-
   @PatchMapping("/api/v1/account/profile")
-  public Profile profile(@Valid @RequestBody Profile r, Authentication a) {
+  public AccountProfileResponse profile(
+      @Valid @RequestBody AccountProfileRequest r, Authentication a) {
     User u = service.profile((User) a.getPrincipal(), r.displayName(), r.preferredLanguage());
-    return new Profile(u.getDisplayName(), u.getPreferredLanguage());
+    return new AccountProfileResponse(u.getDisplayName(), u.getPreferredLanguage());
   }
 
   @PutMapping("/api/v1/account/password")
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  public void password(@Valid @RequestBody Password r, Authentication a) {
+  public void password(@Valid @RequestBody AccountPasswordRequest r, Authentication a) {
     service.password(
         (User) a.getPrincipal(),
         r.currentPassword(),
@@ -64,7 +55,7 @@ public class AccountController {
 
   @PostMapping("/api/v1/account/email")
   @ResponseStatus(HttpStatus.ACCEPTED)
-  public void email(@Valid @RequestBody Email r, Authentication a) {
+  public void email(@Valid @RequestBody AccountEmailRequest r, Authentication a) {
     try {
       service.requestEmail((User) a.getPrincipal(), r.email());
     } catch (AccountService.AlreadyUsedEmail e) {

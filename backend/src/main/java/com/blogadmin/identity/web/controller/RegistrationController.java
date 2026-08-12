@@ -1,6 +1,9 @@
-package com.blogadmin.identity.web;
+package com.blogadmin.identity.web.controller;
 
 import com.blogadmin.identity.application.RegistrationService;
+import com.blogadmin.identity.web.dto.EmailVerificationRequestDTO;
+import com.blogadmin.identity.web.dto.RegistrationRequestDTO;
+import com.blogadmin.identity.web.dto.ResendEmailVerificationRequestDTO;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

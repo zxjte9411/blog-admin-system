@@ -1,4 +1,4 @@
-package com.blogadmin.identity.web;
+package com.blogadmin.identity.web.exception;
 
 import com.blogadmin.identity.application.AccountService.InvalidAccountException;
 import com.blogadmin.identity.application.AdminUserService.*;

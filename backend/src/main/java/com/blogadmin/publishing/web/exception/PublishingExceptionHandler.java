@@ -1,4 +1,4 @@
-package com.blogadmin.publishing.web;
+package com.blogadmin.publishing.web.exception;
 
 import com.blogadmin.publishing.application.ArticleException;
 import jakarta.servlet.http.HttpServletRequest;
