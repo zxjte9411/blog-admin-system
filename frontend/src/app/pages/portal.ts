@@ -8,7 +8,7 @@ import {
   inject,
 } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { Auth } from '../core/auth';
 import { Language } from '../core/language';
 
@@ -36,7 +36,7 @@ const formFields: Record<string, string[]> = {
 @Component({
   selector: 'app-portal',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, RouterLinkActive],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './portal.scss',
   templateUrl: './portal.html',
@@ -81,6 +81,32 @@ export class Portal implements OnInit {
     '/account/email',
     '/account/sessions',
   ];
+
+  readonly navGroups = [
+    { label: 'public', links: ['/public/articles', '/public/tags'] },
+    {
+      label: 'manage',
+      links: [
+        '/admin/articles',
+        '/admin/articles/deleted',
+        '/admin/users',
+        '/admin/invitations',
+        '/admin/settings/password',
+      ],
+    },
+    {
+      label: 'account',
+      links: ['/account/profile', '/account/password', '/account/email', '/account/sessions'],
+    },
+  ];
+
+  navGroupLabel(group: string) {
+    const labels =
+      this.language.lang() === 'en'
+        ? { public: 'Public content', manage: 'Management', account: 'Your account' }
+        : { public: '公開內容', manage: '管理工作區', account: '個人設定' };
+    return labels[group as keyof typeof labels] ?? group;
+  }
 
   ngOnInit() {
     this.routePath = this.router.url.split('?')[0];
