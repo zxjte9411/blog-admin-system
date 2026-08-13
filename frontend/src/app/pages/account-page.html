@@ -1,0 +1,74 @@
+<app-shell [loading]="loading">
+  <app-account-layout>
+    <header class="page-intro">
+      <p class="eyebrow">{{ language.t.title }}</p>
+      <h1>{{ title }}</h1>
+    </header>
+    @if (loading) {
+      <progress class="loading-bar" [attr.aria-label]="language.t.loading"></progress>
+    }
+    @if (message) {
+      <div class="success" role="status">{{ message }}</div>
+    }
+    @if (error) {
+      <div class="error" role="alert">{{ error }}</div>
+    }
+    @if (language.error()) {
+      <div class="error" role="alert">{{ language.error() }}</div>
+    }
+    @if (fields.length || routeKey === 'confirm-email') {
+      <form [formGroup]="form" (ngSubmit)="submit()">
+        @for (field of fields; track field) {
+          <label class="field" [for]="'field-' + field"
+            >{{ fieldLabel(field) }}
+            <input
+              class="control"
+              [id]="'field-' + field"
+              [type]="
+                field.toLowerCase().includes('password')
+                  ? 'password'
+                  : field === 'email'
+                    ? 'email'
+                    : 'text'
+              "
+              [formControlName]="field"
+              [attr.autocomplete]="autocomplete(field)"
+              [attr.aria-invalid]="fieldInvalid(field) ? 'true' : null"
+              [attr.aria-describedby]="fieldErrorId(field)"
+            />
+            <span class="field-error" [id]="fieldErrorId(field)" aria-live="polite">
+              @if (fieldInvalid(field)) {
+                {{ language.t.required }}
+              }
+            </span>
+          </label>
+        }
+        <button class="ui-primary form-submit" type="submit" [disabled]="loading">
+          {{ language.t.submit }}
+        </button>
+      </form>
+    }
+    @if (routeKey === 'account/sessions' && !loading) {
+      <section class="sessions" [attr.aria-label]="title">
+        @for (session of items; track session['id']) {
+          <article class="session">
+            <strong>{{ session['current'] ? language.t.sessionCurrent : session['id'] }}</strong>
+            <div>
+              {{ language.t.sessionCreatedAt }}: <time>{{ session['createdAt'] }}</time>
+            </div>
+            <div>
+              {{ language.t.sessionLastUsedAt }}: <time>{{ session['lastUsedAt'] }}</time>
+            </div>
+            @if (!session['current']) {
+              <button class="text-link danger" type="button" (click)="revoke(session)">
+                {{ language.t.revoke }}
+              </button>
+            }
+          </article>
+        } @empty {
+          <p>{{ language.t.empty }}</p>
+        }
+      </section>
+    }
+  </app-account-layout>
+</app-shell>

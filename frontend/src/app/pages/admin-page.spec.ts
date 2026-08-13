@@ -1,0 +1,310 @@
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
+import { ActivatedRoute, provideRouter } from '@angular/router';
+import { AdminPage } from './admin-page';
+
+describe('AdminPage', () => {
+  function setup(routeKey: string, id: string | null = null) {
+    return TestBed.configureTestingModule({
+      imports: [AdminPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: routeKey },
+              paramMap: { get: (key: string) => (key === 'id' ? id : null) },
+              queryParamMap: { get: () => null },
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+  }
+
+  it('prefills an article editor from its existing article', async () => {
+    await setup('admin/articles/:id', 'article-1');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.detectChanges();
+
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/articles/article-1')
+      .flush({
+        id: 'article-1',
+        title: 'Existing title',
+        content: 'Existing content',
+        status: 'PUBLISHED',
+        tagIds: ['tag-1', 'tag-2'],
+        version: 3,
+      });
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement.querySelector('#title') as HTMLInputElement).value).toBe(
+      'Existing title',
+    );
+    expect(fixture.nativeElement.querySelector('.preserved-tags')?.textContent).toContain('tag-1');
+    expect(fixture.nativeElement.querySelector('.preserved-tags')?.textContent).toContain('tag-2');
+  });
+
+  it('renders article status as selectable radio options', async () => {
+    await setup('admin/articles/new');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.detectChanges();
+
+    const radios = fixture.nativeElement.querySelectorAll(
+      'input[type="radio"][name="status"]',
+    ) as NodeListOf<HTMLInputElement>;
+
+    expect(radios).toHaveLength(2);
+    expect([...radios].map((radio) => radio.value)).toEqual(['DRAFT', 'PUBLISHED']);
+
+    const publishedLabel = fixture.nativeElement.querySelector(
+      'label.status-option:nth-of-type(2)',
+    ) as HTMLLabelElement;
+    publishedLabel.click();
+
+    expect(
+      (fixture.nativeElement.querySelector('input[name="status"]:checked') as HTMLInputElement)
+        .value,
+    ).toBe('PUBLISHED');
+    const publishedRadio = fixture.nativeElement.querySelector(
+      'input[name="status"][value="PUBLISHED"]',
+    ) as HTMLInputElement;
+    publishedRadio.focus();
+    expect(document.activeElement).toBe(publishedRadio);
+    publishedRadio.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    expect(publishedRadio.checked).toBe(true);
+  });
+
+  it('renders new article controls in the PRD order', async () => {
+    await setup('admin/articles/new');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.detectChanges();
+
+    const form = fixture.nativeElement.querySelector('.article-form') as HTMLFormElement;
+    const controls = [...form.children]
+      .map((element: Element) => ({
+        name: element.matches('.status-field') ? 'status' : element.querySelector('.control')?.id,
+        order: Number(getComputedStyle(element).order),
+      }))
+      .sort((left, right) => left.order - right.order)
+      .map(({ name }) => name)
+      .filter(Boolean);
+
+    expect(controls).toEqual(['title', 'content', 'tagNames', 'status']);
+  });
+
+  it('sends the article editor payload with enum status and remaining tags', async () => {
+    await setup('admin/articles/:id', 'article-1');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/articles/article-1').flush({
+      owner: 'author-1',
+      title: 'Title',
+      content: 'Content',
+      status: 'DRAFT',
+      tagIds: ['tag-1', 'tag-2'],
+      version: 3,
+    });
+    fixture.componentInstance.removeTag('tag-1');
+    fixture.componentInstance.submit();
+
+    const request = http.expectOne('/api/v1/articles/article-1');
+    expect(request.request.method).toBe('PUT');
+    expect(request.request.body).toEqual(
+      expect.objectContaining({ status: 'DRAFT', tagIds: ['tag-2'], version: 3 }),
+    );
+  });
+
+  it('allows an author to edit their own article and rejects another owner', async () => {
+    await setup('admin/articles/:id', 'article-1');
+    const fixture = TestBed.createComponent(AdminPage);
+    const page = fixture.componentInstance;
+    page.auth.user = {
+      id: 'author-1',
+      displayName: 'Ada',
+      preferredLanguage: 'en',
+      role: 'AUTHOR',
+    };
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/articles/article-1').flush({
+      owner: 'author-1',
+      title: 'Owned article',
+      content: 'Content',
+      status: 'DRAFT',
+      tagIds: [],
+      version: 1,
+    });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('form')).toBeTruthy();
+
+    fixture.destroy();
+    const otherFixture = TestBed.createComponent(AdminPage);
+    otherFixture.componentInstance.auth.user = { ...page.auth.user };
+    otherFixture.detectChanges();
+    http.expectOne('/api/v1/articles/article-1').flush({ owner: 'author-2' });
+    otherFixture.detectChanges();
+
+    expect(otherFixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
+  });
+
+  it('only deletes an article after confirmation', async () => {
+    await setup('admin/articles');
+    const page = TestBed.createComponent(AdminPage).componentInstance;
+    vi.spyOn(page, 'confirmDelete').mockReturnValue(false);
+    page.deleteArticle({ id: 'article-1', title: 'Title' });
+    TestBed.inject(HttpTestingController).expectNone('/api/v1/articles/article-1');
+  });
+
+  it('searches from the first page and requests the next result page', async () => {
+    await setup('admin/articles');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/articles?page=0').flush({ content: [], totalPages: 2 });
+
+    fixture.componentInstance.search('needle');
+    http.expectOne('/api/v1/articles?page=0&title=needle').flush({ content: [], totalPages: 2 });
+    fixture.componentInstance.nextPage();
+    const next = http.expectOne('/api/v1/articles?page=1&title=needle');
+    expect(next.request.params.get('page')).toBe('1');
+  });
+
+  it('renders the article management list for the administration route', async () => {
+    await setup('admin/articles');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/articles?page=0').flush({ content: [], totalPages: 0 });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('app-article-management-list')).toBeTruthy();
+  });
+
+  it('uses the administration API for deleted articles', async () => {
+    await setup('admin/articles/deleted');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.componentInstance.routeKey = 'admin/articles/deleted';
+    fixture.detectChanges();
+
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/articles/deleted?page=0').flush([]);
+  });
+
+  it('allows article management only to its owner or an administrator', async () => {
+    await setup('admin/articles');
+    const page = TestBed.createComponent(AdminPage).componentInstance;
+    page.auth.user = {
+      id: 'author-1',
+      displayName: 'Ada',
+      preferredLanguage: 'en',
+      role: 'AUTHOR',
+    };
+
+    expect(page.canManageArticle({ owner: 'author-1' })).toBe(true);
+    expect(page.canManageArticle({ owner: 'author-2' })).toBe(false);
+    page.auth.user = { ...page.auth.user, role: 'ADMIN' };
+    expect(page.canManageArticle({ ownerId: 'author-2' })).toBe(true);
+  });
+
+  it('renders password history audit fields', async () => {
+    await setup('admin/settings/password');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.detectChanges();
+
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/admin/settings/password-minimum-length/history?page=0')
+      .flush([
+        {
+          operatorId: 'operator-1',
+          previousValue: 8,
+          newValue: 12,
+          changedAt: '2026-08-14T10:00:00Z',
+        },
+      ]);
+    fixture.detectChanges();
+
+    const table = fixture.nativeElement.querySelector('.password-history');
+    expect(table.textContent).toContain('operator-1');
+    expect(table.textContent).toContain('8');
+    expect(table.textContent).toContain('12');
+    expect(table.textContent).toContain('2026-08-14T10:00:00Z');
+  });
+
+  it('does not submit an invalid invitation email', async () => {
+    await setup('admin/invitations');
+    const fixture = TestBed.createComponent(AdminPage);
+    const page = fixture.componentInstance;
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/admin/invitations?page=0').flush([]);
+    page.form.patchValue({ email: 'invalid-email' });
+    page.submit();
+
+    http.expectNone('/api/v1/admin/invitations');
+  });
+
+  it('renders admin users with role and enabled controls', async () => {
+    await setup('admin/users');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http
+      .expectOne('/api/v1/admin/users?page=0')
+      .flush([{ id: 'user-2', displayName: 'Mina', role: 'AUTHOR', enabled: true }]);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('table')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('select[aria-label="Role: Mina"]')).toBeTruthy();
+    expect(
+      fixture.nativeElement.querySelector('input[type="checkbox"][aria-label="Enabled: Mina"]'),
+    ).toBeTruthy();
+  });
+
+  it('sends an admin user role change without changing the endpoint contract', async () => {
+    await setup('admin/users');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http
+      .expectOne('/api/v1/admin/users?page=0')
+      .flush([{ id: 'user-2', displayName: 'Mina', role: 'AUTHOR', enabled: true }]);
+    fixture.detectChanges();
+
+    const select = fixture.nativeElement.querySelector(
+      'select[aria-label="Role: Mina"]',
+    ) as HTMLSelectElement;
+    select.value = 'ADMIN';
+    select.dispatchEvent(new Event('change'));
+    fixture.nativeElement.querySelector('button[aria-label="Update Mina"]').click();
+
+    const request = http.expectOne('/api/v1/admin/users/user-2');
+    expect(request.request.method).toBe('PATCH');
+    expect(request.request.body).toEqual({ role: 'ADMIN', enabled: true });
+  });
+
+  it('updates the administration title when the language changes', async () => {
+    await setup('admin/articles');
+    const fixture = TestBed.createComponent(AdminPage);
+    const page = fixture.componentInstance;
+    page.routeKey = 'admin/articles';
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/articles?page=0').flush([]);
+    fixture.detectChanges();
+    const englishTitle = fixture.nativeElement.querySelector('h1').textContent.trim();
+
+    page.language.set('zh-TW');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('h1').textContent.trim()).not.toBe(englishTitle);
+  });
+});

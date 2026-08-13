@@ -1,0 +1,229 @@
+<app-shell [loading]="loading">
+  <div class="page-intro">
+    <div>
+      <p class="eyebrow">{{ language.t.title }}</p>
+      <h1>{{ title }}</h1>
+    </div>
+    @if (routeKey === 'admin/articles') {
+      <a class="ui-primary" routerLink="/admin/articles/new">{{ language.t.newArticle }}</a>
+    }
+  </div>
+  @if (loading) {
+    <progress class="loading-bar" [attr.aria-label]="language.t.loading"></progress>
+  }
+  @if (message) {
+    <div class="success" role="status">{{ message }}</div>
+  }
+  @if (error) {
+    <div class="error" role="alert">{{ error }}</div>
+  }
+  @if (language.error()) {
+    <div class="error" role="alert">{{ language.error() }}</div>
+  }
+
+  @if (
+    form.controls &&
+    (routeKey === 'admin/articles/new' ||
+      routeKey === 'admin/articles/:id' ||
+      routeKey === 'admin/invitations' ||
+      routeKey === 'admin/settings/password')
+  ) {
+    <form
+      class="admin-form"
+      [class.article-form]="routeKey === 'admin/articles/new' || routeKey === 'admin/articles/:id'"
+      [class.compact-submit]="
+        routeKey === 'admin/invitations' || routeKey === 'admin/settings/password'
+      "
+      [formGroup]="form"
+      (ngSubmit)="submit()"
+    >
+      @for (field of form.controls | keyvalue; track field.key) {
+        @if (field.key !== 'status') {
+          <label [attr.for]="field.key"
+            >{{ fieldLabel(field.key) }}
+            @if (field.key === 'content' || field.key === 'tagNames') {
+              <textarea
+                class="control"
+                [id]="field.key"
+                [formControlName]="field.key"
+                [attr.aria-invalid]="fieldHasError(field.key) ? 'true' : null"
+                [attr.aria-describedby]="
+                  fieldHasError(field.key) ? 'field-' + field.key + '-error' : null
+                "
+              ></textarea>
+            } @else {
+              <input
+                class="control"
+                [id]="field.key"
+                [type]="field.key === 'email' ? 'email' : field.key === 'value' ? 'number' : 'text'"
+                [formControlName]="field.key"
+                [attr.aria-invalid]="fieldHasError(field.key) ? 'true' : null"
+                [attr.aria-describedby]="
+                  fieldHasError(field.key) ? 'field-' + field.key + '-error' : null
+                "
+              />
+            }
+            @if (fieldHasError(field.key)) {
+              <span class="field-error" [id]="'field-' + field.key + '-error'" role="alert">{{
+                fieldError(field.key)
+              }}</span>
+            }
+          </label>
+        }
+      }
+      @if (routeKey === 'admin/articles/new' || routeKey === 'admin/articles/:id') {
+        <fieldset
+          class="status-field status-options"
+          [attr.aria-invalid]="fieldHasError('status') ? 'true' : null"
+          [attr.aria-describedby]="fieldHasError('status') ? 'field-status-error' : null"
+        >
+          <legend>{{ fieldLabel('status') }}</legend>
+          <label class="status-option" for="status-draft">
+            <input
+              id="status-draft"
+              type="radio"
+              name="status"
+              value="DRAFT"
+              formControlName="status"
+            />
+            <span>{{ language.t.draft }}</span>
+          </label>
+          <label class="status-option" for="status-published">
+            <input
+              id="status-published"
+              type="radio"
+              name="status"
+              value="PUBLISHED"
+              formControlName="status"
+            />
+            <span>{{ language.t.published }}</span>
+          </label>
+          @if (fieldHasError('status')) {
+            <span class="field-error" id="field-status-error" role="alert">{{
+              fieldError('status')
+            }}</span>
+          }
+        </fieldset>
+      }
+      @if (routeKey === 'admin/articles/:id' && visibleTagIds().length) {
+        <div class="preserved-tags" aria-label="Existing tag IDs">
+          @for (tagId of visibleTagIds(); track tagId) {
+            <span class="tag-id"
+              >{{ tagId }}
+              <button type="button" class="text-link" (click)="removeTag(tagId)">
+                {{ language.t.remove }}
+              </button></span
+            >
+          }
+        </div>
+      }
+      <button class="ui-primary" type="submit" [disabled]="loading">{{ language.t.submit }}</button>
+    </form>
+  }
+
+  @if (routeKey === 'admin/articles') {
+    <app-article-management-list
+      [items]="items"
+      [loading]="loading"
+      [totalPages]="totalPages"
+      [page]="page"
+      [searchTitle]="searchTitle"
+      [canManageArticle]="canManageArticle"
+      [titleLabel]="fieldLabel('title')"
+      [authorLabel]="language.t.authorAttribution"
+      [createdLabel]="language.t.sessionCreatedAt"
+      [actionsLabel]="language.t.actions"
+      [caption]="language.t.data"
+      [emptyLabel]="language.t.empty"
+      [loadingLabel]="language.t.loading"
+      [searchLabel]="language.t.searchAction"
+      [editLabel]="language.t.edit"
+      [deleteLabel]="language.t.delete"
+      [previousLabel]="language.t.previous"
+      [nextLabel]="language.t.next"
+      [pageLabel]="language.t.page"
+      [ofLabel]="language.t.of"
+      (searchChange)="search($event)"
+      (open)="open($event)"
+      (delete)="deleteArticle($event)"
+      (previousPage)="previousPage()"
+      (nextPage)="nextPage()"
+    />
+  } @else if (routeKey === 'admin/users') {
+    <app-admin-user-management
+      [items]="items"
+      [dataLabel]="language.t.data"
+      [roleLabel]="language.t.role"
+      [authorLabel]="language.t.roles.AUTHOR"
+      [adminLabel]="language.t.roles.ADMIN"
+      [enabledLabel]="language.t.enabled"
+      [disabledLabel]="language.t.disabled"
+      [statusLabel]="language.t.field.status"
+      [toggleLabel]="language.t.toggle"
+      [updateLabel]="language.t.update"
+      [canEditRow]="canManageUser"
+      (updateRow)="updateUser($event)"
+      (toggleRow)="toggleUserEnabled($event)"
+      (roleChange)="updateUserRole($event)"
+      (enabledChange)="updateUserEnabled($event)"
+    />
+  } @else if (items.length) {
+    @if (routeKey === 'admin/settings/password') {
+      <div class="table-wrap">
+        <table class="data-table password-history">
+          <caption>
+            {{
+              language.t.historyHeading
+            }}
+          </caption>
+          <thead>
+            <tr>
+              <th>{{ language.t.history.operatorId }}</th>
+              <th>{{ language.t.history.previousValue }}</th>
+              <th>{{ language.t.history.newValue }}</th>
+              <th>{{ language.t.history.changedAt }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of items; track row['id'] || row['changedAt']) {
+              <tr>
+                <td [attr.data-label]="language.t.history.operatorId">{{ row['operatorId'] }}</td>
+                <td [attr.data-label]="language.t.history.previousValue">
+                  {{ row['previousValue'] }}
+                </td>
+                <td [attr.data-label]="language.t.history.newValue">{{ row['newValue'] }}</td>
+                <td [attr.data-label]="language.t.history.changedAt">{{ row['changedAt'] }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <div class="table-wrap">
+        <table class="data-table">
+          <caption>
+            {{
+              language.t.data
+            }}
+          </caption>
+          <tbody>
+            @for (row of items; track row['id']) {
+              <tr>
+                <td>
+                  {{ row['title'] || row['email'] || row['id'] }}
+                  @if (routeKey === 'admin/articles/deleted') {
+                    <button class="text-link" type="button" (click)="restoreArticle(row)">
+                      {{ language.t.restore }}
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  } @else if (!loading && routeKey !== 'admin/articles/new' && routeKey !== 'admin/articles/:id') {
+    <p class="empty">{{ language.t.empty }}</p>
+  }
+</app-shell>

@@ -1,0 +1,42 @@
+<a class="skip-link" href="#content">Skip to main content</a>
+<header class="app-shell-header">
+  <a routerLink="/public/articles" class="brand">{{ language.t.title }}</a>
+  <span class="spacer"></span>
+  <button class="ui-ghost" type="button" (click)="toggleLanguage()">
+    {{ language.lang() === 'en' ? '繁中' : 'EN' }}
+  </button>
+  @if (auth.token) {
+    <button class="ui-ghost" type="button" (click)="logout()">{{ language.t.logout }}</button>
+  } @else {
+    <a class="ui-ghost" routerLink="/login">{{ language.t.login }}</a>
+  }
+</header>
+<div class="shell">
+  <aside class="app-shell-sidebar">
+    <nav aria-label="Primary navigation">
+      @for (group of navGroups; track group.label) {
+        <section class="nav-group" [attr.aria-label]="navGroupLabel(group.label)">
+          <h2>{{ navGroupLabel(group.label) }}</h2>
+          <ul>
+            @for (link of group.links; track link) {
+              <li [hidden]="!canSeeNav(link)">
+                <a
+                  class="nav-link"
+                  [routerLink]="link"
+                  routerLinkActive="is-active"
+                  [routerLinkActiveOptions]="{ exact: true }"
+                  [ariaCurrentWhenActive]="'page'"
+                >
+                  {{ navLabel(link) }}
+                </a>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+    </nav>
+  </aside>
+  <main id="content" class="app-shell-main" tabindex="-1" [attr.aria-busy]="loading">
+    <ng-content />
+  </main>
+</div>

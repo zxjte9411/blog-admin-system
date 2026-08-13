@@ -1,0 +1,104 @@
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  Input,
+  OnInit,
+  inject,
+} from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { Auth } from '../core/auth';
+import { Language } from '../core/language';
+
+@Component({
+  selector: 'app-shell',
+  standalone: true,
+  imports: [RouterLink, RouterLinkActive],
+  templateUrl: './app-shell.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  styleUrl: './app-shell.scss',
+})
+export class AppShell implements OnInit {
+  readonly auth = inject(Auth);
+  readonly language = inject(Language);
+  private readonly http = inject(HttpClient);
+  private readonly router = inject(Router);
+  private readonly cdr = inject(ChangeDetectorRef);
+
+  @Input() loading = false;
+
+  readonly navGroups = [
+    { label: 'public', links: ['/public/articles', '/public/tags'] },
+    {
+      label: 'manage',
+      links: [
+        '/admin/articles',
+        '/admin/articles/deleted',
+        '/admin/users',
+        '/admin/invitations',
+        '/admin/settings/password',
+      ],
+    },
+    {
+      label: 'account',
+      links: ['/account/profile', '/account/password', '/account/email', '/account/sessions'],
+    },
+  ];
+
+  ngOnInit() {
+    if (this.auth.token && !this.auth.user) {
+      this.auth.load().subscribe((user) => {
+        if (user) this.language.usePreferred(user.preferredLanguage);
+        this.cdr.markForCheck();
+      });
+    }
+  }
+
+  toggleLanguage() {
+    const next = this.language.lang() === 'en' ? 'zh-TW' : 'en';
+    if (this.auth.token && !this.auth.user) {
+      this.language.usePreferred(next);
+      this.auth.load().subscribe((user) => user && this.language.set(next));
+    } else {
+      this.language.set(next);
+    }
+  }
+
+  navGroupLabel(group: string) {
+    const labels =
+      this.language.lang() === 'en'
+        ? { public: 'Public content', manage: 'Management', account: 'Your account' }
+        : { public: '公開內容', manage: '管理工作區', account: '個人設定' };
+    return labels[group as keyof typeof labels] ?? group;
+  }
+
+  navLabel(link: string) {
+    if (link.includes('/public/tags')) return this.language.t.nav.tags;
+    if (link.includes('/articles/deleted')) return this.language.t.nav.deletedArticles;
+    if (link.includes('invitations')) return this.language.t.nav.invitations;
+    if (link.includes('settings/password')) return this.language.t.nav.password;
+    if (link.includes('users')) return this.language.t.nav.users;
+    if (link.includes('articles')) return this.language.t.nav.articles;
+    if (link.includes('profile')) return this.language.t.nav.profile;
+    if (link.includes('account/password')) return this.language.t.field.password;
+    if (link.includes('account/email')) return this.language.t.field.email;
+    return this.language.t.nav.sessions;
+  }
+
+  canSeeNav(link: string) {
+    if (link === '/public/articles' || link === '/public/tags') return true;
+    if (!this.auth.user) return false;
+    return (
+      !['/admin/users', '/admin/invitations', '/admin/settings/password'].includes(link) ||
+      this.auth.user.role === 'ADMIN'
+    );
+  }
+
+  logout() {
+    this.http.post('/api/v1/auth/logout', {}).subscribe(() => {
+      this.auth.clear();
+      void this.router.navigateByUrl('/login');
+    });
+  }
+}

@@ -1,0 +1,14 @@
+:host {
+  display: block;
+}
+
+.account-layout {
+  width: min(100%, 48rem);
+  box-sizing: border-box;
+  margin-inline: auto;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--cream) 92%, white);
+  box-shadow: 0 1rem 3rem rgb(23 22 20 / 8%);
+}

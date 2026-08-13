@@ -34,8 +34,58 @@
 .state-text {
   white-space: nowrap;
 }
-@media (max-width: 52rem) {
+@media (max-width: 640px) {
   .table-wrap {
-    overflow-x: auto;
+    overflow-x: visible;
+  }
+
+  .data-table {
+    min-width: 0;
+  }
+
+  .data-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .data-table,
+  .data-table tbody,
+  .data-table tr,
+  .data-table td,
+  .data-table th {
+    display: block;
+  }
+
+  .data-table tr {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .data-table td,
+  .data-table th {
+    display: grid;
+    grid-template-columns: minmax(6rem, 36%) minmax(0, 1fr);
+    gap: 0.75rem;
+    border-bottom: 0;
+    padding: 0.55rem 0;
+    text-align: left;
+  }
+
+  .data-table td::before,
+  .data-table th::before {
+    content: attr(data-label);
+    color: var(--ink-muted, #716a61);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .state-control {
+    margin-left: 0;
   }
 }

@@ -1,0 +1,244 @@
+:host {
+  display: block;
+}
+.page-intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 1rem;
+  padding-bottom: 1.75rem;
+  border-bottom: 1px solid var(--line);
+}
+.eyebrow {
+  margin: 0 0 0.5rem;
+  color: var(--amber);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+h1 {
+  margin: 0;
+  font:
+    700 clamp(2rem, 4vw, 3.5rem)/1 Georgia,
+    serif;
+}
+.loading-bar {
+  display: block;
+  width: 100%;
+  height: 0.25rem;
+  accent-color: var(--amber);
+}
+.success,
+.error {
+  margin: 1rem 0;
+  padding: 0.85rem 1rem;
+  border-inline-start: 3px solid;
+}
+.success {
+  color: #185c37;
+  background: #e4f2df;
+  border-color: #398456;
+}
+.error {
+  color: #9b2c20;
+  background: #f9e2dc;
+  border-color: #b33b2d;
+}
+.admin-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 2rem 0 0.75rem;
+}
+.article-form {
+  gap: 1.25rem;
+}
+.article-form > label:first-child,
+.article-form > label:has(textarea) {
+  grid-column: 1 / -1;
+}
+.article-form > label[for='title'] {
+  order: 1;
+}
+.article-form > label[for='content'] {
+  order: 2;
+}
+.article-form > label[for='tagNames'] {
+  order: 3;
+}
+.article-form > .status-field {
+  order: 4;
+}
+.status-field {
+  align-content: start;
+}
+.status-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.status-option {
+  display: flex !important;
+  min-height: 3rem;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 0.6rem !important;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  padding: 0.7rem 0.8rem;
+  color: var(--ink);
+  background: var(--paper);
+  font-weight: 500 !important;
+  cursor: pointer;
+}
+.status-option:has(input:checked) {
+  border-color: var(--amber);
+  background: #fff8e8;
+  box-shadow: 0 0 0 2px #d88a1230;
+}
+.status-option input {
+  accent-color: var(--amber);
+}
+.status-option input:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 3px;
+}
+.admin-form label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 700;
+}
+.admin-form .control[aria-invalid='true'] {
+  border-color: #b33b2d;
+  box-shadow: 0 0 0 2px rgba(179, 59, 45, 0.15);
+}
+.field-error {
+  color: #9b2c20;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.admin-form textarea,
+.admin-form button {
+  grid-column: 1 / -1;
+}
+.admin-form textarea {
+  min-height: 11rem;
+}
+.admin-form.compact-submit > button {
+  justify-self: start;
+}
+.preserved-tags {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.tag-id {
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font:
+    600 0.85rem/1.2 ui-monospace,
+    monospace;
+}
+.tag-id .text-link {
+  margin-inline-start: 0.35rem;
+}
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 1.75rem;
+}
+.data-table {
+  width: 100%;
+  min-width: 34rem;
+  margin-top: 1.5rem;
+  border-collapse: collapse;
+  text-align: left;
+}
+.data-table th,
+.data-table td {
+  padding: 1rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.data-table th {
+  border-top: 2px solid var(--ink);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.data-table caption {
+  margin-bottom: 0.75rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: left;
+}
+.text-link {
+  margin-inline-start: 1rem;
+}
+@media (max-width: 700px) {
+  .admin-form {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-form.compact-submit > button {
+    width: 100%;
+  }
+
+  .status-options {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .table-wrap {
+    overflow-x: visible;
+  }
+
+  .data-table {
+    min-width: 0;
+  }
+
+  .password-history thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .password-history,
+  .password-history tbody,
+  .password-history tr,
+  .password-history td {
+    display: block;
+  }
+
+  .password-history tr {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .password-history td {
+    display: grid;
+    grid-template-columns: minmax(6rem, 36%) minmax(0, 1fr);
+    gap: 0.75rem;
+    border-bottom: 0;
+    padding: 0.55rem 0;
+  }
+
+  .password-history td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+}

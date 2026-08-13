@@ -32,16 +32,16 @@
         <tbody>
           @for (row of items; track row['id'] || row) {
             <tr class="mat-mdc-row">
-              <td>
+              <td [attr.data-label]="titleLabel">
                 <span class="row-title">{{ row['title'] || row['id'] }}</span>
               </td>
-              <td>{{ row['authorAttribution'] || '—' }}</td>
-              <td>
+              <td [attr.data-label]="authorLabel">{{ row['authorAttribution'] || '—' }}</td>
+              <td [attr.data-label]="createdLabel">
                 <time [attr.datetime]="row['createdAt']">
                   {{ dateValue(row) | date: dateFormat }}
                 </time>
               </td>
-              <td>
+              <td [attr.data-label]="actionsLabel">
                 @if (canManageArticle(row)) {
                   <div class="row-actions">
                     <button

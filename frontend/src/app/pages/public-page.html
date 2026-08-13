@@ -1,0 +1,64 @@
+<app-shell [loading]="loading">
+  <header class="page-intro">
+    <div>
+      <p class="eyebrow">
+        {{ routeKey === 'public/tags' ? language.t.nav.tags : language.t.nav.articles }}
+      </p>
+      <h1>{{ heading }}</h1>
+    </div>
+  </header>
+  @if (loading) {
+    <progress class="loading-bar" [attr.aria-label]="language.t.loading"></progress>
+  }
+  @if (error) {
+    <p class="error" role="alert">{{ error }}</p>
+  }
+  @if (detail) {
+    <article class="article-detail">
+      <h2>{{ detail['title'] }}</h2>
+      <p>{{ detail['content'] }}</p>
+    </article>
+  } @else if (!loading && !error) {
+    @if (hasTagFilter()) {
+      <a class="clear-filter ui-outline" [routerLink]="['/public/articles']">
+        {{ language.t.clearFilter }}
+      </a>
+    }
+    @if (!items.length) {
+      <p class="empty">{{ language.t.empty }}</p>
+    }
+    <ul class="items">
+      @for (row of items; track row['id']) {
+        <li>
+          @if (routeKey === 'public/articles') {
+            <a class="row-title" [routerLink]="['/public/articles', row['id']]">{{
+              row['title']
+            }}</a>
+            <span class="meta">{{ row['authorAttribution'] }} {{ row['createdAt'] }}</span>
+          } @else {
+            <strong class="row-title">{{ row['name'] }}</strong>
+            <a class="text-link" [routerLink]="['/public/articles']" [queryParams]="tagQuery(row)">
+              {{ language.t.filterArticles }}
+            </a>
+          }
+        </li>
+      }
+    </ul>
+    @if (items.length && totalPages > 0) {
+      <nav class="pagination" [attr.aria-label]="language.t.page">
+        <button class="ui-outline" type="button" (click)="previousPage()" [disabled]="page === 0">
+          {{ language.t.previous }}
+        </button>
+        <span>{{ language.t.page }} {{ page + 1 }} {{ language.t.of }} {{ totalPages }}</span>
+        <button
+          class="ui-outline"
+          type="button"
+          (click)="nextPage()"
+          [disabled]="page + 1 >= totalPages"
+        >
+          {{ language.t.next }}
+        </button>
+      </nav>
+    }
+  }
+</app-shell>

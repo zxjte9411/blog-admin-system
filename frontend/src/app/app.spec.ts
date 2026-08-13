@@ -1,7 +1,11 @@
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Location } from '@angular/common';
+import { provideRouter, Router } from '@angular/router';
 import { App } from './app';
 import { routes } from './app.routes';
+import { Auth } from './core/auth';
 
 describe('App', () => {
   it('creates the application shell', async () => {
@@ -13,17 +17,35 @@ describe('App', () => {
     expect(TestBed.createComponent(App).componentInstance).toBeTruthy();
   });
 
-  it('exposes public and authenticated feature routes', () => {
-    const paths = routes.map((route) => route.path);
+  it('redirects anonymous protected navigation to login', async () => {
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideRouter(routes), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
 
-    expect(paths).toEqual(
-      expect.arrayContaining(['login', 'public/articles', 'admin/articles', 'account/profile']),
-    );
+    await TestBed.inject(Router).navigateByUrl('/account/profile');
+
+    expect(TestBed.inject(Location).path()).toBe('/login');
   });
 
-  it('provides a revoke action for account sessions', async () => {
-    const sessionRoute = routes.find((route) => route.path === 'account/sessions');
-    expect(sessionRoute?.loadComponent).toBeDefined();
-    expect(await sessionRoute!.loadComponent!()).toBeTruthy();
+  it('redirects a non-admin away from administration navigation', async () => {
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideRouter(routes), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const auth = TestBed.inject(Auth);
+    auth.setToken('token');
+    auth.user = {
+      id: 'author-1',
+      displayName: 'Ada',
+      preferredLanguage: 'en',
+      role: 'AUTHOR',
+    };
+
+    await TestBed.inject(Router).navigateByUrl('/admin/users');
+
+    expect(TestBed.inject(Location).path()).toBe('/forbidden');
+    TestBed.inject(HttpTestingController).expectNone('/api/v1/account/me');
   });
 });

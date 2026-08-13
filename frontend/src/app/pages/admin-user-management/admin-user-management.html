@@ -18,11 +18,11 @@
       <tbody>
         @for (row of items; track row['id']) {
           <tr>
-            <th scope="row">
+            <th scope="row" [attr.data-label]="dataLabel">
               <span class="user-name">{{ row['displayName'] || row['email'] || row['id'] }}</span>
               <span class="user-email">{{ row['email'] }}</span>
             </th>
-            <td>
+            <td [attr.data-label]="roleLabel">
               @if (canEditRow(row)) {
                 <label class="field-label">
                   <span class="sr-only">{{ roleLabel }} {{ row['displayName'] }}</span>
@@ -41,7 +41,7 @@
                 {{ roleText(row) }}
               }
             </td>
-            <td>
+            <td [attr.data-label]="statusLabel">
               <span class="state-text">{{ stateText(row) }}</span>
               @if (canEditRow(row)) {
                 <label class="state-control">
@@ -64,7 +64,7 @@
                 </button>
               }
             </td>
-            <td>
+            <td [attr.data-label]="updateLabel">
               @if (canEditRow(row)) {
                 <button
                   class="text-link"
