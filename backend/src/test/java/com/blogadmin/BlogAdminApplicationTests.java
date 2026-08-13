@@ -62,6 +62,16 @@ class BlogAdminApplicationTests {
   }
 
   @Test
+  void swaggerIsPubliclyAccessible() {
+    assertThat(
+            restTemplate.getForEntity(
+                "http://localhost:" + port + "/swagger-ui/index.html", String.class))
+        .hasFieldOrPropertyWithValue("statusCode", HttpStatus.OK);
+    assertThat(restTemplate.getForEntity("http://localhost:" + port + "/v3/api-docs", String.class))
+        .hasFieldOrPropertyWithValue("statusCode", HttpStatus.OK);
+  }
+
+  @Test
   void liquibaseMasterChangelogExists() {
     assertThat(Files.exists(Path.of("src/main/resources/db/changelog/db.changelog-master.yaml")))
         .isTrue();
