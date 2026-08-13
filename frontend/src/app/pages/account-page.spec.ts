@@ -2,6 +2,9 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter, Router } from '@angular/router';
+import { Location } from '@angular/common';
+import { App } from '../app';
+import { routes } from '../app.routes';
 import { AccountPage } from './account-page';
 
 describe('AccountPage', () => {
@@ -80,6 +83,56 @@ describe('AccountPage', () => {
     );
   });
 
+  it('shows the account journey links and a named preferred language select', async () => {
+    await TestBed.configureTestingModule({
+      imports: [AccountPage],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(AccountPage);
+    fixture.componentInstance.routeKey = 'register';
+    fixture.componentInstance.ngOnInit();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('a[href="/login"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('a[href="/verify-email"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('a[href="/verify/resend"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('a[href="/password-reset"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('select[name="preferredLanguage"]')).toBeTruthy();
+    const languageSelect = fixture.nativeElement.querySelector('select[name="preferredLanguage"]');
+    expect(languageSelect.getAttribute('aria-invalid')).toBeNull();
+    expect(languageSelect.getAttribute('aria-describedby')).toBe('field-preferredLanguage-error');
+    expect(fixture.nativeElement.querySelector('#field-preferredLanguage-error')).toBe(
+      languageSelect.parentElement.querySelector('.field-error'),
+    );
+    expect(fixture.nativeElement.textContent).toContain('1–100');
+    expect(
+      fixture.nativeElement.querySelector('#field-password').getAttribute('aria-describedby'),
+    ).toContain('field-password-hint');
+  });
+
+  it('navigates account entry links with the Angular Router', async () => {
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideRouter(routes), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(App);
+    await TestBed.inject(Router).navigateByUrl('/register');
+    fixture.detectChanges();
+
+    const verifyEmailLink = fixture.nativeElement.querySelector('a[href="/verify-email"]');
+    verifyEmailLink.click();
+    await fixture.whenStable();
+    expect(TestBed.inject(Location).path()).toBe('/verify-email');
+
+    fixture.detectChanges();
+    const loginLink = fixture.nativeElement.querySelector('a[href="/login"]');
+    loginLink.click();
+    await fixture.whenStable();
+    expect(TestBed.inject(Location).path()).toBe('/login');
+  });
+
   it('updates the account title when the language changes', async () => {
     await TestBed.configureTestingModule({
       imports: [AccountPage],
@@ -131,6 +184,23 @@ describe('AccountPage', () => {
     expect(input.getAttribute('aria-describedby')).toBe(error.id);
     expect(error.id).toBe('field-email-error');
     expect(error.textContent.trim()).toBeTruthy();
+  });
+
+  it('marks the preferred language select invalid with its field error', async () => {
+    await TestBed.configureTestingModule({
+      imports: [AccountPage],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(AccountPage);
+    fixture.componentInstance.routeKey = 'register';
+    fixture.componentInstance.ngOnInit();
+    fixture.componentInstance.submit();
+    fixture.detectChanges();
+
+    const select = fixture.nativeElement.querySelector('select[name="preferredLanguage"]');
+    expect(select.getAttribute('aria-invalid')).toBe('true');
+    expect(select.getAttribute('aria-describedby')).toBe('field-preferredLanguage-error');
   });
 
   it('synchronizes the preferred language after a profile update', async () => {

@@ -21,21 +21,51 @@
         @for (field of fields; track field) {
           <label class="field" [for]="'field-' + field"
             >{{ fieldLabel(field) }}
-            <input
-              class="control"
-              [id]="'field-' + field"
-              [type]="
-                field.toLowerCase().includes('password')
-                  ? 'password'
-                  : field === 'email'
-                    ? 'email'
-                    : 'text'
-              "
-              [formControlName]="field"
-              [attr.autocomplete]="autocomplete(field)"
-              [attr.aria-invalid]="fieldInvalid(field) ? 'true' : null"
-              [attr.aria-describedby]="fieldErrorId(field)"
-            />
+            @if (field === 'preferredLanguage') {
+              <select
+                class="control"
+                [id]="'field-' + field"
+                [name]="field"
+                autocomplete="language"
+                [formControlName]="field"
+                [attr.aria-invalid]="fieldInvalid(field) ? 'true' : null"
+                [attr.aria-describedby]="fieldErrorId(field)"
+              >
+                <option value="zh-TW">{{ language.t.languages.zhTW }}</option>
+                <option value="en">{{ language.t.languages.en }}</option>
+              </select>
+            } @else {
+              <input
+                class="control"
+                [id]="'field-' + field"
+                [type]="
+                  field.toLowerCase().includes('password')
+                    ? 'password'
+                    : field === 'email'
+                      ? 'email'
+                      : 'text'
+                "
+                [formControlName]="field"
+                [attr.autocomplete]="autocomplete(field)"
+                [attr.aria-invalid]="fieldInvalid(field) ? 'true' : null"
+                [attr.aria-describedby]="
+                  fieldErrorId(field) +
+                  (field.toLowerCase().includes('password') || field === 'displayName'
+                    ? ' field-' + field + '-hint'
+                    : '')
+                "
+              />
+            }
+            @if (field.toLowerCase().includes('password')) {
+              <span class="field-hint" [id]="'field-' + field + '-hint'">{{
+                language.t.passwordHint
+              }}</span>
+            }
+            @if (field === 'displayName') {
+              <span class="field-hint" [id]="'field-' + field + '-hint'">
+                {{ language.t.displayNameHint }}
+              </span>
+            }
             <span class="field-error" [id]="fieldErrorId(field)" aria-live="polite">
               @if (fieldInvalid(field)) {
                 {{ language.t.required }}
@@ -48,6 +78,23 @@
         </button>
       </form>
     }
+    <nav class="account-links" aria-label="{{ language.t.accountLinks }}">
+      @if (routeKey !== 'login') {
+        <a routerLink="/login">{{ language.t.login }}</a>
+      }
+      @if (routeKey !== 'register') {
+        <a routerLink="/register">{{ language.t.authTitles.register }}</a>
+      }
+      @if (routeKey !== 'verify-email') {
+        <a routerLink="/verify-email">{{ language.t.authTitles.verifyEmail }}</a>
+      }
+      @if (routeKey !== 'verify/resend') {
+        <a routerLink="/verify/resend">{{ language.t.authTitles.verifyResend }}</a>
+      }
+      @if (routeKey !== 'password-reset' && routeKey !== 'reset-password') {
+        <a routerLink="/password-reset">{{ language.t.authTitles.passwordReset }}</a>
+      }
+    </nav>
     @if (routeKey === 'account/sessions' && !loading) {
       <section class="sessions" [attr.aria-label]="title">
         @for (session of items; track session['id']) {

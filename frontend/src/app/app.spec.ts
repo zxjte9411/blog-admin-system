@@ -28,6 +28,33 @@ describe('App', () => {
     expect(TestBed.inject(Location).path()).toBe('/login');
   });
 
+  it('navigates the root to public articles', async () => {
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideRouter(routes), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    await TestBed.inject(Router).navigateByUrl('/');
+
+    expect(TestBed.inject(Location).path()).toBe('/public/articles');
+  });
+
+  it('exposes account entry links through the rendered account page', async () => {
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideRouter(routes), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(App);
+    await TestBed.inject(Router).navigateByUrl('/register');
+    fixture.detectChanges();
+    const links = [...fixture.nativeElement.querySelectorAll('a')].map((link) =>
+      link.getAttribute('href'),
+    );
+
+    expect(links).toEqual(expect.arrayContaining(['/login', '/verify-email']));
+  });
+
   it('redirects a non-admin away from administration navigation', async () => {
     await TestBed.configureTestingModule({
       imports: [App],

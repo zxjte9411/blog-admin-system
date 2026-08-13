@@ -8,7 +8,7 @@ import {
   inject,
 } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Auth } from '../core/auth';
 import { Language } from '../core/language';
 import { AccountLayout } from '../layouts/account-layout';
@@ -33,7 +33,7 @@ const fields: Record<string, string[]> = {
 @Component({
   selector: 'app-account-page',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, AppShell, AccountLayout],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, AppShell, AccountLayout],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './account-page.scss',
   templateUrl: './account-page.html',
@@ -93,7 +93,7 @@ export class AccountPage implements OnInit {
     if (field === 'password') {
       return 'current-password';
     }
-    return field === 'email' ? 'email' : null;
+    return field === 'email' ? (this.routeKey === 'login' ? 'username' : 'email') : null;
   }
 
   submit() {
