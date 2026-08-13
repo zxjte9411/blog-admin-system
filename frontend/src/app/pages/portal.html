@@ -193,6 +193,8 @@
         [canEditRow]="canManageUser"
         (updateRow)="updateUser($event)"
         (toggleRow)="toggleUserEnabled($event)"
+        (roleChange)="updateUserRole($event)"
+        (enabledChange)="updateUserEnabled($event)"
       />
     } @else if (!loading || items.length > 0) {
       @if (!items.length && !detail) {

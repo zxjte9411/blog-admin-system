@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from 
 import { FormsModule } from '@angular/forms';
 
 type Row = Record<string, unknown>;
+type UserChange = { row: Row; value: unknown };
 
 @Component({
   selector: 'app-admin-user-management',
@@ -27,6 +28,8 @@ export class AdminUserManagement {
 
   @Output() updateRow = new EventEmitter<Row>();
   @Output() toggleRow = new EventEmitter<Row>();
+  @Output() roleChange = new EventEmitter<UserChange>();
+  @Output() enabledChange = new EventEmitter<UserChange>();
 
   roleText(row: Row) {
     return row['role'] === 'AUTHOR' ? this.authorLabel : this.adminLabel;

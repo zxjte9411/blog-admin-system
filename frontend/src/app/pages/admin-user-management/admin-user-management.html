@@ -28,7 +28,8 @@
                   <span class="sr-only">{{ roleLabel }} {{ row['displayName'] }}</span>
                   <select
                     class="control"
-                    [(ngModel)]="row['role']"
+                    [value]="row['role']"
+                    (change)="roleChange.emit({ row, value: $any($event.target).value })"
                     [name]="'role-' + row['id']"
                     [attr.aria-label]="roleLabel + ': ' + row['displayName']"
                   >
@@ -47,7 +48,8 @@
                   <span class="sr-only">{{ enabledLabel }} {{ row['displayName'] }}</span>
                   <input
                     type="checkbox"
-                    [(ngModel)]="row['enabled']"
+                    [checked]="row['enabled'] === true"
+                    (change)="enabledChange.emit({ row, value: $any($event.target).checked })"
                     [name]="'enabled-' + row['id']"
                     [attr.aria-label]="enabledLabel + ': ' + row['displayName']"
                   />

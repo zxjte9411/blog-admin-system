@@ -3,7 +3,9 @@ import { provideHttpClientTesting, HttpTestingController } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { FormBuilder, FormControl } from '@angular/forms';
+import { By } from '@angular/platform-browser';
 import { Auth } from '../core/auth';
+import { AdminUserManagement } from './admin-user-management/admin-user-management';
 import { Portal } from './portal';
 
 describe('Portal API requests', () => {
@@ -59,6 +61,60 @@ describe('Portal API requests', () => {
       fixture.nativeElement.querySelector('input[type="checkbox"][aria-label="Enabled: Mina"]'),
     ).toBeTruthy();
     expect(fixture.nativeElement.textContent).toContain('Enabled');
+  });
+
+  it('keeps user edits in Portal and sends the existing update payload', async () => {
+    await TestBed.configureTestingModule({
+      imports: [Portal],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'admin/users' },
+              paramMap: { get: () => null },
+              queryParamMap: { get: () => null },
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(Portal);
+    const component = fixture.componentInstance;
+    TestBed.inject((await import('../core/language')).Language).usePreferred('en');
+    component.routeKey = 'admin/users';
+    component.auth.user = {
+      id: 'admin-1',
+      displayName: 'Admin',
+      preferredLanguage: 'en',
+      role: 'ADMIN',
+    };
+    component.items = [{ id: 'user-2', displayName: 'Mina', role: 'AUTHOR', enabled: true }];
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/admin/users?page=0')
+      .flush(component.items);
+    fixture.detectChanges();
+
+    const row = component.items[0];
+    const child = fixture.debugElement.query(By.directive(AdminUserManagement))
+      .componentInstance as AdminUserManagement;
+    expect(child.roleChange).toBeDefined();
+    expect(child.enabledChange).toBeDefined();
+    child.roleChange.emit({ row, value: 'ADMIN' });
+    expect(component.items[0]['role']).toBe('ADMIN');
+
+    child.enabledChange.emit({ row, value: false });
+    expect(component.items[0]['enabled']).toBe(false);
+
+    fixture.nativeElement.querySelector('button[aria-label="Update Mina"]').click();
+    const update = TestBed.inject(HttpTestingController).expectOne('/api/v1/admin/users/user-2');
+    expect(update.request.method).toBe('PATCH');
+    expect(update.request.body).toEqual({ role: 'ADMIN', enabled: false });
   });
 
   it('recreates the refresh request after the first refresh completes', async () => {

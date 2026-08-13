@@ -326,15 +326,32 @@ export class Portal implements OnInit {
   }
 
   updateUser(row: Row) {
-    this.action('PATCH', `/api/v1/admin/users/${row['id']}`, {
-      role: row['role'],
-      enabled: row['enabled'],
+    const current = this.items.find((item) => item['id'] === row['id']) ?? row;
+    this.action('PATCH', `/api/v1/admin/users/${current['id']}`, {
+      role: current['role'],
+      enabled: current['enabled'],
     });
   }
 
+  updateUserRole(change: { row: Row; value: unknown }) {
+    this.replaceUserRow(change.row, { role: change.value });
+  }
+
+  updateUserEnabled(change: { row: Row; value: unknown }) {
+    this.replaceUserRow(change.row, { enabled: change.value });
+  }
+
   toggleUserEnabled(row: Row) {
-    row['enabled'] = !row['enabled'];
-    this.updateUser(row);
+    const updated = { ...row, enabled: !row['enabled'] };
+    this.replaceUserRow(row, { enabled: updated['enabled'] });
+    this.updateUser(updated);
+  }
+
+  private replaceUserRow(row: Row, changes: Row) {
+    this.items = this.items.map((item) =>
+      item['id'] === row['id'] ? { ...item, ...changes } : item,
+    );
+    this.cdr.markForCheck();
   }
 
   private requestFor(value: Row) {
