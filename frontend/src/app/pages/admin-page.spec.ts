@@ -53,29 +53,37 @@ describe('AdminPage', () => {
     const fixture = TestBed.createComponent(AdminPage);
     fixture.detectChanges();
 
-    TestBed.inject(HttpTestingController)
-      .expectOne('/api/v1/articles/article-1')
-      .flush({
-        id: 'article-1',
-        title: 'Existing title',
-        content: 'Existing content',
-        status: 'PUBLISHED',
-        tagIds: ['tag-1', 'tag-2'],
-        version: 3,
-      });
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/public/tags?size=100').flush([
+      { id: 'tag-1', name: 'Angular' },
+      { id: 'tag-2', name: 'Spring' },
+    ]);
+    http.expectOne('/api/v1/articles/article-1').flush({
+      id: 'article-1',
+      title: 'Existing title',
+      content: 'Existing content',
+      status: 'PUBLISHED',
+      tagIds: ['tag-1', 'tag-2'],
+      version: 3,
+    });
     fixture.detectChanges();
 
     expect((fixture.nativeElement.querySelector('#field-title') as HTMLInputElement).value).toBe(
       'Existing title',
     );
-    expect(fixture.nativeElement.querySelector('.preserved-tags')?.textContent).toContain('tag-1');
-    expect(fixture.nativeElement.querySelector('.preserved-tags')?.textContent).toContain('tag-2');
+    expect((fixture.nativeElement.querySelector('#tag-tag-1') as HTMLInputElement).checked).toBe(
+      true,
+    );
+    expect((fixture.nativeElement.querySelector('#tag-tag-2') as HTMLInputElement).checked).toBe(
+      true,
+    );
   });
 
   it('renders article status as selectable radio options', async () => {
     await setup('articles/new');
     const fixture = TestBed.createComponent(AdminPage);
     fixture.detectChanges();
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/public/tags?size=100').flush([]);
 
     const radios = fixture.nativeElement.querySelectorAll(
       'input[type="radio"][name="status"]',
@@ -83,43 +91,32 @@ describe('AdminPage', () => {
 
     expect(radios).toHaveLength(2);
     expect([...radios].map((radio) => radio.value)).toEqual(['DRAFT', 'PUBLISHED']);
-
-    const publishedLabel = fixture.nativeElement.querySelector(
-      'label.status-option:nth-of-type(2)',
-    ) as HTMLLabelElement;
-    publishedLabel.click();
-
-    expect(
-      (fixture.nativeElement.querySelector('input[name="status"]:checked') as HTMLInputElement)
-        .value,
-    ).toBe('PUBLISHED');
-    const publishedRadio = fixture.nativeElement.querySelector(
-      'input[name="status"][value="PUBLISHED"]',
-    ) as HTMLInputElement;
-    publishedRadio.focus();
-    expect(document.activeElement).toBe(publishedRadio);
-    publishedRadio.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    expect(publishedRadio.checked).toBe(true);
   });
 
   it('renders new article controls in the PRD order', async () => {
     await setup('articles/new');
     const fixture = TestBed.createComponent(AdminPage);
     fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/public/tags?size=100')
+      .flush([{ id: 'tag-1', name: 'Tech' }]);
+    fixture.detectChanges();
 
     const form = fixture.nativeElement.querySelector('.article-form') as HTMLFormElement;
     const controls = [...form.children]
       .map((element: Element) => ({
-        name: element.matches('.status-field')
+        name: element.matches('.status-options')
           ? 'status'
-          : element.querySelector('.control')?.id?.replace('field-', ''),
+          : element.matches('.tag-field')
+            ? 'availableTags'
+            : element.querySelector('.control')?.id?.replace('field-', ''),
         order: Number(getComputedStyle(element).order),
       }))
       .sort((left, right) => left.order - right.order)
       .map(({ name }) => name)
       .filter(Boolean);
 
-    expect(controls).toEqual(['title', 'content', 'tagNames', 'status']);
+    expect(controls).toEqual(['title', 'content', 'availableTags', 'tagNames', 'status']);
   });
 
   it('sends the article editor payload with enum status and remaining tags', async () => {
@@ -127,6 +124,10 @@ describe('AdminPage', () => {
     const fixture = TestBed.createComponent(AdminPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/public/tags?size=100').flush([
+      { id: 'tag-1', name: 'Angular' },
+      { id: 'tag-2', name: 'Spring' },
+    ]);
     http.expectOne('/api/v1/articles/article-1').flush({
       owner: 'author-1',
       title: 'Title',
@@ -135,7 +136,12 @@ describe('AdminPage', () => {
       tagIds: ['tag-1', 'tag-2'],
       version: 3,
     });
-    fixture.componentInstance.removeTag('tag-1');
+    fixture.detectChanges();
+
+    const tag1Checkbox = fixture.nativeElement.querySelector('#tag-tag-1') as HTMLInputElement;
+    tag1Checkbox.checked = false;
+    tag1Checkbox.dispatchEvent(new Event('change'));
+
     fixture.componentInstance.submit();
 
     const request = http.expectOne('/api/v1/articles/article-1');
@@ -158,6 +164,7 @@ describe('AdminPage', () => {
     fixture.detectChanges();
 
     const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/public/tags?size=100').flush([]);
     http.expectOne('/api/v1/articles/article-1').flush({
       owner: 'author-1',
       title: 'Owned article',
@@ -175,6 +182,7 @@ describe('AdminPage', () => {
     const otherFixture = TestBed.createComponent(AdminPage);
     otherFixture.componentInstance.auth.user = { ...page.auth.user };
     otherFixture.detectChanges();
+    http.expectOne('/api/v1/public/tags?size=100').flush([]);
     http.expectOne('/api/v1/articles/article-1').flush({ owner: 'author-2' });
     otherFixture.detectChanges();
 

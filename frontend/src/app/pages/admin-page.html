@@ -93,6 +93,24 @@
         }
       }
       @if (routeKey === 'articles/new' || routeKey === 'articles/:id/edit') {
+        @if (availableTags.length) {
+          <fieldset class="tag-field tag-options">
+            <legend>{{ language.t.availableTags }}</legend>
+            <div class="tag-checkboxes">
+              @for (tag of availableTags; track tag.id) {
+                <label class="tag-checkbox" [attr.for]="'tag-' + tag.id">
+                  <input
+                    type="checkbox"
+                    [id]="'tag-' + tag.id"
+                    [checked]="selectedTagIds.has(tag.id)"
+                    (change)="toggleTag(tag.id, $event)"
+                  />
+                  <span>{{ tag.name }}</span>
+                </label>
+              }
+            </div>
+          </fieldset>
+        }
         <fieldset
           class="status-field status-options"
           [attr.aria-invalid]="fieldHasError('status') ? 'true' : null"
@@ -125,18 +143,6 @@
             }}</span>
           }
         </fieldset>
-      }
-      @if (routeKey === 'articles/:id/edit' && visibleTagIds().length) {
-        <div class="preserved-tags" aria-label="Existing tag IDs">
-          @for (tagId of visibleTagIds(); track tagId) {
-            <span class="tag-id"
-              >{{ tagId }}
-              <button type="button" class="text-link" (click)="removeTag(tagId)">
-                {{ language.t.remove }}
-              </button></span
-            >
-          }
-        </div>
       }
       <button class="ui-primary" type="submit" [disabled]="loading">{{ language.t.submit }}</button>
     </form>

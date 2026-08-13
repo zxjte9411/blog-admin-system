@@ -1,6 +1,3 @@
-:host {
-  display: block;
-}
 .page-intro {
   display: flex;
   justify-content: space-between;
@@ -33,17 +30,16 @@ h1 {
 .error {
   margin: 1rem 0;
   padding: 0.85rem 1rem;
-  border-inline-start: 3px solid;
 }
 .success {
   color: #185c37;
   background: #e4f2df;
-  border-color: #398456;
+  border-inline-start: 3px solid #398456;
 }
 .error {
   color: #9b2c20;
   background: #f9e2dc;
-  border-color: #b33b2d;
+  border-inline-start: 3px solid #b33b2d;
 }
 .admin-form {
   display: grid;
@@ -55,7 +51,8 @@ h1 {
   gap: 1.25rem;
 
   > label:first-child,
-  > label:has(textarea) {
+  > label:has(textarea),
+  > .tag-field {
     grid-column: 1 / -1;
   }
   > label[for='field-title'] {
@@ -64,11 +61,39 @@ h1 {
   > label[for='field-content'] {
     order: 2;
   }
-  > label[for='field-tagNames'] {
+  > .tag-field {
     order: 3;
   }
-  > .status-field {
+  > label[for='field-tagNames'] {
     order: 4;
+  }
+  > .status-field {
+    order: 5;
+  }
+}
+.tag-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.tag-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  cursor: pointer;
+
+  &:has(:checked) {
+    border-color: var(--amber);
+    background: #fff8e8;
+  }
+
+  input {
+    accent-color: var(--amber);
   }
 }
 .status-field {
@@ -122,33 +147,15 @@ h1 {
   font-size: 0.85rem;
   font-weight: 500;
 }
-.admin-form textarea,
+.admin-form textarea {
+  grid-column: 1 / -1;
+  min-height: 11rem;
+}
 .admin-form button {
   grid-column: 1 / -1;
 }
-.admin-form textarea {
-  min-height: 11rem;
-}
 .admin-form.compact-submit > button {
   justify-self: start;
-}
-.preserved-tags {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
-}
-.tag-id {
-  padding: 0.45rem 0.65rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font:
-    600 0.85rem/1.2 ui-monospace,
-    monospace;
-}
-.tag-id .text-link {
-  margin-inline-start: 0.35rem;
 }
 .table-wrap {
   width: 100%;
@@ -195,8 +202,7 @@ h1 {
   .status-options {
     grid-template-columns: 1fr;
   }
-}
-@media (max-width: 640px) {
+
   .table-wrap {
     overflow-x: visible;
   }
@@ -206,12 +212,7 @@ h1 {
   }
 
   .password-history thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
+    display: none;
   }
 
   .password-history,
@@ -230,17 +231,16 @@ h1 {
     display: grid;
     grid-template-columns: minmax(6rem, 36%) minmax(0, 1fr);
     gap: 0.75rem;
-    border-bottom: 0;
     padding: 0.55rem 0;
-  }
 
-  .password-history td::before {
-    content: attr(data-label);
-    color: var(--muted);
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    &::before {
+      content: attr(data-label);
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
   }
 }
 
@@ -248,8 +248,8 @@ h1 {
   position: fixed;
   inset: 0;
   margin: auto;
-  width: min(28rem, 90%);
-  padding: 1.5rem;
+  width: min(26rem, 90%);
+  padding: 1.25rem;
   border: 1px solid var(--line);
   border-radius: 0.5rem;
   background: var(--paper);
@@ -259,18 +259,18 @@ h1 {
   }
 
   h2 {
-    margin: 0 0 0.75rem;
+    margin: 0 0 0.5rem;
   }
 
   p {
-    margin: 0 0 1.5rem;
+    margin: 0 0 1rem;
     color: var(--muted);
   }
 
   .dialog-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 0.75rem;
+    gap: 0.5rem;
   }
 
   .danger-btn {

@@ -64,8 +64,8 @@ export class AdminPage implements OnInit {
   error = '';
   message = '';
   editorAllowed = false;
-  preservedTagIds: unknown[] = [];
-  removedTagIds: unknown[] = [];
+  availableTags: { id: string; name: string }[] = [];
+  selectedTagIds: Set<string> = new Set();
   currentMinimum: number | null = null;
   deletedSuccess = false;
   selectedDeletedArticle: Row | null = null;
@@ -79,8 +79,11 @@ export class AdminPage implements OnInit {
       this.make(routeFields);
     }
     if (this.routeKey === 'articles/:id/edit') {
+      this.loadAvailableTags();
       this.loadEditor();
-    } else if (this.routeKey !== 'articles/new') {
+    } else if (this.routeKey === 'articles/new') {
+      this.loadAvailableTags();
+    } else {
       this.read();
     }
   }
@@ -160,11 +163,15 @@ export class AdminPage implements OnInit {
     row['ownerId'] === this.auth.user?.id ||
     row['owner'] === this.auth.user?.id;
   canManageUser = (row: Row) => row['id'] !== this.auth.user?.id;
-  visibleTagIds() {
-    return this.preservedTagIds.filter((id) => !this.removedTagIds.includes(id));
-  }
-  removeTag(id: unknown) {
-    this.removedTagIds = [...this.removedTagIds, id];
+  toggleTag(id: string, event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (input.checked) {
+      this.selectedTagIds.add(id);
+    } else {
+      this.selectedTagIds.delete(id);
+    }
+    this.form.markAsDirty();
+    this.cdr.markForCheck();
   }
 
   submit() {
@@ -300,6 +307,16 @@ export class AdminPage implements OnInit {
       error: (e: HttpErrorResponse) => this.fail(e.status),
     });
   }
+  private loadAvailableTags() {
+    this.http.get<Row[] | Row>('/api/v1/public/tags?size=100').subscribe({
+      next: (res) => {
+        const list = this.pageResponse(res).content as { id: string; name: string }[];
+        this.availableTags = list;
+        this.cdr.markForCheck();
+      },
+      error: () => {},
+    });
+  }
   private loadEditor() {
     this.loading = true;
     this.http.get<Row>(`/api/v1/articles/${this.route.snapshot.paramMap.get('id')}`).subscribe({
@@ -312,7 +329,9 @@ export class AdminPage implements OnInit {
             ? article['tagNames'].join(', ')
             : article['tagNames'],
         });
-        this.preservedTagIds = Array.isArray(article['tagIds']) ? article['tagIds'] : [];
+        this.selectedTagIds = new Set(
+          Array.isArray(article['tagIds']) ? article['tagIds'].map(String) : [],
+        );
         this.loading = false;
         this.cdr.markForCheck();
       },
@@ -369,13 +388,7 @@ export class AdminPage implements OnInit {
     const result = { ...value };
     if (this.routeKey.startsWith('articles/')) {
       result['status'] = String(result['status'] ?? 'DRAFT').toUpperCase();
-      const tags = this.form.get('tagNames');
-      result['tagIds'] =
-        tags?.dirty && !String(tags.value ?? '').trim()
-          ? []
-          : (Array.isArray(result['tagIds']) ? result['tagIds'] : this.preservedTagIds).filter(
-              (id) => !this.removedTagIds.includes(id),
-            );
+      result['tagIds'] = Array.from(this.selectedTagIds);
       if (typeof result['tagNames'] === 'string')
         result['tagNames'] = result['tagNames']
           .split(',')
