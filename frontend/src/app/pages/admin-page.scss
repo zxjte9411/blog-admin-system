@@ -185,8 +185,13 @@ h1 {
   font-size: 0.78rem;
   text-align: left;
 }
-.text-link {
-  margin-inline-start: 1rem;
+.row-title {
+  font-weight: 700;
+}
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }
 @media (max-width: 700px) {
   .admin-form {

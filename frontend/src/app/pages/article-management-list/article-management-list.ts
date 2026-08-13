@@ -19,6 +19,9 @@ export class ArticleManagementList {
   @Input() page = 0;
   @Input() searchTitle = '';
   @Input() canManageArticle: (row: Row) => boolean = () => false;
+  @Input() statusLabel = '';
+  @Input() draftLabel = '';
+  @Input() publishedLabel = '';
   @Input() titleLabel = '';
   @Input() authorLabel = '';
   @Input() createdLabel = '';
@@ -33,6 +36,7 @@ export class ArticleManagementList {
   @Input() nextLabel = '';
   @Input() pageLabel = '';
   @Input() ofLabel = '';
+  @Input() pageSuffix = '';
 
   @Output() searchChange = new EventEmitter<string>();
   @Output() open = new EventEmitter<Row>();

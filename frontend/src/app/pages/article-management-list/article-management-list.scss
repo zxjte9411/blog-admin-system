@@ -46,6 +46,22 @@ th {
 .row-title {
   font-weight: 700;
 }
+.status-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+
+  &.is-published {
+    color: #185c37;
+    background: #e4f2df;
+  }
+  &.is-draft {
+    color: #8a5207;
+    background: #fff8e8;
+  }
+}
 .row-actions {
   display: flex;
   flex-wrap: wrap;

@@ -65,6 +65,25 @@
   color: var(--muted);
   font-size: 0.85rem;
 }
+.tag-pill-link {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  background: var(--paper);
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: var(--amber);
+    background: #fff8e8;
+    color: #8a5207;
+  }
+}
 .text-link {
   color: var(--amber);
 }

@@ -74,6 +74,7 @@ export class AppShell implements OnInit {
   }
 
   navLabel(link: string) {
+    if (link === '/public/articles') return this.language.t.nav.publicArticles;
     if (link.includes('/public/tags')) return this.language.t.nav.tags;
     if (link.includes('/articles/deleted')) return this.language.t.nav.deletedArticles;
     if (link.includes('invitations')) return this.language.t.nav.invitations;

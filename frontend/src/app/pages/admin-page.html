@@ -44,6 +44,9 @@
     @if (routeKey === 'admin/settings/password' && currentMinimum !== null) {
       <p class="current-value">{{ language.t.currentValue }}: {{ currentMinimum }}</p>
     }
+    @if (routeKey === 'admin/invitations') {
+      <p class="field-hint">{{ language.t.invitationHint }}</p>
+    }
     <form
       class="admin-form"
       [class.article-form]="routeKey === 'articles/new' || routeKey === 'articles/:id/edit'"
@@ -177,6 +180,9 @@
       [searchTitle]="searchTitle"
       [canManageArticle]="canManageArticle"
       [titleLabel]="fieldLabel('title')"
+      [statusLabel]="fieldLabel('status')"
+      [draftLabel]="language.t.draft"
+      [publishedLabel]="language.t.published"
       [authorLabel]="language.t.authorAttribution"
       [createdLabel]="language.t.sessionCreatedAt"
       [actionsLabel]="language.t.actions"
@@ -190,6 +196,7 @@
       [nextLabel]="language.t.next"
       [pageLabel]="language.t.page"
       [ofLabel]="language.t.of"
+      [pageSuffix]="language.t.pageSuffix"
       (searchChange)="search($event)"
       (open)="open($event)"
       (delete)="deleteArticle($event)"
@@ -202,7 +209,7 @@
       [loading]="loading"
       [emptyLabel]="language.t.empty"
       [loadingLabel]="language.t.loading"
-      [dataLabel]="language.t.data"
+      [dataLabel]="language.t.userInfo"
       [roleLabel]="language.t.role"
       [authorLabel]="language.t.roles.AUTHOR"
       [adminLabel]="language.t.roles.ADMIN"
@@ -256,29 +263,49 @@
               language.t.data
             }}
           </caption>
-          <tbody>
-            @for (row of items; track row['id']) {
+          @if (routeKey === 'articles/deleted') {
+            <thead>
               <tr>
-                <td>
-                  {{ row['title'] || row['email'] || row['id'] }}
-                  @if (routeKey === 'articles/deleted') {
-                    <button class="text-link" type="button" (click)="restoreArticle(row)">
-                      {{ language.t.restore }}
-                    </button>
-                    @if (auth.user?.role === 'ADMIN') {
-                      <button
-                        class="text-link danger"
-                        type="button"
-                        (click)="openPermanentDeleteDialog(row, $event.currentTarget)"
-                      >
-                        {{ language.t.permanentDelete }}
-                      </button>
-                    }
-                  }
-                </td>
+                <th scope="col">{{ fieldLabel('title') }}</th>
+                <th scope="col">{{ language.t.actions }}</th>
               </tr>
-            }
-          </tbody>
+            </thead>
+            <tbody>
+              @for (row of items; track row['id']) {
+                <tr>
+                  <td [attr.data-label]="fieldLabel('title')">
+                    <span class="row-title">{{ row['title'] || row['id'] }}</span>
+                  </td>
+                  <td [attr.data-label]="language.t.actions">
+                    <div class="row-actions">
+                      <button class="text-link" type="button" (click)="restoreArticle(row)">
+                        {{ language.t.restore }}
+                      </button>
+                      @if (auth.user?.role === 'ADMIN') {
+                        <button
+                          class="text-link danger"
+                          type="button"
+                          (click)="openPermanentDeleteDialog(row, $event.currentTarget)"
+                        >
+                          {{ language.t.permanentDelete }}
+                        </button>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          } @else {
+            <tbody>
+              @for (row of items; track row['id']) {
+                <tr>
+                  <td>
+                    {{ row['title'] || row['email'] || row['id'] }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          }
         </table>
       </div>
     }

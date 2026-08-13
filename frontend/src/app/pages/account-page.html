@@ -79,23 +79,25 @@
         </button>
       </form>
     }
-    <nav class="account-links" aria-label="{{ language.t.accountLinks }}">
-      @if (routeKey !== 'login') {
-        <a routerLink="/login">{{ language.t.login }}</a>
-      }
-      @if (routeKey !== 'register') {
-        <a routerLink="/register">{{ language.t.authTitles.register }}</a>
-      }
-      @if (routeKey !== 'verify-email') {
-        <a routerLink="/verify-email">{{ language.t.authTitles.verifyEmail }}</a>
-      }
-      @if (routeKey !== 'verify/resend') {
-        <a routerLink="/verify/resend">{{ language.t.authTitles.verifyResend }}</a>
-      }
-      @if (routeKey !== 'password-reset' && routeKey !== 'reset-password') {
-        <a routerLink="/password-reset">{{ language.t.authTitles.passwordReset }}</a>
-      }
-    </nav>
+    @if (!routeKey.startsWith('account/')) {
+      <nav class="account-links" aria-label="{{ language.t.accountLinks }}">
+        @if (routeKey !== 'login') {
+          <a routerLink="/login">{{ language.t.login }}</a>
+        }
+        @if (routeKey !== 'register') {
+          <a routerLink="/register">{{ language.t.authTitles.register }}</a>
+        }
+        @if (routeKey !== 'verify-email') {
+          <a routerLink="/verify-email">{{ language.t.authTitles.verifyEmail }}</a>
+        }
+        @if (routeKey !== 'verify/resend') {
+          <a routerLink="/verify/resend">{{ language.t.authTitles.verifyResend }}</a>
+        }
+        @if (routeKey !== 'password-reset' && routeKey !== 'reset-password') {
+          <a routerLink="/password-reset">{{ language.t.authTitles.passwordReset }}</a>
+        }
+      </nav>
+    }
     @if (routeKey === 'account/sessions' && !loading) {
       <section class="sessions-section" [attr.aria-label]="title">
         @if (error) {

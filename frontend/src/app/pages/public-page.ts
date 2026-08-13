@@ -34,6 +34,10 @@ export class PublicPage implements OnInit {
   loading = false;
   private errorKey: 'forbidden' | 'notFound' | 'error' | '' = '';
 
+  dateValue(row: Row) {
+    return row['createdAt'] as string | number | Date | null | undefined;
+  }
+
   ngOnInit() {
     this.routeKey = this.route.snapshot.routeConfig?.path ?? '**';
     if (this.routeKey === 'forbidden' || this.routeKey === '**') {

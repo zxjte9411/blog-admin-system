@@ -24,6 +24,9 @@
         <thead>
           <tr>
             <th scope="col">{{ titleLabel }}</th>
+            @if (statusLabel) {
+              <th scope="col">{{ statusLabel }}</th>
+            }
             <th scope="col">{{ authorLabel }}</th>
             <th scope="col">{{ createdLabel }}</th>
             <th scope="col">{{ actionsLabel }}</th>
@@ -35,6 +38,17 @@
               <td [attr.data-label]="titleLabel">
                 <span class="row-title">{{ row['title'] || row['id'] }}</span>
               </td>
+              @if (statusLabel) {
+                <td [attr.data-label]="statusLabel">
+                  <span
+                    class="status-badge"
+                    [class.is-draft]="row['status'] === 'DRAFT'"
+                    [class.is-published]="row['status'] === 'PUBLISHED'"
+                  >
+                    {{ row['status'] === 'PUBLISHED' ? publishedLabel : draftLabel }}
+                  </span>
+                </td>
+              }
               <td [attr.data-label]="authorLabel">{{ row['authorAttribution'] || '—' }}</td>
               <td [attr.data-label]="createdLabel">
                 <time [attr.datetime]="row['createdAt']">
@@ -80,7 +94,7 @@
         {{ previousLabel }}
       </button>
       <span aria-live="polite"
-        >{{ pageLabel }} {{ page + 1 }} {{ ofLabel }} {{ totalPages || 1 }}</span
+        >{{ pageLabel }} {{ page + 1 }} {{ ofLabel }} {{ totalPages || 1 }} {{ pageSuffix }}</span
       >
       <button
         class="ui-outline"
