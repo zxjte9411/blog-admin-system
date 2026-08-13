@@ -112,7 +112,15 @@ class AccountApiIntegrationTest {
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(response.getBody())
         .containsExactlyInAnyOrderEntriesOf(
-            Map.of("displayName", "Current User", "preferredLanguage", "en", "role", "ADMIN"));
+            Map.of(
+                "id",
+                user.getId().toString(),
+                "displayName",
+                "Current User",
+                "preferredLanguage",
+                "en",
+                "role",
+                "ADMIN"));
   }
 
   @Test

@@ -3,9 +3,11 @@ package com.blogadmin.publishing.web.dto;
 import com.blogadmin.publishing.application.ArticleService;
 import java.time.Instant;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 public record PublicArticleView(
+    UUID id,
     String title,
     String content,
     Set<PublicTagView> tags,
@@ -15,6 +17,7 @@ public record PublicArticleView(
     Instant updatedAt) {
   public static PublicArticleView of(ArticleService.PublicArticle a) {
     return new PublicArticleView(
+        a.id(),
         a.title(),
         a.content(),
         a.tags().stream().map(t -> new PublicTagView(t.id(), t.name())).collect(Collectors.toSet()),

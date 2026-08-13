@@ -14,6 +14,7 @@ public record ArticleView(
     String content,
     PublicationStatus status,
     Instant publishedAt,
+    Instant createdAt,
     long version,
     Set<UUID> tagIds) {
   public static ArticleView of(ArticleService.ArticleView a) {
@@ -25,6 +26,7 @@ public record ArticleView(
         a.content(),
         a.status(),
         a.publishedAt(),
+        a.createdAt(),
         a.version(),
         a.tagIds());
   }

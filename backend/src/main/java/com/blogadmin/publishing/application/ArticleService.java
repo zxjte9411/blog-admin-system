@@ -32,6 +32,7 @@ public class ArticleService {
       String content,
       PublicationStatus status,
       Instant publishedAt,
+      Instant createdAt,
       long version,
       Set<UUID> tagIds) {}
 
@@ -52,6 +53,7 @@ public class ArticleService {
   public record PublicTag(UUID id, String name) {}
 
   public record PublicArticle(
+      UUID id,
       String title,
       String content,
       Set<PublicTag> tags,
@@ -66,6 +68,7 @@ public class ArticleService {
         .map(
             a ->
                 new PublicArticle(
+                    a.getId(),
                     a.getTitle(),
                     a.getContent(),
                     a.getTags().stream()
@@ -80,6 +83,7 @@ public class ArticleService {
   public PublicArticle publicArticleView(UUID id, String ip) {
     Article a = publicArticle(id, ip);
     return new PublicArticle(
+        a.getId(),
         a.getTitle(),
         a.getContent(),
         a.getTags().stream()
@@ -218,6 +222,7 @@ public class ArticleService {
         a.getContent(),
         a.getStatus(),
         a.getPublishedAt(),
+        a.getCreatedAt(),
         a.getVersion(),
         a.getTags().stream().map(Tag::getId).collect(Collectors.toSet()));
   }

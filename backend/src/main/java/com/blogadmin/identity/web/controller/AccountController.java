@@ -24,7 +24,7 @@ public class AccountController {
   public AccountMeResponse me(Authentication authentication) {
     User user = (User) authentication.getPrincipal();
     return new AccountMeResponse(
-        user.getDisplayName(), user.getPreferredLanguage(), user.getRole());
+        user.getId(), user.getDisplayName(), user.getPreferredLanguage(), user.getRole());
   }
 
   @PatchMapping("/api/v1/account/profile")

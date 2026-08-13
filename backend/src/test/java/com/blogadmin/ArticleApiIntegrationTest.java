@@ -60,6 +60,9 @@ class ArticleApiIntegrationTest {
         exchange("/api/v1/articles", HttpMethod.POST, token, request, Map.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     UUID id = UUID.fromString((String) created.getBody().get("id"));
+    assertThat(created.getBody().get("createdAt")).isNotNull();
+    Instant createdAt =
+        Instant.parse(created.getBody().get("createdAt").toString()).truncatedTo(ChronoUnit.MILLIS);
     assertThat(created.getBody())
         .containsEntry("authorAttribution", "author")
         .containsEntry("status", "DRAFT");
@@ -84,7 +87,43 @@ class ArticleApiIntegrationTest {
             exchange("/api/v1/articles/" + id, HttpMethod.GET, token, null, Map.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.OK);
+    assertThat(
+            exchange("/api/v1/articles?title=Hello 2", HttpMethod.GET, token, null, Map.class)
+                .getBody())
+        .extracting(
+            body ->
+                Instant.parse(
+                        ((List<Map<String, Object>>) ((Map<String, Object>) body).get("content"))
+                            .get(0)
+                            .get("createdAt")
+                            .toString())
+                    .truncatedTo(ChronoUnit.MILLIS))
+        .isEqualTo(createdAt);
     assertThat(author).isNotNull();
+  }
+
+  @Test
+  void publicArticleViewsIncludeArticleIdInListAndDetail() {
+    user(UserRole.AUTHOR, "public-id");
+    String token = login("public-id");
+    ResponseEntity<Map> created =
+        exchange(
+            "/api/v1/articles",
+            HttpMethod.POST,
+            token,
+            Map.of("title", "Public ID", "content", "Content", "status", "PUBLISHED"),
+            Map.class);
+    UUID id = UUID.fromString((String) created.getBody().get("id"));
+
+    ResponseEntity<Map> list =
+        exchange("/api/v1/public/articles", HttpMethod.GET, token, null, Map.class);
+    List<Map<String, Object>> articles = (List<Map<String, Object>>) list.getBody().get("content");
+    assertThat(articles)
+        .anySatisfy(article -> assertThat(article).containsEntry("id", id.toString()));
+
+    ResponseEntity<Map> detail =
+        exchange("/api/v1/public/articles/" + id, HttpMethod.GET, token, null, Map.class);
+    assertThat(detail.getBody()).containsEntry("id", id.toString());
   }
 
   @Test
