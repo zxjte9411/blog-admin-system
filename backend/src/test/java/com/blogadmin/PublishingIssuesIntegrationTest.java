@@ -412,7 +412,9 @@ class PublishingIssuesIntegrationTest {
         new com.blogadmin.publishing.application.ArticleService(articles, tags);
     Field field = service.getClass().getDeclaredField("publicLimits");
     field.setAccessible(true);
-    Map<String, Deque<Instant>> limits = (Map<String, Deque<Instant>>) field.get(service);
+    @SuppressWarnings("unchecked")
+    Map<String, Deque<Instant>> limits =
+        (Map<String, Deque<Instant>>) (Map<?, ?>) field.get(service);
     limits.put("old-ip", new ArrayDeque<>(Set.of(Instant.now().minusSeconds(61))));
     service.publicArticles(
         "", null, org.springframework.data.domain.PageRequest.of(0, 1), "new-ip");

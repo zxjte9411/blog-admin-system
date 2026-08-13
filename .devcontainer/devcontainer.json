@@ -66,6 +66,7 @@
     "vscode": {
       "settings": {
         "terminal.integrated.defaultProfile.linux": "zsh",
+        "java.jdt.ls.vmargs": "-javaagent:/root/.m2/repository/org/projectlombok/lombok/1.18.46/lombok-1.18.46.jar",
         "java.configuration.runtimes": [
           {
             "name": "JavaSE-25",
