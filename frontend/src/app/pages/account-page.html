@@ -81,20 +81,25 @@
     }
     @if (!routeKey.startsWith('account/')) {
       <nav class="account-links" aria-label="{{ language.t.accountLinks }}">
-        @if (routeKey !== 'login') {
-          <a routerLink="/login">{{ language.t.login }}</a>
-        }
-        @if (routeKey !== 'register') {
-          <a routerLink="/register">{{ language.t.authTitles.register }}</a>
-        }
-        @if (routeKey !== 'verify-email') {
-          <a routerLink="/verify-email">{{ language.t.authTitles.verifyEmail }}</a>
-        }
-        @if (routeKey !== 'verify/resend') {
+        @if (routeKey === 'login') {
+          <a routerLink="/register">{{ language.t.needAccount }}</a>
+          <a routerLink="/password-reset">{{ language.t.forgotPassword }}</a>
+        } @else if (routeKey === 'register') {
+          <a routerLink="/login">{{ language.t.hasAccount }}</a>
           <a routerLink="/verify/resend">{{ language.t.authTitles.verifyResend }}</a>
-        }
-        @if (routeKey !== 'password-reset' && routeKey !== 'reset-password') {
           <a routerLink="/password-reset">{{ language.t.authTitles.passwordReset }}</a>
+          <a routerLink="/verify-email">{{ language.t.authTitles.verifyEmail }}</a>
+        } @else if (routeKey === 'password-reset' || routeKey === 'reset-password') {
+          <a routerLink="/login">{{ language.t.hasAccount }}</a>
+          <a routerLink="/register">{{ language.t.needAccount }}</a>
+        } @else if (routeKey === 'verify-email') {
+          <a routerLink="/verify/resend">{{ language.t.authTitles.verifyResend }}</a>
+          <a routerLink="/login">{{ language.t.hasAccount }}</a>
+        } @else if (routeKey === 'verify/resend') {
+          <a routerLink="/verify-email">{{ language.t.verifyEmailHelp }}</a>
+          <a routerLink="/login">{{ language.t.hasAccount }}</a>
+        } @else {
+          <a routerLink="/login">{{ language.t.hasAccount }}</a>
         }
       </nav>
     }
