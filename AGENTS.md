@@ -12,6 +12,20 @@
 - 執行涉及 triage 的工作時，依 `docs/agents/triage-labels.md` 對應標籤。
 - 探索或修改領域行為時，先依 `docs/agents/domain.md` 讀取 `CONTEXT.md` 與相關 ADR，並使用詞彙表用語。
 
+## Agent skills
+
+### Issue tracker
+
+議題與規格使用 GitHub Issues，透過 `gh` 操作。見 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+使用五種預設 triage 標籤。見 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+採用單一情境文件配置。見 `docs/agents/domain.md`。
+
 ## CodeGraph
 - 根目錄有 `.codegraph/` 時，先用 CodeGraph MCP `codegraph_explore`（或 `codegraph explore "..."`）定位與理解程式碼，再讀取或搜尋；沒有就略過。
 - 修改後若 CodeGraph 顯示索引尚未同步，直接讀取列出的檔案確認內容。
