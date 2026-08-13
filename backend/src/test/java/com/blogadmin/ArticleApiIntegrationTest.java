@@ -7,6 +7,7 @@ import com.blogadmin.identity.domain.user.UserRepository;
 import com.blogadmin.identity.domain.user.UserRole;
 import com.blogadmin.publishing.domain.tag.Tag;
 import com.blogadmin.publishing.domain.tag.TagRepository;
+import com.blogadmin.publishing.web.dto.ArticleView;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -56,16 +57,14 @@ class ArticleApiIntegrationTest {
     UUID author = user(UserRole.AUTHOR, "author");
     String token = login("author");
     Map<String, Object> request = Map.of("title", "Hello", "content", "plain text");
-    ResponseEntity<Map> created =
-        exchange("/api/v1/articles", HttpMethod.POST, token, request, Map.class);
+    ResponseEntity<ArticleView> created =
+        exchange("/api/v1/articles", HttpMethod.POST, token, request, ArticleView.class);
     assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-    UUID id = UUID.fromString((String) created.getBody().get("id"));
-    assertThat(created.getBody().get("createdAt")).isNotNull();
-    Instant createdAt =
-        Instant.parse(created.getBody().get("createdAt").toString()).truncatedTo(ChronoUnit.MILLIS);
-    assertThat(created.getBody())
-        .containsEntry("authorAttribution", "author")
-        .containsEntry("status", "DRAFT");
+    UUID id = created.getBody().id();
+    assertThat(created.getBody().createdAt()).isNotNull();
+    Instant createdAt = created.getBody().createdAt().truncatedTo(ChronoUnit.MILLIS);
+    assertThat(created.getBody().authorAttribution()).isEqualTo("author");
+    assertThat(created.getBody().status()).hasToString("DRAFT");
 
     Map<String, Object> publish =
         Map.of(
@@ -76,15 +75,14 @@ class ArticleApiIntegrationTest {
             "status",
             "PUBLISHED",
             "version",
-            created.getBody().get("version"));
-    ResponseEntity<Map> updated =
-        exchange("/api/v1/articles/" + id, HttpMethod.PUT, token, publish, Map.class);
+            created.getBody().version());
+    ResponseEntity<ArticleView> updated =
+        exchange("/api/v1/articles/" + id, HttpMethod.PUT, token, publish, ArticleView.class);
     assertThat(updated.getStatusCode()).isEqualTo(HttpStatus.OK);
-    Object publishedAt = updated.getBody().get("publishedAt");
-    assertThat(publishedAt).isNotNull();
-    assertThat(updated.getBody()).containsEntry("authorAttribution", "author");
+    assertThat(updated.getBody().publishedAt()).isNotNull();
+    assertThat(updated.getBody().authorAttribution()).isEqualTo("author");
     assertThat(
-            exchange("/api/v1/articles/" + id, HttpMethod.GET, token, null, Map.class)
+            exchange("/api/v1/articles/" + id, HttpMethod.GET, token, null, ArticleView.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.OK);
     assertThat(
@@ -202,7 +200,7 @@ class ArticleApiIntegrationTest {
                 .getStatusCode())
         .isEqualTo(HttpStatus.NO_CONTENT);
     assertThat(
-            exchange("/api/v1/articles/" + id, HttpMethod.GET, token, null, Map.class)
+            exchange("/api/v1/articles/" + id, HttpMethod.GET, token, null, ArticleView.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.NOT_FOUND);
     ResponseEntity<Map> filtered =
@@ -266,7 +264,7 @@ class ArticleApiIntegrationTest {
         .containsEntry("totalPages", 2)
         .containsEntry("size", 1)
         .containsEntry("number", 0);
-    assertThat((List<Map>) pageOne.getBody().get("content"))
+    assertThat((List<Map<String, Object>>) pageOne.getBody().get("content"))
         .singleElement()
         .satisfies(
             article ->
