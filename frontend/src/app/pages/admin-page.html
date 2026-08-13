@@ -12,13 +12,26 @@
     <progress class="loading-bar" [attr.aria-label]="language.t.loading"></progress>
   }
   @if (message) {
-    <div class="success" role="status">{{ message }}</div>
+    <div class="success" role="status">
+      <span>{{ message }}</span>
+      @if (deletedSuccess) {
+        <a routerLink="/articles/deleted">{{ language.t.viewDeleted }}</a>
+      }
+    </div>
   }
   @if (error) {
-    <div class="error" role="alert">{{ error }}</div>
+    <div class="error" role="alert">
+      <span>{{ error }}</span>
+      <button class="ui-outline retry-button" type="button" (click)="retry()">
+        {{ language.t.retryAction }}
+      </button>
+    </div>
   }
   @if (language.error()) {
     <div class="error" role="alert">{{ language.error() }}</div>
+  }
+  @if (routeKey === 'articles/deleted') {
+    <p class="notice deleted-notice">{{ language.t.deletedNotice }}</p>
   }
 
   @if (
@@ -28,6 +41,9 @@
       routeKey === 'admin/invitations' ||
       routeKey === 'admin/settings/password')
   ) {
+    @if (routeKey === 'admin/settings/password' && currentMinimum !== null) {
+      <p class="current-value">{{ language.t.currentValue }}: {{ currentMinimum }}</p>
+    }
     <form
       class="admin-form"
       [class.article-form]="routeKey === 'articles/new' || routeKey === 'articles/:id/edit'"
@@ -56,12 +72,17 @@
                 class="control"
                 [id]="field.key"
                 [type]="field.key === 'email' ? 'email' : field.key === 'value' ? 'number' : 'text'"
+                [attr.min]="field.key === 'value' ? 8 : null"
+                [attr.max]="field.key === 'value' ? 128 : null"
                 [formControlName]="field.key"
                 [attr.aria-invalid]="fieldHasError(field.key) ? 'true' : null"
                 [attr.aria-describedby]="
                   fieldHasError(field.key) ? 'field-' + field.key + '-error' : null
                 "
               />
+              @if (field.key === 'value') {
+                <span class="field-hint">{{ language.t.passwordRule }}</span>
+              }
             }
             @if (fieldHasError(field.key)) {
               <span class="field-error" [id]="'field-' + field.key + '-error'" role="alert">{{
@@ -152,6 +173,9 @@
   } @else if (routeKey === 'admin/users') {
     <app-admin-user-management
       [items]="items"
+      [loading]="loading"
+      [emptyLabel]="language.t.empty"
+      [loadingLabel]="language.t.loading"
       [dataLabel]="language.t.data"
       [roleLabel]="language.t.role"
       [authorLabel]="language.t.roles.AUTHOR"

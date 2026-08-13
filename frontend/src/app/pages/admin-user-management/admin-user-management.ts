@@ -15,6 +15,9 @@ type UserChange = { row: Row; value: unknown };
 })
 export class AdminUserManagement {
   @Input() items: Row[] = [];
+  @Input() loading = false;
+  @Input() emptyLabel = '';
+  @Input() loadingLabel = '';
   @Input() dataLabel = '';
   @Input() roleLabel = '';
   @Input() authorLabel = '';

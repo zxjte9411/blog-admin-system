@@ -44,6 +44,11 @@ public class AdminUserController {
     return service.invitations();
   }
 
+  @GetMapping("/settings/password-minimum-length")
+  public Map<String, Integer> current() {
+    return Map.of("value", service.getMinimum());
+  }
+
   @PutMapping("/settings/password-minimum-length")
   public Map<String, Integer> minimum(@RequestBody PasswordMinimumRequest r, Authentication a) {
     return Map.of("value", service.setMinimum((User) a.getPrincipal(), r.value()));

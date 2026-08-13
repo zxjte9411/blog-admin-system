@@ -147,6 +147,10 @@ public class AdminUserService {
     return user;
   }
 
+  public int getMinimum() {
+    return passwordSettings.findById(true).orElseThrow().getMinimumLength();
+  }
+
   @Transactional
   public int setMinimum(User actor, int value) {
     if (value < 8 || value > 128) throw new InvalidMinimumException();

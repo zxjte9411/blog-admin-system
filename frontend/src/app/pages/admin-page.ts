@@ -63,6 +63,9 @@ export class AdminPage implements OnInit {
   editorAllowed = false;
   preservedTagIds: unknown[] = [];
   removedTagIds: unknown[] = [];
+  currentMinimum: number | null = null;
+  deletedSuccess = false;
+  private originalUsers: Map<unknown, Row> = new Map();
   readonly confirmDelete = (row: Row) => window.confirm(this.confirmMessage(row));
 
   ngOnInit() {
@@ -76,6 +79,11 @@ export class AdminPage implements OnInit {
     } else if (this.routeKey !== 'articles/new') {
       this.read();
     }
+  }
+
+  retry() {
+    this.error = '';
+    this.read();
   }
 
   confirmMessage(row: Row) {
@@ -121,6 +129,7 @@ export class AdminPage implements OnInit {
     if (this.routeKey === 'articles/:id/edit' && !this.editorAllowed) return;
     this.submitAttempted = true;
     this.message = '';
+    this.deletedSuccess = false;
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
@@ -152,17 +161,48 @@ export class AdminPage implements OnInit {
     }
   }
   deleteArticle(row: Row) {
-    if (this.confirmDelete(row)) this.action('DELETE', `/api/v1/articles/${row['id']}`);
+    if (!this.confirmDelete(row)) return;
+    this.loading = true;
+    this.http.delete(`/api/v1/articles/${row['id']}`).subscribe({
+      next: () => {
+        this.loading = false;
+        this.error = '';
+        const title = String(row['title'] ?? '');
+        this.message = this.language.t.deleteSuccess.replace('{title}', title);
+        this.deletedSuccess = true;
+        this.read();
+      },
+      error: (e: HttpErrorResponse) => this.fail(e.status),
+    });
   }
   restoreArticle(row: Row) {
     this.action('POST', `/api/v1/articles/${row['id']}/restore`);
   }
   updateUser(row: Row) {
     const current = this.items.find((item) => item['id'] === row['id']) ?? row;
-    this.action('PATCH', `/api/v1/admin/users/${current['id']}`, {
-      role: current['role'],
-      enabled: current['enabled'],
-    });
+    const original = this.originalUsers.get(current['id']);
+    this.loading = true;
+    this.http
+      .patch<Row>(`/api/v1/admin/users/${current['id']}`, {
+        role: current['role'],
+        enabled: current['enabled'],
+      })
+      .subscribe({
+        next: () => {
+          this.loading = false;
+          if (original) {
+            original['role'] = current['role'];
+            original['enabled'] = current['enabled'];
+          }
+          this.cdr.markForCheck();
+        },
+        error: (e: HttpErrorResponse) => {
+          if (original) {
+            this.replaceUser(current, { role: original['role'], enabled: original['enabled'] });
+          }
+          this.fail(e.status);
+        },
+      });
   }
   updateUserRole(change: { row: Row; value: unknown }) {
     this.replaceUser(change.row, { role: change.value });
@@ -171,8 +211,15 @@ export class AdminPage implements OnInit {
     this.replaceUser(change.row, { enabled: change.value });
   }
   toggleUserEnabled(row: Row) {
-    const updated = { ...row, enabled: !row['enabled'] };
-    this.replaceUser(row, { enabled: updated['enabled'] });
+    const current = this.items.find((item) => item['id'] === row['id']) ?? row;
+    if (current['enabled'] === true) {
+      const name = String(current['displayName'] || current['email'] || current['id']);
+      if (!window.confirm(this.language.t.confirmDisable.replace('{name}', name))) {
+        return;
+      }
+    }
+    const updated = { ...current, enabled: !current['enabled'] };
+    this.replaceUser(current, { enabled: updated['enabled'] });
     this.updateUser(updated);
   }
   private replaceUser(row: Row, changes: Row) {
@@ -183,12 +230,27 @@ export class AdminPage implements OnInit {
   }
   private read() {
     this.loading = true;
+    this.error = '';
     const params: Record<string, string | number> = { page: this.page };
     if (this.routeKey === 'articles' && this.searchTitle) params['title'] = this.searchTitle;
+    if (this.routeKey === 'admin/settings/password') {
+      this.http.get<Row>('/api/v1/admin/settings/password-minimum-length').subscribe({
+        next: (val) => {
+          if (val && typeof val['value'] === 'number') {
+            this.currentMinimum = val['value'];
+            this.cdr.markForCheck();
+          }
+        },
+        error: () => {},
+      });
+    }
     this.http.get<Row[] | Row>(this.readEndpoint(), { params }).subscribe({
       next: (value) => {
         const page = this.pageResponse(value);
         this.items = page.content;
+        if (this.routeKey === 'admin/users') {
+          this.originalUsers = new Map(this.items.map((u) => [u['id'], { ...u }]));
+        }
         this.totalPages = page.totalPages;
         this.loading = false;
         this.cdr.markForCheck();
@@ -289,9 +351,11 @@ export class AdminPage implements OnInit {
             '',
             name === 'email'
               ? [Validators.required, Validators.email]
-              : ['title', 'content', 'status', 'version', 'value'].includes(name)
-                ? Validators.required
-                : [],
+              : name === 'value'
+                ? [Validators.required, Validators.min(8), Validators.max(128)]
+                : ['title', 'content', 'status', 'version'].includes(name)
+                  ? Validators.required
+                  : [],
           ],
         ]),
       ),

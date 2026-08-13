@@ -117,6 +117,11 @@ export class AccountPage implements OnInit {
     this.action('DELETE', `/api/v1/auth/sessions/${row['id']}`);
   }
 
+  retrySessions() {
+    this.error = '';
+    this.readSessions();
+  }
+
   private request(value: Row) {
     const token = this.route.snapshot.queryParamMap.get('token');
     if (this.routeKey === 'login') {
@@ -163,6 +168,7 @@ export class AccountPage implements OnInit {
   }
   private readSessions() {
     this.loading = true;
+    this.error = '';
     this.http.get<Row[]>('/api/v1/auth/sessions', { params: { page: 0 } }).subscribe({
       next: (items) => {
         this.items = items;

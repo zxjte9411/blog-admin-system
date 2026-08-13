@@ -261,4 +261,70 @@ describe('AccountPage', () => {
       ),
     ).toHaveLength(1);
   });
+
+  it('shows a retry button when sessions fail to load', async () => {
+    await TestBed.configureTestingModule({
+      imports: [AccountPage],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(AccountPage);
+    fixture.componentInstance.routeKey = 'account/sessions';
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    const req = http.expectOne('/api/v1/auth/sessions?page=0');
+    req.flush('Error loading sessions', { status: 500, statusText: 'Internal Server Error' });
+    fixture.detectChanges();
+
+    const buttons: HTMLButtonElement[] = Array.from(
+      fixture.nativeElement.querySelectorAll('button'),
+    );
+    const retryBtn = buttons.find(
+      (btn) => btn.textContent?.includes('Reload') || btn.textContent?.includes('重新載入'),
+    );
+    expect(retryBtn).toBeTruthy();
+  });
+
+  it('retries loading sessions when retry is clicked', async () => {
+    await TestBed.configureTestingModule({
+      imports: [AccountPage],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(AccountPage);
+    fixture.componentInstance.routeKey = 'account/sessions';
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/auth/sessions?page=0').flush('Error loading sessions', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    fixture.detectChanges();
+
+    const buttons: HTMLButtonElement[] = Array.from(
+      fixture.nativeElement.querySelectorAll('button'),
+    );
+    const retryBtn = buttons.find(
+      (btn) => btn.textContent?.includes('Reload') || btn.textContent?.includes('重新載入'),
+    );
+    expect(retryBtn).toBeTruthy();
+    retryBtn?.click();
+
+    http.expectOne('/api/v1/auth/sessions?page=0');
+  });
+
+  it('shows loading indicator while sessions are loading', async () => {
+    await TestBed.configureTestingModule({
+      imports: [AccountPage],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(AccountPage);
+    fixture.componentInstance.routeKey = 'account/sessions';
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('progress')).toBeTruthy();
+  });
 });

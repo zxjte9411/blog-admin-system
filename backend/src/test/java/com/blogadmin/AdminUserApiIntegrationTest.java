@@ -293,6 +293,21 @@ class AdminUserApiIntegrationTest {
     assertThat(audit.getChangedAt()).isNotNull();
   }
 
+  @Test
+  void reads_the_current_password_minimum_length() {
+    User admin = user(UserRole.ADMIN, true);
+    String token = login(admin);
+    ResponseEntity<Map> response =
+        exchange(
+            "/api/v1/admin/settings/password-minimum-length",
+            HttpMethod.GET,
+            token,
+            null,
+            Map.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody()).containsEntry("value", 8);
+  }
+
   private String sentToken() {
     ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
     verify(mail, org.mockito.Mockito.atLeastOnce()).send(captor.capture());

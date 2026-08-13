@@ -10,7 +10,7 @@
     @if (message) {
       <div class="success" role="status">{{ message }}</div>
     }
-    @if (error) {
+    @if (error && routeKey !== 'account/sessions') {
       <div class="error" role="alert">{{ error }}</div>
     }
     @if (language.error()) {
@@ -97,23 +97,32 @@
     </nav>
     @if (routeKey === 'account/sessions' && !loading) {
       <section class="sessions" [attr.aria-label]="title">
-        @for (session of items; track session['id']) {
-          <article class="session">
-            <strong>{{ session['current'] ? language.t.sessionCurrent : session['id'] }}</strong>
-            <div>
-              {{ language.t.sessionCreatedAt }}: <time>{{ session['createdAt'] }}</time>
-            </div>
-            <div>
-              {{ language.t.sessionLastUsedAt }}: <time>{{ session['lastUsedAt'] }}</time>
-            </div>
-            @if (!session['current']) {
-              <button class="text-link danger" type="button" (click)="revoke(session)">
-                {{ language.t.revoke }}
-              </button>
-            }
-          </article>
-        } @empty {
-          <p>{{ language.t.empty }}</p>
+        @if (error) {
+          <div class="error" role="alert">
+            {{ error }}
+            <button class="ui-outline" type="button" (click)="retrySessions()">
+              {{ language.t.retryAction }}
+            </button>
+          </div>
+        } @else {
+          @for (session of items; track session['id']) {
+            <article class="session">
+              <strong>{{ session['current'] ? language.t.sessionCurrent : session['id'] }}</strong>
+              <div>
+                {{ language.t.sessionCreatedAt }}: <time>{{ session['createdAt'] }}</time>
+              </div>
+              <div>
+                {{ language.t.sessionLastUsedAt }}: <time>{{ session['lastUsedAt'] }}</time>
+              </div>
+              @if (!session['current']) {
+                <button class="text-link danger" type="button" (click)="revoke(session)">
+                  {{ language.t.revoke }}
+                </button>
+              }
+            </article>
+          } @empty {
+            <p>{{ language.t.empty }}</p>
+          }
         }
       </section>
     }

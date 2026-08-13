@@ -332,4 +332,141 @@ describe('AdminPage', () => {
 
     expect(fixture.nativeElement.querySelector('h1').textContent.trim()).not.toBe(englishTitle);
   });
+
+  it('shows error with retry when article list fails to load', async () => {
+    await setup('articles');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http
+      .expectOne('/api/v1/articles?page=0')
+      .flush('Error', { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+
+    const alert = fixture.nativeElement.querySelector('[role="alert"]');
+    expect(alert).toBeTruthy();
+    const retryBtn = fixture.nativeElement.querySelector('.error button, button.retry-button');
+    expect(retryBtn).toBeTruthy();
+
+    retryBtn.click();
+    http.expectOne('/api/v1/articles?page=0').flush({ content: [], totalPages: 0 });
+  });
+
+  it('shows deleted article notice in deleted articles view', async () => {
+    await setup('articles/deleted');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.componentInstance.routeKey = 'articles/deleted';
+    fixture.detectChanges();
+
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/articles/deleted?page=0').flush([]);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain(
+      fixture.componentInstance.language.t.deletedNotice,
+    );
+  });
+
+  it('shows delete success with link to deleted articles', async () => {
+    await setup('articles');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/articles?page=0').flush([{ id: 'art-1', title: 'Test Article' }]);
+    fixture.detectChanges();
+
+    vi.spyOn(fixture.componentInstance, 'confirmDelete').mockReturnValue(true);
+    fixture.componentInstance.deleteArticle({ id: 'art-1', title: 'Test Article' });
+
+    http.expectOne('/api/v1/articles/art-1').flush({});
+    http.expectOne('/api/v1/articles?page=0').flush([]);
+    fixture.detectChanges();
+
+    const statusEl = fixture.nativeElement.querySelector('[role="status"]');
+    expect(statusEl).toBeTruthy();
+    expect(statusEl.textContent).toContain(
+      fixture.componentInstance.language.t.deleteSuccess.replace('{title}', 'Test Article'),
+    );
+    const link = statusEl.querySelector(
+      'a[routerLink="/articles/deleted"], a[href="/articles/deleted"]',
+    );
+    expect(link).toBeTruthy();
+  });
+
+  it('confirms before disabling a user', async () => {
+    await setup('admin/users');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http
+      .expectOne('/api/v1/admin/users?page=0')
+      .flush([{ id: 'user-1', displayName: 'Mina', role: 'AUTHOR', enabled: true }]);
+    fixture.detectChanges();
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    fixture.componentInstance.toggleUserEnabled(fixture.componentInstance.items[0]);
+
+    expect(confirmSpy).toHaveBeenCalledOnce();
+    http.expectNone('/api/v1/admin/users/user-1');
+  });
+
+  it('reverts user role on update failure', async () => {
+    await setup('admin/users');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http
+      .expectOne('/api/v1/admin/users?page=0')
+      .flush([{ id: 'user-1', displayName: 'Mina', role: 'AUTHOR', enabled: true }]);
+    fixture.detectChanges();
+
+    fixture.componentInstance.updateUserRole({
+      row: fixture.componentInstance.items[0],
+      value: 'ADMIN',
+    });
+    fixture.componentInstance.updateUser(fixture.componentInstance.items[0]);
+
+    http
+      .expectOne('/api/v1/admin/users/user-1')
+      .flush('Error', { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.items[0]['role']).toBe('AUTHOR');
+  });
+
+  it('shows error with retry when user list fails to load', async () => {
+    await setup('admin/users');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http
+      .expectOne('/api/v1/admin/users?page=0')
+      .flush('Error', { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+
+    const alert = fixture.nativeElement.querySelector('[role="alert"]');
+    expect(alert).toBeTruthy();
+    const retryBtn = fixture.nativeElement.querySelector('.error button, button.retry-button');
+    expect(retryBtn).toBeTruthy();
+
+    retryBtn.click();
+    http.expectOne('/api/v1/admin/users?page=0').flush({ content: [], totalPages: 0 });
+  });
+
+  it('displays current password minimum length alongside history', async () => {
+    await setup('admin/settings/password');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/admin/settings/password-minimum-length').flush({ value: 12 });
+    http.expectOne('/api/v1/admin/settings/password-minimum-length/history?page=0').flush([]);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('12');
+  });
 });

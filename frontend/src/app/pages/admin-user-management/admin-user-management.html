@@ -1,84 +1,92 @@
 <section class="user-management" aria-labelledby="user-management-heading">
   <h2 id="user-management-heading" class="sr-only">{{ dataLabel }}</h2>
-  <div class="table-wrap">
-    <table class="data-table">
-      <caption>
-        {{
-          dataLabel
-        }}
-      </caption>
-      <thead>
-        <tr>
-          <th scope="col">{{ dataLabel }}</th>
-          <th scope="col">{{ roleLabel }}</th>
-          <th scope="col">{{ statusLabel }}</th>
-          <th scope="col">{{ updateLabel }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (row of items; track row['id']) {
+  @if (loading && !items.length) {
+    <div class="skeleton" [attr.aria-label]="loadingLabel" role="status">
+      <span></span><span></span><span></span>
+    </div>
+  } @else if (!items.length) {
+    <p class="empty">{{ emptyLabel }}</p>
+  } @else {
+    <div class="table-wrap">
+      <table class="data-table">
+        <caption>
+          {{
+            dataLabel
+          }}
+        </caption>
+        <thead>
           <tr>
-            <th scope="row" [attr.data-label]="dataLabel">
-              <span class="user-name">{{ row['displayName'] || row['email'] || row['id'] }}</span>
-              <span class="user-email">{{ row['email'] }}</span>
-            </th>
-            <td [attr.data-label]="roleLabel">
-              @if (canEditRow(row)) {
-                <label class="field-label">
-                  <span class="sr-only">{{ roleLabel }} {{ row['displayName'] }}</span>
-                  <select
-                    class="control"
-                    [value]="row['role']"
-                    (change)="roleChange.emit({ row, value: $any($event.target).value })"
-                    [name]="'role-' + row['id']"
-                    [attr.aria-label]="roleLabel + ': ' + row['displayName']"
-                  >
-                    <option value="AUTHOR">{{ authorLabel }}</option>
-                    <option value="ADMIN">{{ adminLabel }}</option>
-                  </select>
-                </label>
-              } @else {
-                {{ roleText(row) }}
-              }
-            </td>
-            <td [attr.data-label]="statusLabel">
-              <span class="state-text">{{ stateText(row) }}</span>
-              @if (canEditRow(row)) {
-                <label class="state-control">
-                  <span class="sr-only">{{ enabledLabel }} {{ row['displayName'] }}</span>
-                  <input
-                    type="checkbox"
-                    [checked]="row['enabled'] === true"
-                    (change)="enabledChange.emit({ row, value: $any($event.target).checked })"
-                    [name]="'enabled-' + row['id']"
-                    [attr.aria-label]="enabledLabel + ': ' + row['displayName']"
-                  />
-                </label>
-                <button
-                  class="text-link"
-                  type="button"
-                  (click)="toggleRow.emit(row)"
-                  [attr.aria-label]="toggleLabel + ' ' + row['displayName']"
-                >
-                  {{ toggleLabel }}
-                </button>
-              }
-            </td>
-            <td [attr.data-label]="updateLabel">
-              @if (canEditRow(row)) {
-                <button
-                  class="text-link"
-                  type="button"
-                  (click)="updateRow.emit(row)"
-                  [attr.aria-label]="updateLabel + ' ' + row['displayName']"
-                >
-                  {{ updateLabel }}
-                </button>
-              }
-            </td>
+            <th scope="col">{{ dataLabel }}</th>
+            <th scope="col">{{ roleLabel }}</th>
+            <th scope="col">{{ statusLabel }}</th>
+            <th scope="col">{{ updateLabel }}</th>
           </tr>
-        }
-      </tbody>
-    </table>
-  </div>
+        </thead>
+        <tbody>
+          @for (row of items; track row['id']) {
+            <tr>
+              <th scope="row" [attr.data-label]="dataLabel">
+                <span class="user-name">{{ row['displayName'] || row['email'] || row['id'] }}</span>
+                <span class="user-email">{{ row['email'] }}</span>
+              </th>
+              <td [attr.data-label]="roleLabel">
+                @if (canEditRow(row)) {
+                  <label class="field-label">
+                    <span class="sr-only">{{ roleLabel }} {{ row['displayName'] }}</span>
+                    <select
+                      class="control"
+                      [value]="row['role']"
+                      (change)="roleChange.emit({ row, value: $any($event.target).value })"
+                      [name]="'role-' + row['id']"
+                      [attr.aria-label]="roleLabel + ': ' + row['displayName']"
+                    >
+                      <option value="AUTHOR">{{ authorLabel }}</option>
+                      <option value="ADMIN">{{ adminLabel }}</option>
+                    </select>
+                  </label>
+                } @else {
+                  {{ roleText(row) }}
+                }
+              </td>
+              <td [attr.data-label]="statusLabel">
+                <span class="state-text">{{ stateText(row) }}</span>
+                @if (canEditRow(row)) {
+                  <label class="state-control">
+                    <span class="sr-only">{{ enabledLabel }} {{ row['displayName'] }}</span>
+                    <input
+                      type="checkbox"
+                      [checked]="row['enabled'] === true"
+                      (change)="enabledChange.emit({ row, value: $any($event.target).checked })"
+                      [name]="'enabled-' + row['id']"
+                      [attr.aria-label]="enabledLabel + ': ' + row['displayName']"
+                    />
+                  </label>
+                  <button
+                    class="text-link"
+                    type="button"
+                    (click)="toggleRow.emit(row)"
+                    [attr.aria-label]="toggleLabel + ' ' + row['displayName']"
+                  >
+                    {{ toggleLabel }}
+                  </button>
+                }
+              </td>
+              <td [attr.data-label]="updateLabel">
+                @if (canEditRow(row)) {
+                  <button
+                    class="text-link"
+                    type="button"
+                    (click)="updateRow.emit(row)"
+                    [attr.aria-label]="updateLabel + ' ' + row['displayName']"
+                  >
+                    {{ updateLabel }}
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
 </section>
