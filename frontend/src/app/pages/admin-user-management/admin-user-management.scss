@@ -1,0 +1,41 @@
+:host {
+  display: block;
+}
+.user-management {
+  margin-top: 1.5rem;
+}
+.data-table {
+  min-width: 42rem;
+}
+.data-table th,
+.data-table td {
+  vertical-align: middle;
+}
+.user-name,
+.user-email {
+  display: block;
+}
+.user-name {
+  font-weight: 600;
+}
+.user-email {
+  color: var(--ink-muted, #716a61);
+  font-size: 0.875rem;
+  margin-top: 0.2rem;
+}
+.field-label,
+.state-control {
+  display: inline-flex;
+  align-items: center;
+}
+.state-control {
+  margin-left: 0.5rem;
+}
+.state-text {
+  white-space: nowrap;
+}
+@media (max-width: 52rem) {
+  .table-wrap {
+    overflow-x: auto;
+  }
+}

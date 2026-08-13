@@ -1,0 +1,82 @@
+<section class="user-management" aria-labelledby="user-management-heading">
+  <h2 id="user-management-heading" class="sr-only">{{ dataLabel }}</h2>
+  <div class="table-wrap">
+    <table class="data-table">
+      <caption>
+        {{
+          dataLabel
+        }}
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ dataLabel }}</th>
+          <th scope="col">{{ roleLabel }}</th>
+          <th scope="col">{{ statusLabel }}</th>
+          <th scope="col">{{ updateLabel }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of items; track row['id']) {
+          <tr>
+            <th scope="row">
+              <span class="user-name">{{ row['displayName'] || row['email'] || row['id'] }}</span>
+              <span class="user-email">{{ row['email'] }}</span>
+            </th>
+            <td>
+              @if (canEditRow(row)) {
+                <label class="field-label">
+                  <span class="sr-only">{{ roleLabel }} {{ row['displayName'] }}</span>
+                  <select
+                    class="control"
+                    [(ngModel)]="row['role']"
+                    [name]="'role-' + row['id']"
+                    [attr.aria-label]="roleLabel + ': ' + row['displayName']"
+                  >
+                    <option value="AUTHOR">{{ authorLabel }}</option>
+                    <option value="ADMIN">{{ adminLabel }}</option>
+                  </select>
+                </label>
+              } @else {
+                {{ roleText(row) }}
+              }
+            </td>
+            <td>
+              <span class="state-text">{{ stateText(row) }}</span>
+              @if (canEditRow(row)) {
+                <label class="state-control">
+                  <span class="sr-only">{{ enabledLabel }} {{ row['displayName'] }}</span>
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="row['enabled']"
+                    [name]="'enabled-' + row['id']"
+                    [attr.aria-label]="enabledLabel + ': ' + row['displayName']"
+                  />
+                </label>
+                <button
+                  class="text-link"
+                  type="button"
+                  (click)="toggleRow.emit(row)"
+                  [attr.aria-label]="toggleLabel + ' ' + row['displayName']"
+                >
+                  {{ toggleLabel }}
+                </button>
+              }
+            </td>
+            <td>
+              @if (canEditRow(row)) {
+                <button
+                  class="text-link"
+                  type="button"
+                  (click)="updateRow.emit(row)"
+                  [attr.aria-label]="updateLabel + ' ' + row['displayName']"
+                >
+                  {{ updateLabel }}
+                </button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>

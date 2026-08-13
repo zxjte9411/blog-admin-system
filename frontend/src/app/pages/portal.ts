@@ -12,6 +12,7 @@ import { ActivatedRoute, Router, RouterLink, RouterLinkActive } from '@angular/r
 import { Auth } from '../core/auth';
 import { Language } from '../core/language';
 import { ArticleManagementList } from './article-management-list/article-management-list';
+import { AdminUserManagement } from './admin-user-management/admin-user-management';
 
 type Row = Record<string, unknown>;
 type Method = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
@@ -44,6 +45,7 @@ const formFields: Record<string, string[]> = {
     RouterLink,
     RouterLinkActive,
     ArticleManagementList,
+    AdminUserManagement,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './portal.scss',
@@ -270,6 +272,8 @@ export class Portal implements OnInit {
       row['owner'] === this.auth.user?.id
     );
   };
+
+  canManageUser = (row: Row) => row['id'] !== this.auth.user?.id;
 
   publicArticleLink(row: Row) {
     return row['id'] ? ['/public/articles', row['id']] : null;

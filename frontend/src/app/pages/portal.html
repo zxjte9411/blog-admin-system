@@ -178,6 +178,22 @@
         (previousPage)="previousPage()"
         (nextPage)="nextPage()"
       />
+    } @else if (routeKey === 'admin/users') {
+      <app-admin-user-management
+        [items]="items"
+        [dataLabel]="language.t.data"
+        [roleLabel]="language.t.role"
+        [authorLabel]="language.t.roles.AUTHOR"
+        [adminLabel]="language.t.roles.ADMIN"
+        [enabledLabel]="language.t.enabled"
+        [disabledLabel]="language.t.disabled"
+        [statusLabel]="language.t.field.status"
+        [toggleLabel]="language.t.toggle"
+        [updateLabel]="language.t.update"
+        [canEditRow]="canManageUser"
+        (updateRow)="updateUser($event)"
+        (toggleRow)="toggleUserEnabled($event)"
+      />
     } @else if (!loading || items.length > 0) {
       @if (!items.length && !detail) {
         <p class="empty">{{ language.t.empty }}</p>
@@ -303,32 +319,6 @@
                         </button>
                       }
                     </div>
-                    @if (routeKey === 'admin/users' && row['id'] !== auth.user?.id) {
-                      <div class="user-controls">
-                        <label
-                          >{{ language.t.role }}
-                          <select
-                            class="control"
-                            [(ngModel)]="row['role']"
-                            [name]="'role-' + row['id']"
-                          >
-                            <option value="AUTHOR">{{ roleLabel('AUTHOR') }}</option>
-                            <option value="ADMIN">{{ roleLabel('ADMIN') }}</option>
-                          </select></label
-                        ><label
-                          ><input
-                            type="checkbox"
-                            [(ngModel)]="row['enabled']"
-                            [name]="'enabled-' + row['id']"
-                          />
-                          {{ language.t.enabled }}</label
-                        ><button class="text-link" type="button" (click)="updateUser(row)">
-                          {{ language.t.update }}</button
-                        ><button class="text-link" type="button" (click)="toggleUserEnabled(row)">
-                          {{ language.t.toggle }}
-                        </button>
-                      </div>
-                    }
                   </td>
                 </tr>
               }

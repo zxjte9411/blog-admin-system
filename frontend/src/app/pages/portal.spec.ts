@@ -7,6 +7,60 @@ import { Auth } from '../core/auth';
 import { Portal } from './portal';
 
 describe('Portal API requests', () => {
+  it('renders admin users through the user management presentation component', async () => {
+    await TestBed.configureTestingModule({
+      imports: [Portal],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'admin/users' },
+              paramMap: { get: () => null },
+              queryParamMap: { get: () => null },
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(Portal);
+    const component = fixture.componentInstance;
+    const language = TestBed.inject((await import('../core/language')).Language);
+    language.usePreferred('en');
+    component.routeKey = 'admin/users';
+    component.items = [
+      {
+        id: 'user-2',
+        displayName: 'Mina',
+        email: 'mina@example.com',
+        role: 'AUTHOR',
+        enabled: true,
+      },
+    ];
+    component.auth.user = {
+      id: 'admin-1',
+      displayName: 'Admin',
+      preferredLanguage: 'en',
+      role: 'ADMIN',
+    };
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/admin/users?page=0')
+      .flush(component.items);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('table')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('select[aria-label="Role: Mina"]')).toBeTruthy();
+    expect(
+      fixture.nativeElement.querySelector('input[type="checkbox"][aria-label="Enabled: Mina"]'),
+    ).toBeTruthy();
+    expect(fixture.nativeElement.textContent).toContain('Enabled');
+  });
+
   it('recreates the refresh request after the first refresh completes', async () => {
     await TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting()],
