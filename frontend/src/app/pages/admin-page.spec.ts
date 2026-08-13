@@ -320,7 +320,6 @@ describe('AdminPage', () => {
     ) as HTMLSelectElement;
     select.value = 'ADMIN';
     select.dispatchEvent(new Event('change'));
-    fixture.nativeElement.querySelector('button[aria-label="Update Mina"]').click();
 
     const request = http.expectOne('/api/v1/admin/users/user-2');
     expect(request.request.method).toBe('PATCH');
@@ -437,7 +436,6 @@ describe('AdminPage', () => {
       row: fixture.componentInstance.items[0],
       value: 'ADMIN',
     });
-    fixture.componentInstance.updateUser(fixture.componentInstance.items[0]);
 
     http
       .expectOne('/api/v1/admin/users/user-1')

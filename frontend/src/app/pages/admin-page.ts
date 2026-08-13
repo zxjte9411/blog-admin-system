@@ -254,7 +254,10 @@ export class AdminPage implements OnInit {
       });
   }
   updateUserRole(change: { row: Row; value: unknown }) {
+    const current = this.items.find((item) => item['id'] === change.row['id']) ?? change.row;
+    const updated = { ...current, role: change.value };
     this.replaceUser(change.row, { role: change.value });
+    this.updateUser(updated);
   }
   updateUserEnabled(change: { row: Row; value: unknown }) {
     this.replaceUser(change.row, { enabled: change.value });

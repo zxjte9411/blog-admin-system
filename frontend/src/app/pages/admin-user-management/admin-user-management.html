@@ -19,7 +19,7 @@
             <th scope="col">{{ dataLabel }}</th>
             <th scope="col">{{ roleLabel }}</th>
             <th scope="col">{{ statusLabel }}</th>
-            <th scope="col">{{ actionsLabel || updateLabel }}</th>
+            <th scope="col">{{ actionsLabel }}</th>
           </tr>
         </thead>
         <tbody>
@@ -67,27 +67,17 @@
                   />
                 }
               </td>
-              <td [attr.data-label]="actionsLabel || updateLabel">
+              <td [attr.data-label]="actionsLabel">
                 @if (canEditRow(row)) {
-                  <div class="row-actions">
-                    <button
-                      class="text-link"
-                      [class.danger]="row['enabled'] === true"
-                      type="button"
-                      (click)="toggleRow.emit(row)"
-                      [attr.aria-label]="toggleLabel + ' ' + row['displayName']"
-                    >
-                      {{ row['enabled'] === true ? disabledLabel : enabledLabel }}
-                    </button>
-                    <button
-                      class="text-link"
-                      type="button"
-                      (click)="updateRow.emit(row)"
-                      [attr.aria-label]="updateLabel + ' ' + row['displayName']"
-                    >
-                      {{ updateLabel }}
-                    </button>
-                  </div>
+                  <button
+                    class="text-link"
+                    [class.danger]="row['enabled'] === true"
+                    type="button"
+                    (click)="toggleRow.emit(row)"
+                    [attr.aria-label]="toggleLabel + ' ' + row['displayName']"
+                  >
+                    {{ row['enabled'] === true ? disabledLabel : enabledLabel }}
+                  </button>
                 } @else {
                   <span>—</span>
                 }
