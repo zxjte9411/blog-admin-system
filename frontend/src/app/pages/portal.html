@@ -1,0 +1,269 @@
+<mat-toolbar color="primary">
+  <a routerLink="/public/articles" class="brand">{{ language.t.title }}</a>
+  <span class="spacer"></span>
+  <button mat-button type="button" (click)="toggleLanguage()">
+    {{ language.lang() === 'en' ? '繁中' : 'EN' }}
+  </button>
+  @if (auth.token) {
+    <button mat-button type="button" (click)="logout()">
+      {{ language.t.logout }}
+    </button>
+  } @else {
+    <a mat-button routerLink="/login">{{ language.t.login }}</a>
+  }
+</mat-toolbar>
+
+<mat-sidenav-container>
+  <mat-sidenav mode="side" opened>
+    <mat-nav-list>
+      @for (link of nav; track link) {
+        <a mat-list-item [routerLink]="link" [hidden]="!canSeeNav(link)">
+          {{ navLabel(link) }}
+        </a>
+      }
+    </mat-nav-list>
+  </mat-sidenav>
+
+  <mat-sidenav-content>
+    <main class="content">
+      <mat-card>
+        <mat-card-header>
+          <mat-card-title>{{ heading }}</mat-card-title>
+        </mat-card-header>
+
+        @if (loading) {
+          <mat-progress-bar mode="indeterminate" />
+        }
+
+        <mat-card-content>
+          @if (message) {
+            <div class="success" aria-live="polite">{{ message }}</div>
+          }
+
+          @if (error) {
+            <div class="error" aria-live="assertive">{{ error }}</div>
+          }
+          @if (language.error()) {
+            <div class="error" aria-live="assertive">{{ language.error() }}</div>
+          }
+
+          @if (
+            (fields.length || routeKey === 'confirm-email') &&
+            (routeKey !== 'admin/articles/:id' || editorAllowed || !auth.user)
+          ) {
+            <form [formGroup]="form" (ngSubmit)="submit()">
+              @for (field of fields; track field) {
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ fieldLabel(field) }}</mat-label>
+
+                  @if (field === 'content' || field === 'tagNames') {
+                    <textarea matInput [formControlName]="field"></textarea>
+                  } @else if (field === 'status') {
+                    <mat-radio-group [formControlName]="field">
+                      <input matInput [formControlName]="field" hidden />
+                      <mat-radio-button value="DRAFT"
+                        >{{ language.t.draftCode }} — {{ language.t.draft }}</mat-radio-button
+                      >
+                      <mat-radio-button value="PUBLISHED"
+                        >{{ language.t.publishedCode }} —
+                        {{ language.t.published }}</mat-radio-button
+                      >
+                    </mat-radio-group>
+                  } @else {
+                    <input
+                      matInput
+                      [type]="
+                        field.toLowerCase().includes('password')
+                          ? 'password'
+                          : field === 'email'
+                            ? 'email'
+                            : 'text'
+                      "
+                      [formControlName]="field"
+                    />
+                  }
+
+                  @if (form.controls[field]?.invalid) {
+                    <mat-error>{{ language.t.required }}</mat-error>
+                  }
+                </mat-form-field>
+              }
+
+              @if (fields.includes('tagNames')) {
+                <div class="tag-list">
+                  @for (tagId of visibleTagIds(); track tagId) {
+                    <span>{{ tagId }}</span>
+                    <button mat-button type="button" (click)="removeTag(tagId)">
+                      {{ language.t.remove }}
+                    </button>
+                  }
+                </div>
+              }
+              <button mat-flat-button color="primary" type="submit" [disabled]="loading">
+                {{ language.t.submit }}
+              </button>
+            </form>
+          }
+          @if (!loading || items.length > 0) {
+            @if (!items.length && !detail) {
+              <p class="empty">{{ language.t.empty }}</p>
+            }
+
+            @if (routeKey === 'admin/articles') {
+              <a mat-stroked-button routerLink="/admin/articles/new">{{ language.t.newArticle }}</a>
+              <form class="search" (ngSubmit)="search()">
+                <mat-form-field appearance="outline">
+                  <mat-label>{{ language.t.search }}</mat-label>
+                  <input matInput [(ngModel)]="searchTitle" name="title" />
+                </mat-form-field>
+                <button mat-stroked-button type="submit">{{ language.t.searchAction }}</button>
+              </form>
+            }
+            @if (routeKey === 'public/articles' && selectedTagId) {
+              <a mat-stroked-button routerLink="/public/articles">{{ language.t.clearFilter }}</a>
+            }
+            @if (routeKey === 'admin/invitations') {
+              <h2>{{ language.t.invitationsHeading }}</h2>
+            }
+            @if (routeKey === 'admin/settings/password') {
+              <h2>{{ language.t.historyHeading }}</h2>
+            }
+            @if (items.length) {
+              <table mat-table [dataSource]="items">
+                <ng-container matColumnDef="data">
+                  <th mat-header-cell *matHeaderCellDef>{{ language.t.data }}</th>
+                  <td mat-cell *matCellDef="let row">
+                    @if (routeKey === 'public/articles' && row['id']) {
+                      <a mat-button [routerLink]="publicArticleLink(row)">
+                        {{ row['title'] || row['id'] }}
+                      </a>
+                    } @else if (routeKey !== 'admin/articles' || canManageArticle(row)) {
+                      <button mat-button type="button" (click)="open(row)">
+                        {{
+                          row['title'] ||
+                            row['name'] ||
+                            row['displayName'] ||
+                            row['email'] ||
+                            row['id']
+                        }}
+                      </button>
+                    } @else {
+                      <span>{{ row['title'] || row['id'] }}</span>
+                    }
+                    @if (routeKey === 'public/tags' && row['id']) {
+                      <a
+                        mat-button
+                        [routerLink]="['/public/articles']"
+                        [queryParams]="tagQuery(row)"
+                      >
+                        {{ language.t.filterArticles }}
+                      </a>
+                    }
+                    @if (routeKey === 'admin/articles') {
+                      <div>{{ row['authorAttribution'] }}</div>
+                      <time>{{ row['createdAt'] }}</time>
+                    } @else {
+                      <span>{{
+                        row['status']
+                          ? statusLabel(row['status'])
+                          : row['role']
+                            ? roleLabel(row['role'])
+                            : row['preferredLanguage']
+                      }}</span>
+                    }
+                    @if (routeKey === 'account/sessions' && row['current'] !== true) {
+                      <button mat-button type="button" (click)="revoke(row)">
+                        {{ language.t.revoke }}
+                      </button>
+                    }
+                    @if (routeKey === 'account/sessions') {
+                      <div>
+                        @if (row['current'] === true) {
+                          <strong>{{ language.t.sessionCurrent }}</strong>
+                        }
+                        <div>{{ language.t.sessionCreatedAt }}: {{ row['createdAt'] }}</div>
+                        <div>{{ language.t.sessionLastUsedAt }}: {{ row['lastUsedAt'] }}</div>
+                      </div>
+                    }
+                    @if (routeKey === 'admin/settings/password') {
+                      <div>{{ language.t.history.operatorId }}: {{ row['operatorId'] }}</div>
+                      <div>{{ language.t.history.previousValue }}: {{ row['previousValue'] }}</div>
+                      <div>{{ language.t.history.newValue }}: {{ row['newValue'] }}</div>
+                      <time>{{ language.t.history.changedAt }}: {{ row['changedAt'] }}</time>
+                    }
+                    @if (routeKey === 'admin/invitations') {
+                      <div>{{ row['email'] || row['status'] || row['expiresAt'] }}</div>
+                    }
+                    @if (routeKey === 'admin/articles' && canManageArticle(row)) {
+                      <button mat-button type="button" (click)="deleteArticle(row)">
+                        {{ language.t.delete }}
+                      </button>
+                    }
+                    @if (routeKey === 'admin/articles/deleted') {
+                      <button mat-button type="button" (click)="restoreArticle(row)">
+                        {{ language.t.restore }}
+                      </button>
+                    }
+                    @if (routeKey === 'admin/users') {
+                      @if (row['id'] !== auth.user?.id) {
+                        <mat-form-field appearance="outline">
+                          <mat-label>{{ language.t.role }}</mat-label>
+                          <mat-select [(ngModel)]="row['role']" [name]="'role-' + row['id']">
+                            <mat-option value="AUTHOR">{{ roleLabel('AUTHOR') }}</mat-option>
+                            <mat-option value="ADMIN">{{ roleLabel('ADMIN') }}</mat-option>
+                          </mat-select>
+                        </mat-form-field>
+                        <mat-checkbox [(ngModel)]="row['enabled']" [name]="'enabled-' + row['id']">
+                          {{ language.t.enabled }}
+                        </mat-checkbox>
+                        <button mat-button type="button" (click)="updateUser(row)">
+                          {{ language.t.update }}
+                        </button>
+                        <button mat-button type="button" (click)="toggleUserEnabled(row)">
+                          {{ language.t.toggle }}
+                        </button>
+                      }
+                    }
+                  </td>
+                </ng-container>
+
+                <tr mat-header-row *matHeaderRowDef="['data']"></tr>
+                <tr mat-row *matRowDef="let row; columns: ['data']"></tr>
+              </table>
+              @if (
+                routeKey === 'admin/articles' ||
+                routeKey === 'public/articles' ||
+                routeKey === 'public/tags'
+              ) {
+                <div class="pagination">
+                  <button mat-button type="button" (click)="previousPage()" [disabled]="page === 0">
+                    {{ language.t.previous }}
+                  </button>
+                  <span
+                    >{{ language.t.page }} {{ page + 1 }} {{ language.t.of }}
+                    {{ totalPages || 1 }}</span
+                  >
+                  <button
+                    mat-button
+                    type="button"
+                    (click)="nextPage()"
+                    [disabled]="page + 1 >= totalPages"
+                  >
+                    {{ language.t.next }}
+                  </button>
+                </div>
+              }
+            }
+
+            @if (detail) {
+              <article>
+                <h2>{{ detail['title'] }}</h2>
+                <p>{{ detail['content'] }}</p>
+              </article>
+            }
+          }
+        </mat-card-content>
+      </mat-card>
+    </main>
+  </mat-sidenav-content>
+</mat-sidenav-container>

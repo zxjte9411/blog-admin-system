@@ -12,4 +12,18 @@ describe('App', () => {
 
     expect(TestBed.createComponent(App).componentInstance).toBeTruthy();
   });
+
+  it('exposes public and authenticated feature routes', () => {
+    const paths = routes.map((route) => route.path);
+
+    expect(paths).toEqual(
+      expect.arrayContaining(['login', 'public/articles', 'admin/articles', 'account/profile']),
+    );
+  });
+
+  it('provides a revoke action for account sessions', async () => {
+    const sessionRoute = routes.find((route) => route.path === 'account/sessions');
+    expect(sessionRoute?.loadComponent).toBeDefined();
+    expect(await sessionRoute!.loadComponent!()).toBeTruthy();
+  });
 });

@@ -1,0 +1,100 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  background: #f5f0e8;
+}
+
+.brand {
+  color: inherit;
+  text-decoration: none;
+  font:
+    700 1.3rem Georgia,
+    serif;
+}
+
+.spacer {
+  flex: 1;
+}
+
+mat-sidenav-container {
+  min-height: calc(100vh - 64px);
+}
+
+mat-sidenav {
+  width: 220px;
+}
+
+.content {
+  max-width: 980px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+mat-card {
+  padding: 1rem;
+}
+
+form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+form button {
+  align-self: center;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+table {
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.error {
+  color: #b3261e;
+  background: #ffdad6;
+  padding: 0.8rem;
+  margin: 1rem 0;
+}
+
+.success {
+  color: #185c37;
+  background: #d9f5df;
+  padding: 0.8rem;
+  margin: 1rem 0;
+}
+
+.empty {
+  padding: 2rem;
+  text-align: center;
+  background: #edf2eb;
+}
+
+article {
+  margin-top: 1rem;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 700px) {
+  mat-sidenav {
+    width: 170px;
+  }
+
+  .content {
+    margin-top: 1rem;
+  }
+}
