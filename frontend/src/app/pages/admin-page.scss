@@ -114,7 +114,7 @@ h1 {
 }
 .admin-form .control[aria-invalid='true'] {
   border-color: #b33b2d;
-  box-shadow: 0 0 0 2px rgba(179, 59, 45, 0.15);
+  box-shadow: 0 0 0 2px #b33b2d26;
 }
 .field-error {
   color: #9b2c20;
@@ -244,16 +244,17 @@ h1 {
 }
 
 .confirm-dialog {
-  max-width: 28rem;
-  width: 90%;
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(28rem, 90%);
   padding: 1.5rem;
   border: 1px solid var(--line);
   border-radius: 0.5rem;
   background: var(--paper);
-  color: var(--ink);
 
   &::backdrop {
-    background: #00000066;
+    background: #0006;
   }
 
   h2 {
