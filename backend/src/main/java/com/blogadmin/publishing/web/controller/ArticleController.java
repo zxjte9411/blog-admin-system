@@ -47,13 +47,14 @@ public class ArticleController {
       @RequestParam(required = false) String title,
       @RequestParam(required = false) PublicationStatus status,
       @RequestParam(required = false) UUID tagId,
-      Pageable p) {
-    return service.list(title, status, tagId, p).map(ArticleView::of);
+      Pageable p,
+      @AuthenticationPrincipal User u) {
+    return service.list(u, title, status, tagId, p).map(ArticleView::of);
   }
 
   @GetMapping("/{id}")
-  public ArticleView get(@PathVariable UUID id) {
-    return ArticleView.of(service.get(id));
+  public ArticleView get(@PathVariable UUID id, @AuthenticationPrincipal User u) {
+    return ArticleView.of(service.get(u, id));
   }
 
   @PutMapping("/{id}")

@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard, adminGuard } from './core/auth';
+import { canLeaveArticle } from './pages/admin-page';
 
 const publicPage = () => import('./pages/public-page').then((m) => m.PublicPage);
 const accountPage = () => import('./pages/account-page').then((m) => m.AccountPage);
@@ -25,9 +26,12 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: accountPage,
   })),
-  ...['admin/articles', 'admin/articles/new', 'admin/articles/deleted', 'admin/articles/:id'].map(
-    (path) => ({ path, canActivate: [authGuard], loadComponent: adminPage }),
-  ),
+  ...['articles', 'articles/new', 'articles/deleted', 'articles/:id/edit'].map((path) => ({
+    path,
+    canActivate: [authGuard],
+    canDeactivate: [canLeaveArticle],
+    loadComponent: adminPage,
+  })),
   ...['admin/users', 'admin/invitations', 'admin/settings/password'].map((path) => ({
     path,
     canActivate: [adminGuard],

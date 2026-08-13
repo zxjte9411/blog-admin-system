@@ -33,9 +33,9 @@ describe('AppShell', () => {
     expect(
       fixture.nativeElement.querySelector('a[href="/account/profile"]').parentElement.hidden,
     ).toBe(true);
-    expect(
-      fixture.nativeElement.querySelector('a[href="/admin/articles"]').parentElement.hidden,
-    ).toBe(true);
+    expect(fixture.nativeElement.querySelector('a[href="/articles"]').parentElement.hidden).toBe(
+      true,
+    );
     expect(fixture.nativeElement.querySelector('a[href="/login"]')).not.toBeNull();
   });
 });

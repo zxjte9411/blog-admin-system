@@ -2,9 +2,31 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
-import { AdminPage } from './admin-page';
+import { AdminPage, canLeaveArticle } from './admin-page';
 
 describe('AdminPage', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('allows leaving a clean article form without confirmation', () => {
+    const component = { form: { dirty: false } } as AdminPage;
+    const confirm = vi.spyOn(window, 'confirm');
+
+    expect(
+      canLeaveArticle(component, undefined as never, undefined as never, undefined as never),
+    ).toBe(true);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])('uses native confirmation result for a dirty form: %s', (answer) => {
+    const component = { form: { dirty: true } } as AdminPage;
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(answer);
+
+    expect(
+      canLeaveArticle(component, undefined as never, undefined as never, undefined as never),
+    ).toBe(answer);
+    expect(confirm).toHaveBeenCalledOnce();
+  });
+
   function setup(routeKey: string, id: string | null = null) {
     return TestBed.configureTestingModule({
       imports: [AdminPage],
@@ -27,7 +49,7 @@ describe('AdminPage', () => {
   }
 
   it('prefills an article editor from its existing article', async () => {
-    await setup('admin/articles/:id', 'article-1');
+    await setup('articles/:id/edit', 'article-1');
     const fixture = TestBed.createComponent(AdminPage);
     fixture.detectChanges();
 
@@ -51,7 +73,7 @@ describe('AdminPage', () => {
   });
 
   it('renders article status as selectable radio options', async () => {
-    await setup('admin/articles/new');
+    await setup('articles/new');
     const fixture = TestBed.createComponent(AdminPage);
     fixture.detectChanges();
 
@@ -81,7 +103,7 @@ describe('AdminPage', () => {
   });
 
   it('renders new article controls in the PRD order', async () => {
-    await setup('admin/articles/new');
+    await setup('articles/new');
     const fixture = TestBed.createComponent(AdminPage);
     fixture.detectChanges();
 
@@ -99,7 +121,7 @@ describe('AdminPage', () => {
   });
 
   it('sends the article editor payload with enum status and remaining tags', async () => {
-    await setup('admin/articles/:id', 'article-1');
+    await setup('articles/:id/edit', 'article-1');
     const fixture = TestBed.createComponent(AdminPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
@@ -122,7 +144,7 @@ describe('AdminPage', () => {
   });
 
   it('allows an author to edit their own article and rejects another owner', async () => {
-    await setup('admin/articles/:id', 'article-1');
+    await setup('articles/:id/edit', 'article-1');
     const fixture = TestBed.createComponent(AdminPage);
     const page = fixture.componentInstance;
     page.auth.user = {
@@ -143,7 +165,9 @@ describe('AdminPage', () => {
       version: 1,
     });
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('form')).toBeTruthy();
+    expect(page.editorAllowed).toBe(true);
+    expect(page.error).toBe('');
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
 
     fixture.destroy();
     const otherFixture = TestBed.createComponent(AdminPage);
@@ -152,11 +176,12 @@ describe('AdminPage', () => {
     http.expectOne('/api/v1/articles/article-1').flush({ owner: 'author-2' });
     otherFixture.detectChanges();
 
+    expect(otherFixture.componentInstance.editorAllowed).toBe(false);
     expect(otherFixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
   });
 
   it('only deletes an article after confirmation', async () => {
-    await setup('admin/articles');
+    await setup('articles');
     const page = TestBed.createComponent(AdminPage).componentInstance;
     vi.spyOn(page, 'confirmDelete').mockReturnValue(false);
     page.deleteArticle({ id: 'article-1', title: 'Title' });
@@ -164,7 +189,7 @@ describe('AdminPage', () => {
   });
 
   it('searches from the first page and requests the next result page', async () => {
-    await setup('admin/articles');
+    await setup('articles');
     const fixture = TestBed.createComponent(AdminPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
@@ -178,7 +203,7 @@ describe('AdminPage', () => {
   });
 
   it('renders the article management list for the administration route', async () => {
-    await setup('admin/articles');
+    await setup('articles');
     const fixture = TestBed.createComponent(AdminPage);
     fixture.detectChanges();
 
@@ -189,16 +214,16 @@ describe('AdminPage', () => {
   });
 
   it('uses the administration API for deleted articles', async () => {
-    await setup('admin/articles/deleted');
+    await setup('articles/deleted');
     const fixture = TestBed.createComponent(AdminPage);
-    fixture.componentInstance.routeKey = 'admin/articles/deleted';
+    fixture.componentInstance.routeKey = 'articles/deleted';
     fixture.detectChanges();
 
     TestBed.inject(HttpTestingController).expectOne('/api/v1/articles/deleted?page=0').flush([]);
   });
 
   it('allows article management only to its owner or an administrator', async () => {
-    await setup('admin/articles');
+    await setup('articles');
     const page = TestBed.createComponent(AdminPage).componentInstance;
     page.auth.user = {
       id: 'author-1',
@@ -293,10 +318,10 @@ describe('AdminPage', () => {
   });
 
   it('updates the administration title when the language changes', async () => {
-    await setup('admin/articles');
+    await setup('articles');
     const fixture = TestBed.createComponent(AdminPage);
     const page = fixture.componentInstance;
-    page.routeKey = 'admin/articles';
+    page.routeKey = 'articles';
     fixture.detectChanges();
     TestBed.inject(HttpTestingController).expectOne('/api/v1/articles?page=0').flush([]);
     fixture.detectChanges();

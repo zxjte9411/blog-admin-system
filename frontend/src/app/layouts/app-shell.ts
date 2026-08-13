@@ -33,8 +33,8 @@ export class AppShell implements OnInit {
     {
       label: 'manage',
       links: [
-        '/admin/articles',
-        '/admin/articles/deleted',
+        '/articles',
+        '/articles/deleted',
         '/admin/users',
         '/admin/invitations',
         '/admin/settings/password',

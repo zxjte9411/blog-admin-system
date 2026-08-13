@@ -199,7 +199,7 @@ export class AccountPage implements OnInit {
       this.auth.setToken(result['accessToken'] as string);
       this.auth.load().subscribe((user) => {
         if (user) this.language.usePreferred(user.preferredLanguage);
-        void this.router.navigateByUrl('/admin/articles');
+        void this.router.navigateByUrl('/articles');
       });
     }
     this.cdr.markForCheck();

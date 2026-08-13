@@ -77,6 +77,30 @@ class PublishingIssuesIntegrationTest {
   }
 
   @Test
+  void articleManagementVisibilityIsScopedByRole() {
+    user(UserRole.AUTHOR, "visibility-a");
+    user(UserRole.AUTHOR, "visibility-b");
+    user(UserRole.ADMIN, "visibility-admin");
+    String a = login("visibility-a"), b = login("visibility-b"), admin = login("visibility-admin");
+    Map<String, Object> aArticle = create(a, Map.of("title", "a article", "content", "a"));
+    Map<String, Object> bArticle = create(b, Map.of("title", "b article", "content", "b"));
+
+    ResponseEntity<Map> aList = get("/api/v1/articles", a);
+    ResponseEntity<Map> adminList = get("/api/v1/articles", admin);
+    assertThat(aList.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(adminList.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(aList.getBody().get("content").toString())
+        .contains("a article")
+        .doesNotContain("b article");
+    assertThat(adminList.getBody().get("content").toString()).contains("a article", "b article");
+    assertThat(get("/api/v1/articles/" + bArticle.get("id"), a).getStatusCode())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(get("/api/v1/articles/" + bArticle.get("id"), admin).getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    assertThat(aArticle).isNotNull();
+  }
+
+  @Test
   void deletedListRestoreAndCleanup() {
     user(UserRole.AUTHOR, "a");
     user(UserRole.AUTHOR, "b");

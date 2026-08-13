@@ -1,6 +1,7 @@
 package com.blogadmin.publishing.application;
 
 import com.blogadmin.identity.domain.user.User;
+import com.blogadmin.identity.domain.user.UserRole;
 import com.blogadmin.publishing.domain.article.Article;
 import com.blogadmin.publishing.domain.article.ArticleRepository;
 import com.blogadmin.publishing.domain.article.PublicationStatus;
@@ -139,16 +140,22 @@ public class ArticleService {
     return view(articles.save(a));
   }
 
-  public Page<ArticleView> list(String t, PublicationStatus s, UUID tag, Pageable p) {
-    return articles.search(t == null || t.isBlank() ? "" : t, s, tag, p).map(this::view);
+  public Page<ArticleView> list(User u, String t, PublicationStatus s, UUID tag, Pageable p) {
+    String title = t == null || t.isBlank() ? "" : t;
+    return (u.getRole() == UserRole.ADMIN
+            ? articles.search(title, s, tag, p)
+            : articles.searchByOwner(u.getId(), title, s, tag, p))
+        .map(this::view);
   }
 
-  public ArticleView get(UUID id) {
-    return view(
+  public ArticleView get(User u, UUID id) {
+    Article a =
         articles
             .findById(id)
-            .filter(a -> a.getDeletedAt() == null)
-            .orElseThrow(() -> new ArticleException(ArticleException.Code.NOT_FOUND, "Not found")));
+            .filter(x -> x.getDeletedAt() == null)
+            .orElseThrow(() -> new ArticleException(ArticleException.Code.NOT_FOUND, "Not found"));
+    check(u, a);
+    return view(a);
   }
 
   @Transactional

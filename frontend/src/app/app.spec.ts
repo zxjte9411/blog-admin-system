@@ -75,4 +75,18 @@ describe('App', () => {
     expect(TestBed.inject(Location).path()).toBe('/forbidden');
     TestBed.inject(HttpTestingController).expectNone('/api/v1/account/me');
   });
+
+  it('exposes shared article routes to authenticated authors and removes admin article routes', () => {
+    expect(routes.map((route) => route.path)).toEqual(
+      expect.arrayContaining(['articles', 'articles/new', 'articles/:id/edit', 'articles/deleted']),
+    );
+    expect(routes.map((route) => route.path)).not.toEqual(
+      expect.arrayContaining([
+        'admin/articles',
+        'admin/articles/new',
+        'admin/articles/deleted',
+        'admin/articles/:id',
+      ]),
+    );
+  });
 });

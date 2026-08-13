@@ -4,8 +4,8 @@
       <p class="eyebrow">{{ language.t.title }}</p>
       <h1>{{ title }}</h1>
     </div>
-    @if (routeKey === 'admin/articles') {
-      <a class="ui-primary" routerLink="/admin/articles/new">{{ language.t.newArticle }}</a>
+    @if (routeKey === 'articles') {
+      <a class="ui-primary" routerLink="/articles/new">{{ language.t.newArticle }}</a>
     }
   </div>
   @if (loading) {
@@ -23,14 +23,14 @@
 
   @if (
     form.controls &&
-    (routeKey === 'admin/articles/new' ||
-      routeKey === 'admin/articles/:id' ||
+    (routeKey === 'articles/new' ||
+      routeKey === 'articles/:id/edit' ||
       routeKey === 'admin/invitations' ||
       routeKey === 'admin/settings/password')
   ) {
     <form
       class="admin-form"
-      [class.article-form]="routeKey === 'admin/articles/new' || routeKey === 'admin/articles/:id'"
+      [class.article-form]="routeKey === 'articles/new' || routeKey === 'articles/:id/edit'"
       [class.compact-submit]="
         routeKey === 'admin/invitations' || routeKey === 'admin/settings/password'
       "
@@ -71,7 +71,7 @@
           </label>
         }
       }
-      @if (routeKey === 'admin/articles/new' || routeKey === 'admin/articles/:id') {
+      @if (routeKey === 'articles/new' || routeKey === 'articles/:id/edit') {
         <fieldset
           class="status-field status-options"
           [attr.aria-invalid]="fieldHasError('status') ? 'true' : null"
@@ -105,7 +105,7 @@
           }
         </fieldset>
       }
-      @if (routeKey === 'admin/articles/:id' && visibleTagIds().length) {
+      @if (routeKey === 'articles/:id/edit' && visibleTagIds().length) {
         <div class="preserved-tags" aria-label="Existing tag IDs">
           @for (tagId of visibleTagIds(); track tagId) {
             <span class="tag-id"
@@ -121,7 +121,7 @@
     </form>
   }
 
-  @if (routeKey === 'admin/articles') {
+  @if (routeKey === 'articles') {
     <app-article-management-list
       [items]="items"
       [loading]="loading"
@@ -211,7 +211,7 @@
               <tr>
                 <td>
                   {{ row['title'] || row['email'] || row['id'] }}
-                  @if (routeKey === 'admin/articles/deleted') {
+                  @if (routeKey === 'articles/deleted') {
                     <button class="text-link" type="button" (click)="restoreArticle(row)">
                       {{ language.t.restore }}
                     </button>
@@ -223,7 +223,7 @@
         </table>
       </div>
     }
-  } @else if (!loading && routeKey !== 'admin/articles/new' && routeKey !== 'admin/articles/:id') {
+  } @else if (!loading && routeKey !== 'articles/new' && routeKey !== 'articles/:id/edit') {
     <p class="empty">{{ language.t.empty }}</p>
   }
 </app-shell>

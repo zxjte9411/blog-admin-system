@@ -7,6 +7,7 @@ import {
   OnInit,
   inject,
 } from '@angular/core';
+import { CanDeactivateFn } from '@angular/router';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Auth } from '../core/auth';
@@ -19,8 +20,8 @@ type Row = Record<string, unknown>;
 type Method = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
 
 const fields: Record<string, string[]> = {
-  '/admin/articles/new': ['title', 'content', 'status', 'tagNames'],
-  '/admin/articles/:id': ['title', 'content', 'status', 'tagNames', 'version'],
+  '/articles/new': ['title', 'content', 'status', 'tagNames'],
+  '/articles/:id/edit': ['title', 'content', 'status', 'tagNames', 'version'],
   '/admin/invitations': ['email'],
   '/admin/settings/password': ['value'],
 };
@@ -70,9 +71,9 @@ export class AdminPage implements OnInit {
     if (routeFields.length) {
       this.make(routeFields);
     }
-    if (this.routeKey === 'admin/articles/:id') {
+    if (this.routeKey === 'articles/:id/edit') {
       this.loadEditor();
-    } else if (this.routeKey !== 'admin/articles/new') {
+    } else if (this.routeKey !== 'articles/new') {
       this.read();
     }
   }
@@ -117,7 +118,7 @@ export class AdminPage implements OnInit {
   }
 
   submit() {
-    if (this.routeKey === 'admin/articles/:id' && !this.editorAllowed) return;
+    if (this.routeKey === 'articles/:id/edit' && !this.editorAllowed) return;
     this.submitAttempted = true;
     this.message = '';
     if (this.form.invalid) {
@@ -131,7 +132,7 @@ export class AdminPage implements OnInit {
     });
   }
   open(row: Row) {
-    void this.router.navigate(['/admin/articles', row['id']]);
+    void this.router.navigate(['/articles', row['id'], 'edit']);
   }
   search(value?: string) {
     if (value !== undefined) this.searchTitle = value;
@@ -183,7 +184,7 @@ export class AdminPage implements OnInit {
   private read() {
     this.loading = true;
     const params: Record<string, string | number> = { page: this.page };
-    if (this.routeKey === 'admin/articles' && this.searchTitle) params['title'] = this.searchTitle;
+    if (this.routeKey === 'articles' && this.searchTitle) params['title'] = this.searchTitle;
     this.http.get<Row[] | Row>(this.readEndpoint(), { params }).subscribe({
       next: (value) => {
         const page = this.pageResponse(value);
@@ -199,8 +200,7 @@ export class AdminPage implements OnInit {
     this.loading = true;
     this.http.get<Row>(`/api/v1/articles/${this.route.snapshot.paramMap.get('id')}`).subscribe({
       next: (article) => {
-        if (this.auth.user?.role === 'AUTHOR' && article['ownerId'] !== this.auth.user.id)
-          return this.fail(403);
+        if (!this.canManageArticle(article)) return this.fail(403);
         this.editorAllowed = true;
         this.form.patchValue({
           ...article,
@@ -231,8 +231,8 @@ export class AdminPage implements OnInit {
     return (
       (
         {
-          'admin/articles': '/api/v1/articles',
-          'admin/articles/deleted': '/api/v1/articles/deleted',
+          articles: '/api/v1/articles',
+          'articles/deleted': '/api/v1/articles/deleted',
           'admin/users': '/api/v1/admin/users',
           'admin/invitations': '/api/v1/admin/invitations',
           'admin/settings/password': '/api/v1/admin/settings/password-minimum-length/history',
@@ -249,8 +249,8 @@ export class AdminPage implements OnInit {
   private requestFor(value: Row) {
     const id = this.route.snapshot.paramMap.get('id');
     const specs: Record<string, { method: Method; url: string; body: Row }> = {
-      'admin/articles/new': { method: 'POST', url: '/api/v1/articles', body: value },
-      'admin/articles/:id': { method: 'PUT', url: `/api/v1/articles/${id}`, body: value },
+      'articles/new': { method: 'POST', url: '/api/v1/articles', body: value },
+      'articles/:id/edit': { method: 'PUT', url: `/api/v1/articles/${id}`, body: value },
       'admin/invitations': { method: 'POST', url: '/api/v1/admin/invitations', body: value },
       'admin/settings/password': {
         method: 'PUT',
@@ -263,7 +263,7 @@ export class AdminPage implements OnInit {
   }
   private payload(value: Row) {
     const result = { ...value };
-    if (this.routeKey.startsWith('admin/articles/')) {
+    if (this.routeKey.startsWith('articles/')) {
       result['status'] = String(result['status'] ?? 'DRAFT').toUpperCase();
       const tags = this.form.get('tagNames');
       result['tagIds'] =
@@ -302,14 +302,15 @@ export class AdminPage implements OnInit {
     this.error = '';
     this.message = this.language.t.success;
     this.cdr.markForCheck();
-    if (this.routeKey === 'admin/articles/new') void this.router.navigateByUrl('/admin/articles');
+    this.form.markAsPristine();
+    if (this.routeKey === 'articles/new') void this.router.navigateByUrl('/articles');
   }
   get title() {
     this.language.lang();
     const labels: Record<string, string> = {
-      'admin/articles': this.language.t.nav.articles,
-      'admin/articles/new': this.language.t.newArticle,
-      'admin/articles/deleted': this.language.t.nav.deletedArticles,
+      articles: this.language.t.nav.articles,
+      'articles/new': this.language.t.newArticle,
+      'articles/deleted': this.language.t.nav.deletedArticles,
       'admin/users': this.language.t.nav.users,
       'admin/invitations': this.language.t.nav.invitations,
       'admin/settings/password': this.language.t.nav.password,
@@ -332,3 +333,6 @@ export class AdminPage implements OnInit {
     this.cdr.markForCheck();
   }
 }
+
+export const canLeaveArticle: CanDeactivateFn<AdminPage> = (component) =>
+  !component.form.dirty || window.confirm('離開此頁面？未儲存的變更將會遺失。');
