@@ -1,33 +1,29 @@
 # Blog Admin System
 
-Blog Admin System 的根目錄開發與 CI 交付設定。
+一個以 Angular 管理介面、Spring Boot REST API 與 PostgreSQL 組成的部落格管理系統。Liquibase 負責資料庫 schema 與 migration；Compose 不使用資料庫 init script。Mailpit 接收本機開發郵件。
 
-## 技術基線
+## 技術版本
 
-- Java 25 LTS
-- Node.js 24 LTS
-- PostgreSQL 18.4
-- Docker Compose
-- Dev Container
+- Angular 21、TypeScript 5.9、Node.js 24 LTS、npm 11
+- Spring Boot 3.5.16、Java 25、Maven Wrapper
+- PostgreSQL 18.4、Liquibase
+- Docker Compose、Mailpit
 
-## 開啟開發環境
+## 服務網址
 
-1. 以 VS Code 的 **Reopen in Container** 開啟此資料夾。
-2. 在容器終端機確認工具：
+啟動 Compose 後，可從下列網址存取服務：
 
-   ```bash
-   java --version
-   node --version
-   git --version
-   docker --version
-   docker compose version
-   python3 --version
-   uv --version
-   ```
+- 前端：<http://localhost:4200>
+- 後端：<http://localhost:8080>
+- Swagger UI：<http://localhost:8080/swagger-ui/index.html>
+- OpenAPI JSON：<http://localhost:8080/v3/api-docs>
+- Mailpit：<http://localhost:8025>
 
-## 本機開發
+Compose 的對外 port 可用 `.env` 覆寫：`POSTGRES_PORT`、`BACKEND_PORT`、`FRONTEND_PORT`、`MAILPIT_SMTP_PORT`、`MAILPIT_HTTP_PORT`。
 
-Compose 不硬編碼密碼或 JWT secret；先複製範例並填入必要值：
+## 啟動開發環境
+
+先在 VS Code 執行 **Reopen in Container**，或在已安裝 Docker、Node.js 24 與 Java 25 的環境執行：
 
 ```bash
 cp .env.example .env
@@ -37,25 +33,55 @@ docker compose up -d --build --wait
 docker compose ps
 ```
 
-Compose 服務為 PostgreSQL、Spring Boot backend、Angular frontend 與 Mailpit。
-backend 僅在 db healthy 後啟動，frontend 僅在 backend healthy 後啟動。資料庫 schema
-只由 backend 的 Liquibase 設定與 migration 管理，不使用 Compose init script。
+`.env` 至少要設定：
 
-停止資料庫：
+- `POSTGRES_PASSWORD`
+- `APP_SECURITY_JWT_SECRET`：隨機產生，至少 32 bytes
+- `APP_BOOTSTRAP_ADMIN_EMAIL`
+- `APP_BOOTSTRAP_ADMIN_PASSWORD`：本機自行設定，至少 8 字元，請勿提交 `.env`
+
+應用程式首次啟動時，只有在 `APP_BOOTSTRAP_ADMIN_EMAIL` 對應的帳號不存在時，才會建立 bootstrap admin。之後重啟不會覆寫既有帳號或密碼。登入測試帳號使用 `.env` 內的 `APP_BOOTSTRAP_ADMIN_EMAIL` 與 `APP_BOOTSTRAP_ADMIN_PASSWORD`，README 不提供固定密碼。
+
+停止服務並保留資料：
 
 ```bash
 docker compose down
 ```
 
-移除資料庫資料：
+刪除 PostgreSQL volume：
 
 ```bash
 docker compose down --volumes
 ```
 
-## 驗證
+## 本機建置與測試
 
-### HTTP smoke
+Backend：
+
+```bash
+cd backend
+./mvnw --batch-mode verify
+cd ..
+```
+
+Frontend：
+
+```bash
+cd frontend
+npm ci
+npm run lint
+npm run lint:format
+npm run typecheck
+npm test
+npm run build
+cd ..
+```
+
+Frontend 的 `npm test` 使用專案內的 `scripts/test.mjs`。Backend 的整合測試使用 Testcontainers PostgreSQL，因此需要可用的 Docker daemon。JaCoCo HTML 報告會輸出到 `backend/target/site/jacoco/`。
+
+## HTTP smoke test
+
+先啟動 Compose，再執行：
 
 ```bash
 bash -n scripts/compose-smoke.sh
@@ -63,25 +89,16 @@ set -a; . ./.env; set +a
 API_BASE=http://localhost:8080 FRONTEND_BASE=http://localhost:4200 bash scripts/compose-smoke.sh
 ```
 
-腳本會驗證 health、frontend、Bootstrap Admin 登入、帶 Tag 的 Article 建立/發布、
-匿名 Public Article/Tag、Draft/Deleted 隱藏，以及 restore 後重新公開。可用 `API_BASE`
-與 `FRONTEND_BASE` 覆寫預設 API 與前端位址。API 路由及 DTO 可參考 backend controller；
-公開 API 位於 `/api/v1/public/**`。
-在 dev container 執行 Compose smoke 時，請使用 `API_BASE=http://host.docker.internal:8080`
-與 `FRONTEND_BASE=http://host.docker.internal:4200`；一般主機保留預設 localhost。兩者都要先
-載入 `.env`，例如：
+這個腳本會檢查 health、前端、bootstrap admin 登入、帶 tag 的文章建立與發布、匿名公開文章與 tag，以及 draft、deleted、restore 的公開狀態。從 dev container 呼叫主機上的服務時，將兩個 base URL 改成 `host.docker.internal`：
 
 ```bash
 set -a; . ./.env; set +a
 API_BASE=http://host.docker.internal:8080 FRONTEND_BASE=http://host.docker.internal:4200 bash scripts/compose-smoke.sh
 ```
 
-API 文件：`http://localhost:8080/swagger-ui/index.html`（OpenAPI JSON：
-`http://localhost:8080/v3/api-docs`）。CI 的 smoke 輸出與 Compose logs 位於
-GitHub Actions 的 `compose-smoke-diagnostics` artifact；JaCoCo HTML 位於
-`jacoco-report` artifact 的 `backend/target/site/jacoco/`。預設分支的 Pages URL 可依
-GitHub 標準格式使用 `https://<owner>.github.io/<repository>/`（實際網址以 repository
-設定為準）。
+## CI 對應指令
+
+CI 不需要先啟動本機服務。以下指令涵蓋 backend verify、frontend lint/test/build，以及 Compose 設定檢查：
 
 ```bash
 docker compose config
@@ -89,8 +106,19 @@ docker compose config
 (cd frontend && npm ci && npm run lint && npm test && npm run build)
 ```
 
-GitHub Actions 會在 backend 使用 Java 25 執行 Maven verify，在 frontend 使用 Node.js
-24 執行上述 npm 驗證；這些 CI 工作不需啟動本機服務。預設分支的 backend 驗證成功後，
-會將 JaCoCo HTML 報告發布至 GitHub Pages。
-CI 亦會執行 Compose smoke，並保存 smoke 輸出與 Compose logs；JaCoCo artifact 與預設
-分支的 GitHub Pages 提供覆蓋率證據。
+需要驗證前端格式與型別時，再執行本機完整序列中的 `npm run lint:format` 與 `npm run typecheck`。
+
+## 功能
+
+登入後，使用者可管理文章的新增、編輯、刪除、搜尋與分頁，並切換草稿與發布狀態。文章支援標籤；訪客可瀏覽已發布的公開文章與標籤。
+
+系統也提供帳戶資料、session 管理、管理員邀請、使用者角色與啟用狀態管理，以及 email 變更、密碼變更、忘記密碼與密碼重設流程。相關通知會送到 Mailpit，方便在本機檢查郵件內容。
+
+認證流程將 access token 放在瀏覽器 `localStorage`，refresh token 放在 `HttpOnly` cookie。API 使用 Bearer access token；refresh token 由 `/api/v1/auth/refresh` 輪替，登出時撤銷 session。
+
+## 設計補充
+
+- Angular 只負責管理介面與 API 呼叫；Spring Boot 集中處理驗證、授權與領域規則。
+- Liquibase 是 schema owner，migration 依序管理資料表變更。
+- 公開 API 位於 `/api/v1/public/**`，並只回傳已發布且未刪除的文章。
+- bootstrap admin 透過環境變數注入，避免把開發密碼寫進原始碼或文件。
