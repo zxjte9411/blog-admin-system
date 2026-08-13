@@ -1,1 +1,12 @@
-/* You can add global styles to this file, and also import other style files */
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  :where(a, button, input, textarea, select):focus-visible {
+    outline: 3px solid #f59e0b;
+    outline-offset: 3px;
+  }
+}

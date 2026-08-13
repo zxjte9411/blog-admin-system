@@ -3,7 +3,7 @@ const tseslint = require('typescript-eslint');
 
 module.exports = tseslint.config(
   {
-    ignores: ['dist/**', '.angular/**', 'node_modules/**'],
+    ignores: ['dist/**', '.angular/**', 'coverage/**', 'node_modules/**'],
   },
   {
     files: ['**/*.ts'],
