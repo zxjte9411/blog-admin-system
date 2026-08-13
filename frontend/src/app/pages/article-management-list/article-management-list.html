@@ -1,0 +1,95 @@
+<section class="article-list">
+  <form class="search" (ngSubmit)="searchChange.emit(searchTitle)">
+    <label class="field" for="article-search"
+      >{{ searchLabel }}
+      <input id="article-search" class="control" [(ngModel)]="searchTitle" name="title" />
+    </label>
+    <button class="ui-outline" type="submit">{{ searchLabel }}</button>
+  </form>
+
+  @if (loading && !items.length) {
+    <div class="skeleton" [attr.aria-label]="loadingLabel" role="status">
+      <span></span><span></span><span></span>
+    </div>
+  } @else if (!items.length) {
+    <p class="empty">{{ emptyLabel }}</p>
+  } @else {
+    <div class="table-wrap">
+      <table class="data-table">
+        <caption>
+          {{
+            caption
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ titleLabel }}</th>
+            <th scope="col">{{ authorLabel }}</th>
+            <th scope="col">{{ createdLabel }}</th>
+            <th scope="col">{{ actionsLabel }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of items; track row['id'] || row) {
+            <tr class="mat-mdc-row">
+              <td>
+                <span class="row-title">{{ row['title'] || row['id'] }}</span>
+              </td>
+              <td>{{ row['authorAttribution'] || '—' }}</td>
+              <td>
+                <time [attr.datetime]="row['createdAt']">
+                  {{ dateValue(row) | date: dateFormat }}
+                </time>
+              </td>
+              <td>
+                @if (canManageArticle(row)) {
+                  <div class="row-actions">
+                    <button
+                      class="text-link"
+                      type="button"
+                      (click)="open.emit(row)"
+                      [attr.aria-label]="editLabel + ' ' + row['title']"
+                    >
+                      {{ editLabel }}
+                    </button>
+                    <button
+                      class="text-link danger"
+                      type="button"
+                      (click)="delete.emit(row)"
+                      [attr.aria-label]="deleteLabel + ' ' + row['title']"
+                    >
+                      {{ deleteLabel }}
+                    </button>
+                  </div>
+                } @else {
+                  <span>—</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <nav class="pagination" [attr.aria-label]="caption">
+      <button
+        class="ui-outline"
+        type="button"
+        (click)="previousPage.emit()"
+        [disabled]="page === 0"
+      >
+        {{ previousLabel }}
+      </button>
+      <span aria-live="polite"
+        >{{ pageLabel }} {{ page + 1 }} {{ ofLabel }} {{ totalPages || 1 }}</span
+      >
+      <button
+        class="ui-outline"
+        type="button"
+        (click)="nextPage.emit()"
+        [disabled]="page + 1 >= totalPages"
+      >
+        {{ nextLabel }}
+      </button>
+    </nav>
+  }
+</section>

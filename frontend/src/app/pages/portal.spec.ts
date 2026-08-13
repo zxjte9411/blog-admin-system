@@ -170,6 +170,76 @@ describe('Portal API requests', () => {
     expect(fixture.nativeElement.textContent).toContain('2026-08-13');
   });
 
+  it('renders article management as a semantic multi-column table with actions', async () => {
+    await TestBed.configureTestingModule({
+      imports: [Portal],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(Portal);
+    TestBed.inject((await import('../core/language')).Language).usePreferred('en');
+    fixture.componentInstance.routeKey = 'admin/articles';
+    fixture.componentInstance.items = [
+      {
+        id: 'article-1',
+        title: 'A considered title',
+        authorAttribution: 'By Ada',
+        createdAt: '2026-08-13T10:30:00Z',
+        ownerId: 'user-1',
+      },
+    ];
+    fixture.componentInstance.auth.user = {
+      id: 'user-1',
+      displayName: 'Ada',
+      preferredLanguage: 'en',
+      role: 'AUTHOR',
+    };
+    fixture.detectChanges();
+
+    const table = fixture.nativeElement.querySelector('table');
+    expect(table.querySelectorAll('thead th')).toHaveLength(4);
+    expect(table.querySelector('th:nth-child(2)')?.textContent).toContain('Author Attribution');
+    expect(table.querySelector('th:nth-child(3)')?.textContent).toContain('Created');
+    expect(table.querySelector('th:nth-child(4)')?.textContent).toContain('Actions');
+    expect(table.querySelector('button[aria-label="Edit A considered title"]')).toBeTruthy();
+    expect(table.querySelector('button[aria-label="Delete A considered title"]')).toBeTruthy();
+  });
+
+  it('sends the article search term entered in the management list', async () => {
+    await TestBed.configureTestingModule({
+      imports: [Portal],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(Portal);
+    TestBed.inject((await import('../core/language')).Language).usePreferred('en');
+    fixture.componentInstance.routeKey = 'admin/articles';
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/articles?page=0').flush([]);
+    fixture.detectChanges();
+
+    fixture.componentInstance.search('new search term');
+
+    const request = http.expectOne('/api/v1/articles?page=0&title=new%20search%20term');
+    expect(request.request.params.get('title')).toBe('new search term');
+    request.flush([]);
+  });
+
+  it('renders the article management skeleton during its initial empty load', async () => {
+    await TestBed.configureTestingModule({
+      imports: [Portal],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(Portal);
+    fixture.componentInstance.routeKey = 'admin/articles';
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[role="status"]')).toBeTruthy();
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/articles?page=0').flush([]);
+  });
+
   it('shows article edit and delete only to its owner or an admin', async () => {
     await TestBed.configureTestingModule({
       imports: [Portal],

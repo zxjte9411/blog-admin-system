@@ -1,0 +1,139 @@
+:host {
+  display: block;
+}
+.search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1.25rem;
+  align-items: end;
+  margin: 1.5rem 0;
+}
+.field {
+  display: grid;
+  gap: 0.45rem;
+  color: #514c45;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.control {
+  width: 100%;
+  min-height: 3rem;
+  box-sizing: border-box;
+  border: 1px solid #b9b1a4;
+  border-radius: 0.3rem;
+  padding: 0.7rem 0.8rem;
+  color: var(--ink);
+  background: var(--paper);
+  font: inherit;
+  font-weight: 400;
+}
+.table-wrap {
+  overflow-x: auto;
+  margin-top: 1.75rem;
+}
+.data-table {
+  width: 100%;
+  min-width: 44rem;
+  border-collapse: collapse;
+  text-align: left;
+}
+caption {
+  margin-bottom: 0.75rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: left;
+}
+th,
+td {
+  border-bottom: 1px solid var(--line);
+  padding: 1rem 0.75rem;
+  vertical-align: top;
+}
+th {
+  border-top: 2px solid var(--ink);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.row-title {
+  font-weight: 700;
+}
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.text-link {
+  border: 0;
+  padding: 0.35rem 0;
+  color: #8a5207;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.danger {
+  color: #b33b2d;
+}
+.empty {
+  margin: 2rem 0;
+  padding: 2rem;
+  border-block: 1px solid var(--line);
+  color: var(--muted);
+  text-align: center;
+}
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.ui-outline {
+  min-height: 3rem;
+  border: 1px solid #8f877b;
+  border-radius: 0.3rem;
+  padding: 0.65rem 0.9rem;
+  color: #514c45;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.skeleton {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.75rem;
+}
+.skeleton span {
+  display: block;
+  height: 4.2rem;
+  border-block: 1px solid var(--line);
+  background: linear-gradient(90deg, #eee7dc 25%, #fffaf0 50%, #eee7dc 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+:where(button, input):focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .search {
+    grid-template-columns: 1fr;
+  }
+  .search button {
+    justify-self: start;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton span {
+    animation: none;
+  }
+}

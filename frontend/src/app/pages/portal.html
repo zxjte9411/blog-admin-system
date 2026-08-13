@@ -150,18 +150,37 @@
       </section>
     }
 
-    @if (!loading || items.length > 0) {
+    @if (routeKey === 'admin/articles') {
+      <app-article-management-list
+        [items]="items"
+        [loading]="loading"
+        [totalPages]="totalPages"
+        [page]="page"
+        [searchTitle]="searchTitle"
+        [canManageArticle]="canManageArticle"
+        [titleLabel]="fieldLabel('title')"
+        [authorLabel]="language.lang() === 'en' ? 'Author Attribution' : '作者署名'"
+        [createdLabel]="language.t.sessionCreatedAt"
+        [actionsLabel]="language.lang() === 'en' ? 'Actions' : '操作'"
+        [caption]="language.t.data"
+        [emptyLabel]="language.t.empty"
+        [loadingLabel]="language.t.loading"
+        [searchLabel]="language.t.searchAction"
+        [editLabel]="language.lang() === 'en' ? 'Edit' : '編輯'"
+        [deleteLabel]="language.t.delete"
+        [previousLabel]="language.t.previous"
+        [nextLabel]="language.t.next"
+        [pageLabel]="language.t.page"
+        [ofLabel]="language.t.of"
+        (searchChange)="search($event)"
+        (open)="open($event)"
+        (delete)="deleteArticle($event)"
+        (previousPage)="previousPage()"
+        (nextPage)="nextPage()"
+      />
+    } @else if (!loading || items.length > 0) {
       @if (!items.length && !detail) {
         <p class="empty">{{ language.t.empty }}</p>
-      }
-      @if (routeKey === 'admin/articles') {
-        <form class="search" (ngSubmit)="search()">
-          <label class="field" for="article-search"
-            >{{ language.t.search }}
-            <input id="article-search" class="control" [(ngModel)]="searchTitle" name="title" />
-          </label>
-          <button class="ui-outline" type="submit">{{ language.t.searchAction }}</button>
-        </form>
       }
       @if (routeKey === 'public/articles' && selectedTagId) {
         <a class="ui-outline" routerLink="/public/articles">{{ language.t.clearFilter }}</a>
@@ -342,6 +361,7 @@
           </div>
         }
       }
+
       @if (detail) {
         <article class="article-detail">
           <h2>{{ detail['title'] }}</h2>

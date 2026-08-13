@@ -11,6 +11,7 @@ import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angu
 import { ActivatedRoute, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { Auth } from '../core/auth';
 import { Language } from '../core/language';
+import { ArticleManagementList } from './article-management-list/article-management-list';
 
 type Row = Record<string, unknown>;
 type Method = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
@@ -36,7 +37,14 @@ const formFields: Record<string, string[]> = {
 @Component({
   selector: 'app-portal',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, RouterLinkActive],
+  imports: [
+    CommonModule,
+    FormsModule,
+    ReactiveFormsModule,
+    RouterLink,
+    RouterLinkActive,
+    ArticleManagementList,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './portal.scss',
   templateUrl: './portal.html',
@@ -255,13 +263,13 @@ export class Portal implements OnInit {
     this.detail = row;
   }
 
-  canManageArticle(row: Row) {
+  canManageArticle = (row: Row) => {
     return (
       this.auth.user?.role === 'ADMIN' ||
       row['ownerId'] === this.auth.user?.id ||
       row['owner'] === this.auth.user?.id
     );
-  }
+  };
 
   publicArticleLink(row: Row) {
     return row['id'] ? ['/public/articles', row['id']] : null;
@@ -287,7 +295,10 @@ export class Portal implements OnInit {
     this.action('DELETE', `/api/v1/articles/${row['id']}`);
   }
 
-  search() {
+  search(searchTitle?: string) {
+    if (searchTitle !== undefined) {
+      this.searchTitle = searchTitle;
+    }
     this.page = 0;
     this.read();
   }
