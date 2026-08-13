@@ -18,15 +18,41 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: "25"
           cache: maven
       - name: Maven verify
         run: ./mvnw --batch-mode verify
       - name: Upload JaCoCo report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: jacoco-report
           path: backend/target/site/jacoco
+      - name: Summarize JaCoCo coverage
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          report = Path('target/site/jacoco/jacoco.xml')
+          summary = Path(os.environ['GITHUB_STEP_SUMMARY'])
+          if not report.exists():
+              summary.open('a', encoding='utf-8').write('## Backend coverage\n\nJaCoCo report 未產生。\n')
+          else:
+              root = ET.parse(report).getroot()
+              counters = {counter.attrib['type']: counter.attrib for counter in root.findall('counter')}
+              lines = ['## Backend coverage', '', '| Metric | Covered | Missed | Coverage |', '| --- | ---: | ---: | ---: |']
+              for metric in ('LINE', 'INSTRUCTION', 'BRANCH', 'METHOD', 'CLASS'):
+                  counter = counters.get(metric)
+                  if counter:
+                      covered = int(counter['covered'])
+                      missed = int(counter['missed'])
+                      total = covered + missed
+                      lines.append(f"| {metric.title()} | {covered} | {missed} | {covered / total * 100:.2f}% |" if total else f'| {metric.title()} | 0 | 0 | 0.00% |')
+              summary.open('a', encoding='utf-8').write('\n'.join(lines) + '\n')
+          PY
 
   frontend-verify:
     runs-on: ubuntu-latest
@@ -37,7 +63,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
@@ -45,7 +71,38 @@ jobs:
       - name: Lint
         run: npm run lint
       - name: Test
-        run: npm test
+        run: npm test -- --coverage --coverage-reporters=lcov --coverage-reporters=html
+      - name: Upload frontend coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+      - name: Summarize frontend coverage
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          report = Path('coverage/blog-admin/lcov.info')
+          summary = Path(os.environ['GITHUB_STEP_SUMMARY'])
+          if not report.exists():
+              summary.open('a', encoding='utf-8').write('## Frontend coverage\n\nlcov.info 未產生。\n')
+          else:
+              data = report.read_text(encoding='utf-8')
+              metrics = {}
+              for prefix, name in (('DA:', 'line'), ('FNDA:', 'function'), ('BRDA:', 'branch')):
+                  index = {'DA:': 1, 'FNDA:': 0, 'BRDA:': -1}[prefix]
+                  values = [line[len(prefix):].split(',')[index] for line in data.splitlines() if line.startswith(prefix)]
+                  covered = sum(value not in ('0', '-') for value in values)
+                  metrics[name] = (covered, len(values))
+              lines = ['## Frontend coverage', '', '| Metric | Covered | Total | Coverage |', '| --- | ---: | ---: | ---: |']
+              for name in ('line', 'function', 'branch'):
+                  covered, total = metrics[name]
+                  lines.append(f'| {name.title()} | {covered} | {total} | {covered / total * 100:.2f}% |' if total else f'| {name.title()} | 0 | 0 | 0.00% |')
+              summary.open('a', encoding='utf-8').write('\n'.join(lines) + '\n')
+          PY
       - name: Build
         run: npm run build
 
@@ -101,8 +158,8 @@ jobs:
         with:
           name: jacoco-report
           path: backend/target/site/jacoco
+      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: backend/target/site/jacoco
       - uses: actions/deploy-pages@v4
-        continue-on-error: true
