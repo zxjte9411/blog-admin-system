@@ -65,7 +65,7 @@ describe('AdminPage', () => {
       });
     fixture.detectChanges();
 
-    expect((fixture.nativeElement.querySelector('#title') as HTMLInputElement).value).toBe(
+    expect((fixture.nativeElement.querySelector('#field-title') as HTMLInputElement).value).toBe(
       'Existing title',
     );
     expect(fixture.nativeElement.querySelector('.preserved-tags')?.textContent).toContain('tag-1');
@@ -110,7 +110,9 @@ describe('AdminPage', () => {
     const form = fixture.nativeElement.querySelector('.article-form') as HTMLFormElement;
     const controls = [...form.children]
       .map((element: Element) => ({
-        name: element.matches('.status-field') ? 'status' : element.querySelector('.control')?.id,
+        name: element.matches('.status-field')
+          ? 'status'
+          : element.querySelector('.control')?.id?.replace('field-', ''),
         order: Number(getComputedStyle(element).order),
       }))
       .sort((left, right) => left.order - right.order)

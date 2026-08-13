@@ -93,11 +93,15 @@ export class AdminPage implements OnInit {
   confirmMessage(row: Row) {
     return this.language.t.confirmDelete.replace('{title}', String(row['title'] ?? ''));
   }
+  private triggerElement: HTMLElement | null = null;
   confirmPermanentDeleteMessage(row: Row) {
     return this.language.t.confirmPermanentDelete.replace('{title}', String(row['title'] ?? ''));
   }
-  openPermanentDeleteDialog(row: Row) {
+  openPermanentDeleteDialog(row: Row, trigger?: EventTarget | null) {
     this.selectedDeletedArticle = row;
+    if (trigger instanceof HTMLElement) {
+      this.triggerElement = trigger;
+    }
     this.cdr.markForCheck();
     this.permanentDialog?.nativeElement.showModal?.();
   }
@@ -105,6 +109,10 @@ export class AdminPage implements OnInit {
     this.permanentDialog?.nativeElement.close?.();
     this.selectedDeletedArticle = null;
     this.cdr.markForCheck();
+    if (this.triggerElement) {
+      this.triggerElement.focus();
+      this.triggerElement = null;
+    }
   }
   confirmPermanentDelete() {
     const target = this.selectedDeletedArticle;

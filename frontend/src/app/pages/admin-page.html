@@ -55,12 +55,12 @@
     >
       @for (field of form.controls | keyvalue; track field.key) {
         @if (field.key !== 'status') {
-          <label [attr.for]="field.key"
+          <label [attr.for]="'field-' + field.key"
             >{{ fieldLabel(field.key) }}
             @if (field.key === 'content' || field.key === 'tagNames') {
               <textarea
                 class="control"
-                [id]="field.key"
+                [id]="'field-' + field.key"
                 [formControlName]="field.key"
                 [attr.aria-invalid]="fieldHasError(field.key) ? 'true' : null"
                 [attr.aria-describedby]="
@@ -70,7 +70,7 @@
             } @else {
               <input
                 class="control"
-                [id]="field.key"
+                [id]="'field-' + field.key"
                 [type]="field.key === 'email' ? 'email' : field.key === 'value' ? 'number' : 'text'"
                 [attr.min]="field.key === 'value' ? 8 : null"
                 [attr.max]="field.key === 'value' ? 128 : null"
@@ -243,7 +243,7 @@
                       <button
                         class="text-link danger"
                         type="button"
-                        (click)="openPermanentDeleteDialog(row)"
+                        (click)="openPermanentDeleteDialog(row, $event.currentTarget)"
                       >
                         {{ language.t.permanentDelete }}
                       </button>

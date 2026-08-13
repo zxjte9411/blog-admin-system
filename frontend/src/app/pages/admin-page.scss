@@ -53,22 +53,23 @@ h1 {
 }
 .article-form {
   gap: 1.25rem;
-}
-.article-form > label:first-child,
-.article-form > label:has(textarea) {
-  grid-column: 1 / -1;
-}
-.article-form > label[for='title'] {
-  order: 1;
-}
-.article-form > label[for='content'] {
-  order: 2;
-}
-.article-form > label[for='tagNames'] {
-  order: 3;
-}
-.article-form > .status-field {
-  order: 4;
+
+  > label:first-child,
+  > label:has(textarea) {
+    grid-column: 1 / -1;
+  }
+  > label[for='field-title'] {
+    order: 1;
+  }
+  > label[for='field-content'] {
+    order: 2;
+  }
+  > label[for='field-tagNames'] {
+    order: 3;
+  }
+  > .status-field {
+    order: 4;
+  }
 }
 .status-field {
   align-content: start;
@@ -82,17 +83,17 @@ h1 {
   border: 0;
 }
 .status-option {
-  display: flex !important;
+  display: flex;
   min-height: 3rem;
   box-sizing: border-box;
   align-items: center;
-  gap: 0.6rem !important;
+  gap: 0.6rem;
   border: 1px solid var(--line);
   border-radius: 0.35rem;
   padding: 0.7rem 0.8rem;
   color: var(--ink);
   background: var(--paper);
-  font-weight: 500 !important;
+  font-weight: 500;
   cursor: pointer;
 }
 .status-option:has(input:checked) {
