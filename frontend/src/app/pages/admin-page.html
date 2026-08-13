@@ -239,6 +239,15 @@
                     <button class="text-link" type="button" (click)="restoreArticle(row)">
                       {{ language.t.restore }}
                     </button>
+                    @if (auth.user?.role === 'ADMIN') {
+                      <button
+                        class="text-link danger"
+                        type="button"
+                        (click)="openPermanentDeleteDialog(row)"
+                      >
+                        {{ language.t.permanentDelete }}
+                      </button>
+                    }
                   }
                 </td>
               </tr>
@@ -250,4 +259,19 @@
   } @else if (!loading && routeKey !== 'articles/new' && routeKey !== 'articles/:id/edit') {
     <p class="empty">{{ language.t.empty }}</p>
   }
+
+  <dialog #permanentDialog class="confirm-dialog" (close)="closePermanentDeleteDialog()">
+    @if (selectedDeletedArticle) {
+      <h2>{{ language.t.permanentDelete }}</h2>
+      <p>{{ confirmPermanentDeleteMessage(selectedDeletedArticle) }}</p>
+      <div class="dialog-actions">
+        <button class="ui-outline" type="button" (click)="closePermanentDeleteDialog()">
+          {{ language.t.cancel }}
+        </button>
+        <button class="ui-primary danger-btn" type="button" (click)="confirmPermanentDelete()">
+          {{ language.t.permanentDelete }}
+        </button>
+      </div>
+    }
+  </dialog>
 </app-shell>

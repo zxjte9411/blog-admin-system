@@ -4,7 +4,9 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  ElementRef,
   OnInit,
+  ViewChild,
   inject,
 } from '@angular/core';
 import { CanDeactivateFn } from '@angular/router';
@@ -43,6 +45,7 @@ const fields: Record<string, string[]> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AdminPage implements OnInit {
+  @ViewChild('permanentDialog') permanentDialog?: ElementRef<HTMLDialogElement>;
   readonly auth = inject(Auth);
   readonly language = inject(Language);
   private readonly http = inject(HttpClient);
@@ -65,6 +68,7 @@ export class AdminPage implements OnInit {
   removedTagIds: unknown[] = [];
   currentMinimum: number | null = null;
   deletedSuccess = false;
+  selectedDeletedArticle: Row | null = null;
   private originalUsers: Map<unknown, Row> = new Map();
   readonly confirmDelete = (row: Row) => window.confirm(this.confirmMessage(row));
 
@@ -88,6 +92,36 @@ export class AdminPage implements OnInit {
 
   confirmMessage(row: Row) {
     return this.language.t.confirmDelete.replace('{title}', String(row['title'] ?? ''));
+  }
+  confirmPermanentDeleteMessage(row: Row) {
+    return this.language.t.confirmPermanentDelete.replace('{title}', String(row['title'] ?? ''));
+  }
+  openPermanentDeleteDialog(row: Row) {
+    this.selectedDeletedArticle = row;
+    this.cdr.markForCheck();
+    this.permanentDialog?.nativeElement.showModal?.();
+  }
+  closePermanentDeleteDialog() {
+    this.permanentDialog?.nativeElement.close?.();
+    this.selectedDeletedArticle = null;
+    this.cdr.markForCheck();
+  }
+  confirmPermanentDelete() {
+    const target = this.selectedDeletedArticle;
+    if (!target) return;
+    this.closePermanentDeleteDialog();
+    this.loading = true;
+    this.http.delete(`/api/v1/articles/deleted/${target['id']}`).subscribe({
+      next: () => {
+        this.loading = false;
+        this.error = '';
+        const title = String(target['title'] ?? '');
+        this.message = this.language.t.permanentDeleteSuccess.replace('{title}', title);
+        this.deletedSuccess = false;
+        this.read();
+      },
+      error: (e: HttpErrorResponse) => this.fail(e.status),
+    });
   }
   fieldLabel(field: string) {
     return (this.language.t.field as Record<string, string>)[field] ?? field;

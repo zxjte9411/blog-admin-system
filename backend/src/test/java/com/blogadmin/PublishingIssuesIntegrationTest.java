@@ -431,6 +431,55 @@ class PublishingIssuesIntegrationTest {
   }
 
   @Test
+  void adminCanPermanentlyDeleteDeletedArticleAndAuthorForbidden() {
+    user(UserRole.AUTHOR, "author-purge");
+    user(UserRole.ADMIN, "admin-purge");
+    String author = login("author-purge");
+    String admin = login("admin-purge");
+
+    UUID tagId = UUID.randomUUID();
+    tags.saveAndFlush(new Tag(tagId, "purge-tag"));
+
+    Map<String, Object> article =
+        create(
+            author,
+            Map.of(
+                "title", "purge target",
+                "content", "text",
+                "status", "DRAFT",
+                "tagIds", Set.of(tagId)));
+    UUID id = UUID.fromString((String) article.get("id"));
+
+    // Attempt permanent delete on an active (not deleted) article -> 404
+    assertThat(
+            exchange("/api/v1/articles/deleted/" + id, HttpMethod.DELETE, admin, null, Void.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
+
+    // Soft delete the article
+    delete(author, article);
+    assertThat(articles.findById(id)).isPresent();
+    assertThat(articles.findById(id).get().getDeletedAt()).isNotNull();
+
+    // Author attempts permanent delete -> 403 Forbidden
+    assertThat(
+            exchange("/api/v1/articles/deleted/" + id, HttpMethod.DELETE, author, null, Void.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+
+    // Admin permanently deletes -> 204 No Content
+    assertThat(
+            exchange("/api/v1/articles/deleted/" + id, HttpMethod.DELETE, admin, null, Void.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.NO_CONTENT);
+
+    // Article is purged
+    assertThat(articles.findById(id)).isEmpty();
+    // Unused tag is cleaned up
+    assertThat(tags.findById(tagId)).isEmpty();
+  }
+
+  @Test
   void publicLimiterRemovesExpiredIdleIpKeys() throws Exception {
     com.blogadmin.publishing.application.ArticleService service =
         new com.blogadmin.publishing.application.ArticleService(articles, tags);

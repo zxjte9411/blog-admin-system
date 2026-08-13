@@ -133,6 +133,24 @@ describe('AccountPage', () => {
     expect(TestBed.inject(Location).path()).toBe('/login');
   });
 
+  it('shows registration link on login page and navigates to register', async () => {
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideRouter(routes), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(App);
+    await TestBed.inject(Router).navigateByUrl('/login');
+    fixture.detectChanges();
+
+    const registerLink = fixture.nativeElement.querySelector('a[href="/register"]');
+    expect(registerLink).toBeTruthy();
+
+    registerLink.click();
+    await fixture.whenStable();
+    expect(TestBed.inject(Location).path()).toBe('/register');
+  });
+
   it('updates the account title when the language changes', async () => {
     await TestBed.configureTestingModule({
       imports: [AccountPage],

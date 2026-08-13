@@ -242,3 +242,37 @@ h1 {
     text-transform: uppercase;
   }
 }
+
+.confirm-dialog {
+  max-width: 28rem;
+  width: 90%;
+  padding: 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--paper);
+  color: var(--ink);
+
+  &::backdrop {
+    background: #00000066;
+  }
+
+  h2 {
+    margin: 0 0 0.75rem;
+  }
+
+  p {
+    margin: 0 0 1.5rem;
+    color: var(--muted);
+  }
+
+  .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+  }
+
+  .danger-btn {
+    background: #b33b2d;
+    color: #fff;
+  }
+}

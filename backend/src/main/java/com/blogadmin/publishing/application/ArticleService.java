@@ -220,6 +220,22 @@ public class ArticleService {
     return view(articles.save(a));
   }
 
+  @Transactional
+  public void purge(User u, UUID id) {
+    if (u.getRole() != UserRole.ADMIN)
+      throw new ArticleException(ArticleException.Code.FORBIDDEN, "Operation not allowed");
+    Article a =
+        articles
+            .findById(id)
+            .orElseThrow(() -> new ArticleException(ArticleException.Code.NOT_FOUND, "Not found"));
+    if (a.getDeletedAt() == null)
+      throw new ArticleException(ArticleException.Code.NOT_FOUND, "Not found");
+    Set<Tag> old = new HashSet<>(a.getTags());
+    a.getTags().clear();
+    articles.delete(a);
+    cleanup(old);
+  }
+
   private ArticleView view(Article a) {
     return new ArticleView(
         a.getId(),

@@ -469,4 +469,127 @@ describe('AdminPage', () => {
 
     expect(fixture.nativeElement.textContent).toContain('12');
   });
+
+  it('shows restore but not permanent delete button to author on deleted articles', async () => {
+    await setup('articles/deleted');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.componentInstance.auth.user = {
+      id: 'author-1',
+      displayName: 'Author',
+      preferredLanguage: 'zh-TW',
+      role: 'AUTHOR',
+    };
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http
+      .expectOne('/api/v1/articles/deleted?page=0')
+      .flush([{ id: 'art-1', title: 'Deleted Post' }]);
+    fixture.detectChanges();
+
+    const buttons = fixture.nativeElement.querySelectorAll('td button');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].textContent.trim()).toBe(fixture.componentInstance.language.t.restore);
+  });
+
+  it('allows admin to open confirmation dialog and permanently delete a deleted article', async () => {
+    await setup('articles/deleted');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.componentInstance.auth.user = {
+      id: 'admin-1',
+      displayName: 'Admin',
+      preferredLanguage: 'zh-TW',
+      role: 'ADMIN',
+    };
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http
+      .expectOne('/api/v1/articles/deleted?page=0')
+      .flush([{ id: 'art-1', title: 'Deleted Post' }]);
+    fixture.detectChanges();
+
+    const deleteBtn = fixture.nativeElement.querySelector('button.danger');
+    expect(deleteBtn).toBeTruthy();
+    expect(deleteBtn.textContent.trim()).toBe(fixture.componentInstance.language.t.permanentDelete);
+
+    const dialog = fixture.nativeElement.querySelector('dialog');
+    if (!dialog.showModal) dialog.showModal = vi.fn();
+    if (!dialog.close) dialog.close = vi.fn();
+    const showModalSpy = vi.spyOn(dialog, 'showModal');
+
+    deleteBtn.click();
+    fixture.detectChanges();
+
+    expect(showModalSpy).toHaveBeenCalled();
+    expect(dialog.textContent).toContain(
+      fixture.componentInstance.language.t.confirmPermanentDelete.replace(
+        '{title}',
+        'Deleted Post',
+      ),
+    );
+
+    // Cancel closes dialog without deleting
+    const cancelBtn = dialog.querySelector('button.ui-outline');
+    cancelBtn.click();
+    fixture.detectChanges();
+    http.expectNone('/api/v1/articles/deleted/art-1');
+
+    // Open again and confirm
+    deleteBtn.click();
+    fixture.detectChanges();
+
+    const confirmBtn = dialog.querySelector('button.danger-btn');
+    confirmBtn.click();
+
+    const deleteReq = http.expectOne('/api/v1/articles/deleted/art-1');
+    expect(deleteReq.request.method).toBe('DELETE');
+    deleteReq.flush(null, { status: 204, statusText: 'No Content' });
+
+    http.expectOne('/api/v1/articles/deleted?page=0').flush([]);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain(
+      fixture.componentInstance.language.t.permanentDeleteSuccess.replace(
+        '{title}',
+        'Deleted Post',
+      ),
+    );
+  });
+
+  it('handles permanent delete failure by displaying error', async () => {
+    await setup('articles/deleted');
+    const fixture = TestBed.createComponent(AdminPage);
+    fixture.componentInstance.auth.user = {
+      id: 'admin-1',
+      displayName: 'Admin',
+      preferredLanguage: 'zh-TW',
+      role: 'ADMIN',
+    };
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http
+      .expectOne('/api/v1/articles/deleted?page=0')
+      .flush([{ id: 'art-1', title: 'Deleted Post' }]);
+    fixture.detectChanges();
+
+    const deleteBtn = fixture.nativeElement.querySelector('button.danger');
+    const dialog = fixture.nativeElement.querySelector('dialog');
+    if (!dialog.showModal) dialog.showModal = vi.fn();
+    if (!dialog.close) dialog.close = vi.fn();
+
+    deleteBtn.click();
+    fixture.detectChanges();
+
+    const confirmBtn = dialog.querySelector('button.danger-btn');
+    confirmBtn.click();
+
+    http
+      .expectOne('/api/v1/articles/deleted/art-1')
+      .flush('Forbidden', { status: 403, statusText: 'Forbidden' });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.error')).toBeTruthy();
+  });
 });

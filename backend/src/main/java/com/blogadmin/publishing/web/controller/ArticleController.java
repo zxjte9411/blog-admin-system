@@ -82,4 +82,10 @@ public class ArticleController {
   public ArticleView restore(@AuthenticationPrincipal User u, @PathVariable UUID id) {
     return ArticleView.of(service.restore(u, id));
   }
+
+  @DeleteMapping("/deleted/{id}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void purge(@AuthenticationPrincipal User u, @PathVariable UUID id) {
+    service.purge(u, id);
+  }
 }
