@@ -251,7 +251,7 @@ async function runAudit() {
     console.log("\n--- 10. Account Sessions & Security ---");
     await session.navigate("http://localhost:4200/account/sessions");
     let sessionItems = await session.eval(
-      'document.querySelectorAll(".session, article").length',
+      'document.querySelectorAll(".session, article, tbody tr").length',
     );
     check(
       "Account sessions view lists active sessions",

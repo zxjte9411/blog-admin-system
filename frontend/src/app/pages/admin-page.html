@@ -57,11 +57,12 @@
         @if (field.key !== 'status') {
           <label [attr.for]="'field-' + field.key"
             >{{ fieldLabel(field.key) }}
-            @if (field.key === 'content' || field.key === 'tagNames') {
+            @if (field.key === 'content') {
               <textarea
-                class="control"
+                class="control content-control"
                 [id]="'field-' + field.key"
                 [formControlName]="field.key"
+                [placeholder]="language.t.contentPlaceholder"
                 [attr.aria-invalid]="fieldHasError(field.key) ? 'true' : null"
                 [attr.aria-describedby]="
                   fieldHasError(field.key) ? 'field-' + field.key + '-error' : null
@@ -70,18 +71,37 @@
             } @else {
               <input
                 class="control"
+                [class.title-control]="field.key === 'title'"
                 [id]="'field-' + field.key"
                 [type]="field.key === 'email' ? 'email' : field.key === 'value' ? 'number' : 'text'"
                 [attr.min]="field.key === 'value' ? 8 : null"
                 [attr.max]="field.key === 'value' ? 128 : null"
+                [placeholder]="
+                  field.key === 'title'
+                    ? language.t.titlePlaceholder
+                    : field.key === 'tagNames'
+                      ? language.t.tagNamesPlaceholder
+                      : ''
+                "
                 [formControlName]="field.key"
                 [attr.aria-invalid]="fieldHasError(field.key) ? 'true' : null"
                 [attr.aria-describedby]="
-                  fieldHasError(field.key) ? 'field-' + field.key + '-error' : null
+                  fieldHasError(field.key)
+                    ? 'field-' + field.key + '-error'
+                    : field.key === 'value'
+                      ? 'field-value-hint'
+                      : field.key === 'tagNames'
+                        ? 'field-tagNames-hint'
+                        : null
                 "
               />
               @if (field.key === 'value') {
-                <span class="field-hint">{{ language.t.passwordRule }}</span>
+                <span class="field-hint" id="field-value-hint">{{ language.t.passwordRule }}</span>
+              }
+              @if (field.key === 'tagNames') {
+                <span class="field-hint" id="field-tagNames-hint">{{
+                  language.t.customTagsHint
+                }}</span>
               }
             }
             @if (fieldHasError(field.key)) {

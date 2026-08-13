@@ -52,7 +52,8 @@ h1 {
 
   > label:first-child,
   > label:has(textarea),
-  > .tag-field {
+  > .tag-field,
+  > label[for='field-tagNames'] {
     grid-column: 1 / -1;
   }
   > label[for='field-title'] {
@@ -70,6 +71,10 @@ h1 {
   > .status-field {
     order: 5;
   }
+}
+.title-control {
+  font-size: 1.15rem;
+  font-weight: 700;
 }
 .tag-checkboxes {
   display: flex;
@@ -91,10 +96,6 @@ h1 {
     border-color: var(--amber);
     background: #fff8e8;
   }
-
-  input {
-    accent-color: var(--amber);
-  }
 }
 .status-field {
   align-content: start;
@@ -110,28 +111,24 @@ h1 {
 .status-option {
   display: flex;
   min-height: 3rem;
-  box-sizing: border-box;
   align-items: center;
   gap: 0.6rem;
   border: 1px solid var(--line);
   border-radius: 0.35rem;
   padding: 0.7rem 0.8rem;
-  color: var(--ink);
   background: var(--paper);
   font-weight: 500;
   cursor: pointer;
+
+  &:has(:checked) {
+    border-color: var(--amber);
+    background: #fff8e8;
+    box-shadow: 0 0 0 2px #d88a1230;
+  }
 }
-.status-option:has(input:checked) {
-  border-color: var(--amber);
-  background: #fff8e8;
-  box-shadow: 0 0 0 2px #d88a1230;
-}
-.status-option input {
-  accent-color: var(--amber);
-}
-.status-option input:focus-visible {
-  outline: 3px solid var(--amber);
-  outline-offset: 3px;
+.field-hint {
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 .admin-form label {
   display: grid;
@@ -149,7 +146,8 @@ h1 {
 }
 .admin-form textarea {
   grid-column: 1 / -1;
-  min-height: 11rem;
+  min-height: 14rem;
+  line-height: 1.6;
 }
 .admin-form button {
   grid-column: 1 / -1;

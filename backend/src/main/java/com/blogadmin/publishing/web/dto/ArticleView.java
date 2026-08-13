@@ -16,7 +16,8 @@ public record ArticleView(
     Instant publishedAt,
     Instant createdAt,
     long version,
-    Set<UUID> tagIds) {
+    Set<UUID> tagIds,
+    Set<String> tagNames) {
   public static ArticleView of(ArticleService.ArticleView a) {
     return new ArticleView(
         a.id(),
@@ -28,6 +29,7 @@ public record ArticleView(
         a.publishedAt(),
         a.createdAt(),
         a.version(),
-        a.tagIds());
+        a.tagIds(),
+        a.tagNames());
   }
 }

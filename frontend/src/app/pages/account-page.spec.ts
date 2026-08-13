@@ -254,7 +254,21 @@ describe('AccountPage', () => {
     expect(usePreferred).toHaveBeenCalledWith('en');
   });
 
-  it('shows session metadata and only offers revoke for other sessions', async () => {
+  it('does not display password hint on login page', async () => {
+    await TestBed.configureTestingModule({
+      imports: [AccountPage],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(AccountPage);
+    fixture.componentInstance.routeKey = 'login';
+    fixture.componentInstance.ngOnInit();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('#field-password-hint')).toBeNull();
+  });
+
+  it('shows session metadata in a data table and offers pagination', async () => {
     await TestBed.configureTestingModule({
       imports: [AccountPage],
       providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
@@ -263,21 +277,39 @@ describe('AccountPage', () => {
     const fixture = TestBed.createComponent(AccountPage);
     fixture.componentInstance.routeKey = 'account/sessions';
     fixture.detectChanges();
+
+    const mockSessions = [
+      {
+        id: 'current',
+        current: true,
+        createdAt: '2026-08-12T09:00:00Z',
+        lastUsedAt: '2026-08-14T03:00:00Z',
+      },
+      ...Array.from({ length: 11 }, (_, i) => ({
+        id: `other-${i + 1}`,
+        current: false,
+        createdAt: `2026-08-11T09:00:${i < 10 ? '0' + i : i}Z`,
+        lastUsedAt: `2026-08-13T09:00:${i < 10 ? '0' + i : i}Z`,
+      })),
+    ];
+
     TestBed.inject(HttpTestingController)
       .expectOne('/api/v1/auth/sessions?page=0')
-      .flush([
-        { id: 'current', current: true, createdAt: '2026-08-12T09:00:00Z' },
-        { id: 'other', current: false, createdAt: '2026-08-11T09:00:00Z' },
-      ]);
+      .flush(mockSessions);
     fixture.detectChanges();
 
+    expect(fixture.nativeElement.querySelector('.data-table')).toBeTruthy();
     expect(fixture.nativeElement.textContent).toContain('2026-08-12T09:00:00Z');
-    expect(fixture.nativeElement.textContent).toContain('2026-08-11T09:00:00Z');
-    expect(
-      [...fixture.nativeElement.querySelectorAll('button')].filter((button) =>
-        button.textContent.includes('Revoke'),
-      ),
-    ).toHaveLength(1);
+    expect(fixture.componentInstance.totalPages).toBe(2);
+    expect(fixture.componentInstance.page).toBe(0);
+
+    fixture.componentInstance.nextPage();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.page).toBe(1);
+
+    fixture.componentInstance.previousPage();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.page).toBe(0);
   });
 
   it('shows a retry button when sessions fail to load', async () => {

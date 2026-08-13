@@ -53,6 +53,9 @@ export class AccountPage implements OnInit {
   error = '';
   message = '';
   items: Row[] = [];
+  page = 0;
+  readonly pageSize = 10;
+  totalPages = 0;
   form = this.fb.group<Record<string, never>>({});
 
   ngOnInit() {
@@ -166,12 +169,39 @@ export class AccountPage implements OnInit {
       error: (e: HttpErrorResponse) => this.fail(e.status),
     });
   }
+  get pagedSessions(): Row[] {
+    const start = this.page * this.pageSize;
+    return this.items.slice(start, start + this.pageSize);
+  }
+
+  previousPage() {
+    if (this.page > 0) {
+      this.page--;
+      this.cdr.markForCheck();
+    }
+  }
+
+  nextPage() {
+    if (this.page + 1 < this.totalPages) {
+      this.page++;
+      this.cdr.markForCheck();
+    }
+  }
+
   private readSessions() {
     this.loading = true;
     this.error = '';
-    this.http.get<Row[]>('/api/v1/auth/sessions', { params: { page: 0 } }).subscribe({
-      next: (items) => {
-        this.items = items;
+    this.http.get<Row[] | Row>('/api/v1/auth/sessions', { params: { page: 0 } }).subscribe({
+      next: (res) => {
+        this.items = Array.isArray(res)
+          ? res
+          : Array.isArray(res?.['content'])
+            ? (res['content'] as Row[])
+            : [];
+        this.totalPages = Math.ceil(this.items.length / this.pageSize) || 1;
+        if (this.page >= this.totalPages) {
+          this.page = Math.max(0, this.totalPages - 1);
+        }
         this.loading = false;
         this.cdr.markForCheck();
       },

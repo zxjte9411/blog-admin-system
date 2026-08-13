@@ -35,7 +35,8 @@ public class ArticleService {
       Instant publishedAt,
       Instant createdAt,
       long version,
-      Set<UUID> tagIds) {}
+      Set<UUID> tagIds,
+      Set<String> tagNames) {}
 
   private final ArticleRepository articles;
   private final TagRepository tags;
@@ -247,7 +248,8 @@ public class ArticleService {
         a.getPublishedAt(),
         a.getCreatedAt(),
         a.getVersion(),
-        a.getTags().stream().map(Tag::getId).collect(Collectors.toSet()));
+        a.getTags().stream().map(Tag::getId).collect(Collectors.toSet()),
+        a.getTags().stream().map(Tag::getName).collect(Collectors.toSet()));
   }
 
   private void check(User u, Article a) {

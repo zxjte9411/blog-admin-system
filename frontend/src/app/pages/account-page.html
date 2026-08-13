@@ -50,13 +50,14 @@
                 [attr.aria-invalid]="fieldInvalid(field) ? 'true' : null"
                 [attr.aria-describedby]="
                   fieldErrorId(field) +
-                  (field.toLowerCase().includes('password') || field === 'displayName'
+                  (field === 'newPassword' || (routeKey === 'register' && field === 'password')
                     ? ' field-' + field + '-hint'
-                    : '')
+                    : '') +
+                  (field === 'displayName' ? ' field-' + field + '-hint' : '')
                 "
               />
             }
-            @if (field.toLowerCase().includes('password')) {
+            @if (field === 'newPassword' || (routeKey === 'register' && field === 'password')) {
               <span class="field-hint" [id]="'field-' + field + '-hint'">{{
                 language.t.passwordHint
               }}</span>
@@ -96,7 +97,7 @@
       }
     </nav>
     @if (routeKey === 'account/sessions' && !loading) {
-      <section class="sessions" [attr.aria-label]="title">
+      <section class="sessions-section" [attr.aria-label]="title">
         @if (error) {
           <div class="error" role="alert">
             {{ error }}
@@ -104,25 +105,80 @@
               {{ language.t.retryAction }}
             </button>
           </div>
+        } @else if (!items.length) {
+          <p class="empty">{{ language.t.empty }}</p>
         } @else {
-          @for (session of items; track session['id']) {
-            <article class="session">
-              <strong>{{ session['current'] ? language.t.sessionCurrent : session['id'] }}</strong>
-              <div>
-                {{ language.t.sessionCreatedAt }}: <time>{{ session['createdAt'] }}</time>
-              </div>
-              <div>
-                {{ language.t.sessionLastUsedAt }}: <time>{{ session['lastUsedAt'] }}</time>
-              </div>
-              @if (!session['current']) {
-                <button class="text-link danger" type="button" (click)="revoke(session)">
-                  {{ language.t.revoke }}
-                </button>
-              }
-            </article>
-          } @empty {
-            <p>{{ language.t.empty }}</p>
-          }
+          <div class="table-wrap">
+            <table class="data-table">
+              <caption>
+                {{
+                  title
+                }}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">{{ language.t.sessionCurrent }}</th>
+                  <th scope="col">{{ language.t.sessionCreatedAt }}</th>
+                  <th scope="col">{{ language.t.sessionLastUsedAt }}</th>
+                  <th scope="col">{{ language.t.actions }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (session of pagedSessions; track session['id']) {
+                  <tr class="mat-mdc-row">
+                    <td [attr.data-label]="language.t.sessionCurrent">
+                      @if (session['current']) {
+                        <strong class="current-badge">{{ language.t.sessionCurrent }}</strong>
+                      } @else {
+                        <span class="session-id">{{ session['id'] }}</span>
+                      }
+                    </td>
+                    <td [attr.data-label]="language.t.sessionCreatedAt">
+                      <time>{{ session['createdAt'] }}</time>
+                    </td>
+                    <td [attr.data-label]="language.t.sessionLastUsedAt">
+                      <time>{{ session['lastUsedAt'] }}</time>
+                    </td>
+                    <td [attr.data-label]="language.t.actions">
+                      @if (!session['current']) {
+                        <button
+                          class="text-link danger"
+                          type="button"
+                          (click)="revoke(session)"
+                          [attr.aria-label]="language.t.revoke + ' ' + session['id']"
+                        >
+                          {{ language.t.revoke }}
+                        </button>
+                      } @else {
+                        <span>—</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <nav class="pagination" [attr.aria-label]="title">
+            <button
+              class="ui-outline"
+              type="button"
+              (click)="previousPage()"
+              [disabled]="page === 0"
+            >
+              {{ language.t.previous }}
+            </button>
+            <span aria-live="polite"
+              >{{ language.t.page }} {{ page + 1 }} {{ language.t.of }} {{ totalPages || 1 }}</span
+            >
+            <button
+              class="ui-outline"
+              type="button"
+              (click)="nextPage()"
+              [disabled]="page + 1 >= totalPages"
+            >
+              {{ language.t.next }}
+            </button>
+          </nav>
         }
       </section>
     }
