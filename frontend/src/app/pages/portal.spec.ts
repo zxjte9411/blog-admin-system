@@ -596,6 +596,32 @@ describe('Portal API requests', () => {
     TestBed.inject(HttpTestingController).expectNone('/api/v1/auth/login');
   });
 
+  it('keeps initial field errors quiet until a submit attempt', async () => {
+    await TestBed.configureTestingModule({
+      imports: [Portal],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(Portal);
+    const component = fixture.componentInstance;
+    component.routeKey = 'login';
+    component.ngOnInit();
+    fixture.detectChanges();
+
+    const email = fixture.nativeElement.querySelector('#field-email') as HTMLInputElement;
+    const error = fixture.nativeElement.querySelector('#error-email') as HTMLElement;
+    expect(error).toBeTruthy();
+    expect(error.textContent?.trim()).toBe('');
+    expect(email.getAttribute('aria-invalid')).toBeNull();
+
+    component.submit();
+    fixture.detectChanges();
+
+    expect(error.textContent?.trim()).toBeTruthy();
+    expect(email.getAttribute('aria-invalid')).toBe('true');
+    expect(email.getAttribute('aria-describedby')).toBe('error-email');
+  });
+
   it('loads an article editor with GET and prefilled values', async () => {
     await TestBed.configureTestingModule({
       imports: [Portal],

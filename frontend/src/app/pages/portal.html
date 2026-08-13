@@ -52,9 +52,11 @@
       }
     </div>
 
-    @if (loading) {
-      <progress class="loading-bar" aria-label="{{ language.t.loading }}"></progress>
-    }
+    <div class="loading-slot">
+      @if (loading) {
+        <progress class="loading-bar" aria-label="{{ language.t.loading }}"></progress>
+      }
+    </div>
 
     <div class="feedback" aria-live="polite">
       @if (message) {
@@ -84,10 +86,32 @@
                   [id]="'field-' + field"
                   [formControlName]="field"
                   [attr.aria-describedby]="'error-' + field"
-                  [attr.aria-invalid]="form.controls[field]?.invalid"
+                  [attr.aria-invalid]="
+                    form.controls[field]?.touched || submitAttempted
+                      ? form.controls[field]?.invalid
+                        ? 'true'
+                        : null
+                      : null
+                  "
+                  [attr.aria-errormessage]="
+                    form.controls[field]?.touched || submitAttempted ? 'error-' + field : null
+                  "
                 ></textarea>
               } @else if (field === 'status') {
-                <fieldset class="radio-group">
+                <fieldset
+                  class="radio-group"
+                  [attr.aria-describedby]="'error-' + field"
+                  [attr.aria-invalid]="
+                    form.controls[field]?.touched || submitAttempted
+                      ? form.controls[field]?.invalid
+                        ? 'true'
+                        : null
+                      : null
+                  "
+                  [attr.aria-errormessage]="
+                    form.controls[field]?.touched || submitAttempted ? 'error-' + field : null
+                  "
+                >
                   <legend class="sr-only">{{ fieldLabel(field) }}</legend>
                   <label
                     ><input type="radio" [formControlName]="field" value="DRAFT" />
@@ -120,12 +144,26 @@
                         : null
                   "
                   [attr.aria-describedby]="'error-' + field"
-                  [attr.aria-invalid]="form.controls[field]?.invalid"
+                  [attr.aria-invalid]="
+                    form.controls[field]?.touched || submitAttempted
+                      ? form.controls[field]?.invalid
+                        ? 'true'
+                        : null
+                      : null
+                  "
+                  [attr.aria-errormessage]="
+                    form.controls[field]?.touched || submitAttempted ? 'error-' + field : null
+                  "
                 />
               }
-              @if (form.controls[field]?.invalid) {
-                <span class="field-error" [id]="'error-' + field">{{ language.t.required }}</span>
-              }
+              <span class="field-error" [id]="'error-' + field">
+                @if (
+                  (form.controls[field]?.touched || submitAttempted) &&
+                  form.controls[field]?.invalid
+                ) {
+                  {{ language.t.required }}
+                }
+              </span>
             </div>
           }
           @if (fields.includes('tagNames')) {

@@ -70,6 +70,7 @@ export class Portal implements OnInit {
   page = 0;
   searchTitle = '';
   loading = false;
+  submitAttempted = false;
   error = '';
   message = '';
   detail: Row | null = null;
@@ -238,6 +239,8 @@ export class Portal implements OnInit {
 
   submit() {
     if (this.routeKey === 'admin/articles/:id' && this.auth.user && !this.editorAllowed) return;
+    this.submitAttempted = true;
+    this.message = '';
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
@@ -606,6 +609,7 @@ export class Portal implements OnInit {
 
   private done(result: unknown) {
     this.loading = false;
+    this.error = '';
     this.message = this.language.t.success;
     this.cdr.markForCheck();
 
@@ -670,6 +674,7 @@ export class Portal implements OnInit {
 
   private fail(status: number) {
     this.loading = false;
+    this.message = '';
     this.error =
       status === 401
         ? this.language.t.unauthorized

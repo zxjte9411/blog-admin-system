@@ -114,6 +114,9 @@ h1 {
   margin: 0.75rem 0 0;
   color: var(--muted);
 }
+.loading-slot {
+  min-height: 0.25rem;
+}
 .loading-bar {
   display: block;
   width: 100%;
@@ -122,7 +125,7 @@ h1 {
   accent-color: var(--amber);
 }
 .feedback {
-  min-height: 0;
+  min-height: 4.2rem;
 }
 .success,
 .error {
@@ -175,6 +178,7 @@ form {
   font-weight: 400;
 }
 .field-error {
+  min-height: 1.15rem;
   color: #b33b2d;
   font-size: 0.78rem;
   font-weight: 500;
