@@ -200,7 +200,7 @@ class ArticleApiIntegrationTest {
                 .getStatusCode())
         .isEqualTo(HttpStatus.NO_CONTENT);
     assertThat(
-            exchange("/api/v1/articles/" + id, HttpMethod.GET, token, null, ArticleView.class)
+            exchange("/api/v1/articles/" + id, HttpMethod.GET, token, null, String.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.NOT_FOUND);
     ResponseEntity<Map> filtered =

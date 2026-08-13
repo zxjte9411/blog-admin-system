@@ -49,6 +49,45 @@ jobs:
       - name: Build
         run: npm run build
 
+  compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.env'); s=p.read_text()
+          s=s.replace('POSTGRES_PASSWORD=', 'POSTGRES_PASSWORD=ci-postgres-password')
+          s=s.replace('APP_SECURITY_JWT_SECRET=', 'APP_SECURITY_JWT_SECRET=ci-jwt-secret-012345678901234567890123456789')
+          s=s.replace('APP_BOOTSTRAP_ADMIN_PASSWORD=', 'APP_BOOTSTRAP_ADMIN_PASSWORD=ci-bootstrap-password-123')
+          p.write_text(s)
+          PY
+      - name: Compose config
+        run: docker compose config
+      - name: Start Compose
+        run: docker compose up --build --wait
+      - name: HTTP smoke
+        env:
+          APP_BOOTSTRAP_ADMIN_EMAIL: admin@example.test
+          APP_BOOTSTRAP_ADMIN_PASSWORD: ci-bootstrap-password-123
+        run: bash scripts/compose-smoke.sh 2>&1 | tee smoke-output.log
+      - name: Collect logs
+        if: always()
+        run: docker compose logs --no-color > compose-logs.txt
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-smoke-diagnostics
+          path: |
+            smoke-output.log
+            compose-logs.txt
+      - name: Stop Compose
+        if: always()
+        run: docker compose down --volumes
+
   jacoco-pages:
     if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
     needs: [verify, frontend-verify]

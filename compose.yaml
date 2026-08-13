@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-blog_admin}
       POSTGRES_USER: ${POSTGRES_USER:-blog_admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-blog_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a local PostgreSQL password}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -26,6 +26,8 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-blog_admin}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-blog_admin}
       APP_SECURITY_JWT_SECRET: ${APP_SECURITY_JWT_SECRET:?Set a randomly generated value of at least 32 bytes}
+      APP_BOOTSTRAP_ADMIN_EMAIL: ${APP_BOOTSTRAP_ADMIN_EMAIL:?Set the development bootstrap Admin email}
+      APP_BOOTSTRAP_ADMIN_PASSWORD: ${APP_BOOTSTRAP_ADMIN_PASSWORD:?Set the development bootstrap Admin password}
       SPRING_LIQUIBASE_ENABLED: "true"
       SPRING_MAIL_HOST: mailpit
       SPRING_MAIL_PORT: 1025
@@ -61,6 +63,12 @@ services:
     ports:
       - "${MAILPIT_SMTP_PORT:-1025}:1025"
       - "${MAILPIT_HTTP_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
 volumes:
   postgres_data:

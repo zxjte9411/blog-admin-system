@@ -23,6 +23,10 @@ spring:
       mail.smtp.timeout: 1000
       mail.smtp.writetimeout: 1000
 app:
+  bootstrap:
+    admin:
+      email: ${APP_BOOTSTRAP_ADMIN_EMAIL:}
+      password: ${APP_BOOTSTRAP_ADMIN_PASSWORD:}
   security:
     jwt-secret: ${APP_SECURITY_JWT_SECRET}
   mail:

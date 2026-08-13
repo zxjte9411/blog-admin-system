@@ -1,0 +1,60 @@
+package com.blogadmin.identity.application;
+
+import com.blogadmin.identity.domain.password.PasswordSettingRepository;
+import com.blogadmin.identity.domain.user.User;
+import com.blogadmin.identity.domain.user.UserRepository;
+import com.blogadmin.identity.domain.user.UserRole;
+import java.time.Instant;
+import java.util.Locale;
+import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+@Component
+public class BootstrapAdminRunner implements ApplicationRunner {
+  private final UserRepository users;
+  private final PasswordEncoder passwords;
+  private final PasswordSettingRepository settings;
+  private final String email;
+  private final String password;
+
+  public BootstrapAdminRunner(
+      UserRepository users,
+      PasswordEncoder passwords,
+      PasswordSettingRepository settings,
+      @Value("${app.bootstrap.admin.email:}") String email,
+      @Value("${app.bootstrap.admin.password:}") String password) {
+    this.users = users;
+    this.passwords = passwords;
+    this.settings = settings;
+    this.email = email;
+    this.password = password;
+  }
+
+  @Override
+  @Transactional
+  public void run(ApplicationArguments args) {
+    if (email == null || email.trim().isEmpty() || password == null || password.isEmpty()) return;
+    String normalized = email.trim().toLowerCase(Locale.ROOT);
+    if (users.findByNormalizedEmail(normalized).isPresent()) return;
+    int minimum = settings.findById(true).orElseThrow().getMinimumLength();
+    if (!AccountService.validPassword(password, minimum))
+      throw new IllegalStateException("Invalid bootstrap admin password");
+
+    User admin =
+        new User(
+            UUID.randomUUID(),
+            email.trim(),
+            normalized,
+            "Admin",
+            passwords.encode(password),
+            "zh-TW");
+    admin.changeRole(UserRole.ADMIN);
+    admin.verify(Instant.now());
+    users.save(admin);
+  }
+}

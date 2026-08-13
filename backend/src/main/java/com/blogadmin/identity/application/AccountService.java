@@ -69,11 +69,8 @@ public class AccountService {
       User user, String current, String next, UUID currentSession, boolean logoutCurrent) {
     User managed = users.findLockedById(user.getId()).orElseThrow(InvalidAccountException::new);
     int min = settings.findById(true).orElseThrow().getMinimumLength();
-    if (!passwords.matches(current, managed.getPasswordHash())
-        || next == null
-        || next.length() < min
-        || next.length() > 128
-        || COMMON.contains(next.toLowerCase(Locale.ROOT))) throw new InvalidAccountException();
+    if (!passwords.matches(current, managed.getPasswordHash()) || !validPassword(next, min))
+      throw new InvalidAccountException();
     managed.changePasswordKeepingSessions(passwords.encode(next));
     if (logoutCurrent) sessions.revokeAll(managed.getId(), Instant.now());
     else sessions.revokeOthers(managed.getId(), currentSession, Instant.now());
@@ -110,10 +107,7 @@ public class AccountService {
     int min = settings.findById(true).orElseThrow().getMinimumLength();
     if (t.getUsedAt() != null || !t.getExpiresAt().isAfter(Instant.now()))
       throw new ResetTokenNotFound();
-    if (next == null
-        || next.length() < min
-        || next.length() > 128
-        || COMMON.contains(next.toLowerCase(Locale.ROOT))) throw new InvalidAccountException();
+    if (!validPassword(next, min)) throw new InvalidAccountException();
     u.changePassword(passwords.encode(next));
     sessions.revokeAll(u.getId(), Instant.now());
     t.use(Instant.now());
@@ -196,6 +190,13 @@ public class AccountService {
     byte[] b = new byte[32];
     RANDOM.nextBytes(b);
     return b;
+  }
+
+  static boolean validPassword(String password, int minimumLength) {
+    return password != null
+        && password.length() >= minimumLength
+        && password.length() <= 128
+        && !COMMON.contains(password.toLowerCase(Locale.ROOT));
   }
 
   private static byte[] hash(byte[] b) {
