@@ -27,6 +27,7 @@ export class AdminUserManagement {
   @Input() statusLabel = '';
   @Input() toggleLabel = '';
   @Input() updateLabel = '';
+  @Input() actionsLabel = '';
   @Input() canEditRow: (row: Row) => boolean = () => false;
 
   @Output() updateRow = new EventEmitter<Row>();

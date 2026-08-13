@@ -19,7 +19,7 @@
             <th scope="col">{{ dataLabel }}</th>
             <th scope="col">{{ roleLabel }}</th>
             <th scope="col">{{ statusLabel }}</th>
-            <th scope="col">{{ updateLabel }}</th>
+            <th scope="col">{{ actionsLabel || updateLabel }}</th>
           </tr>
         </thead>
         <tbody>
@@ -32,7 +32,7 @@
               <td [attr.data-label]="roleLabel">
                 @if (canEditRow(row)) {
                   <label class="field-label">
-                    <span class="sr-only">{{ roleLabel }} {{ row['displayName'] }}</span>
+                    <span class="sr-only">{{ roleLabel }}: {{ row['displayName'] }}</span>
                     <select
                       class="control role-select"
                       [value]="row['role']"
@@ -49,46 +49,45 @@
                 }
               </td>
               <td [attr.data-label]="statusLabel">
-                <div class="status-cell">
-                  <span
-                    class="status-badge"
-                    [class.is-published]="row['enabled'] === true"
-                    [class.is-draft]="row['enabled'] !== true"
-                  >
-                    {{ stateText(row) }}
-                  </span>
-                  @if (canEditRow(row)) {
-                    <label class="state-control">
-                      <span class="sr-only">{{ enabledLabel }} {{ row['displayName'] }}</span>
-                      <input
-                        type="checkbox"
-                        [checked]="row['enabled'] === true"
-                        (change)="enabledChange.emit({ row, value: $any($event.target).checked })"
-                        [name]="'enabled-' + row['id']"
-                        [attr.aria-label]="enabledLabel + ': ' + row['displayName']"
-                      />
-                    </label>
+                <span
+                  class="status-badge"
+                  [class.is-published]="row['enabled'] === true"
+                  [class.is-draft]="row['enabled'] !== true"
+                >
+                  {{ stateText(row) }}
+                </span>
+                @if (canEditRow(row)) {
+                  <input
+                    type="checkbox"
+                    class="sr-only"
+                    [checked]="row['enabled'] === true"
+                    (change)="enabledChange.emit({ row, value: $any($event.target).checked })"
+                    [name]="'enabled-' + row['id']"
+                    [attr.aria-label]="enabledLabel + ': ' + row['displayName']"
+                  />
+                }
+              </td>
+              <td [attr.data-label]="actionsLabel || updateLabel">
+                @if (canEditRow(row)) {
+                  <div class="row-actions">
                     <button
                       class="text-link"
+                      [class.danger]="row['enabled'] === true"
                       type="button"
                       (click)="toggleRow.emit(row)"
                       [attr.aria-label]="toggleLabel + ' ' + row['displayName']"
                     >
-                      {{ toggleLabel }}
+                      {{ row['enabled'] === true ? disabledLabel : enabledLabel }}
                     </button>
-                  }
-                </div>
-              </td>
-              <td [attr.data-label]="updateLabel">
-                @if (canEditRow(row)) {
-                  <button
-                    class="text-link"
-                    type="button"
-                    (click)="updateRow.emit(row)"
-                    [attr.aria-label]="updateLabel + ' ' + row['displayName']"
-                  >
-                    {{ updateLabel }}
-                  </button>
+                    <button
+                      class="text-link"
+                      type="button"
+                      (click)="updateRow.emit(row)"
+                      [attr.aria-label]="updateLabel + ' ' + row['displayName']"
+                    >
+                      {{ updateLabel }}
+                    </button>
+                  </div>
                 } @else {
                   <span>—</span>
                 }

@@ -85,8 +85,18 @@ th {
     background: #f9e2dc;
   }
 }
-.state-control {
-  margin-left: 0.25rem;
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.text-link.danger {
+  color: #b33b2d;
+
+  &:hover {
+    color: #8f291e;
+  }
 }
 @media (max-width: 640px) {
   .table-wrap {
