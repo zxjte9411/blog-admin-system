@@ -80,6 +80,15 @@ th {
     border-color: var(--amber);
     box-shadow: 0 0 0 3px rgba(178, 106, 8, 0.12);
   }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background-color: #ede9e1;
+    color: var(--muted);
+    border-color: var(--line);
+    box-shadow: none;
+  }
 }
 .role-text {
   font-weight: 600;

@@ -193,8 +193,8 @@ describe('AdminPage', () => {
   it('only deletes an article after confirmation', async () => {
     await setup('articles');
     const page = TestBed.createComponent(AdminPage).componentInstance;
-    vi.spyOn(page, 'confirmDelete').mockReturnValue(false);
     page.deleteArticle({ id: 'article-1', title: 'Title' });
+    expect(page.modalState).not.toBeNull();
     TestBed.inject(HttpTestingController).expectNone('/api/v1/articles/article-1');
   });
 
@@ -385,8 +385,8 @@ describe('AdminPage', () => {
     http.expectOne('/api/v1/articles?page=0').flush([{ id: 'art-1', title: 'Test Article' }]);
     fixture.detectChanges();
 
-    vi.spyOn(fixture.componentInstance, 'confirmDelete').mockReturnValue(true);
     fixture.componentInstance.deleteArticle({ id: 'art-1', title: 'Test Article' });
+    fixture.componentInstance.confirmModal();
 
     http.expectOne('/api/v1/articles/art-1').flush({});
     http.expectOne('/api/v1/articles?page=0').flush([]);
@@ -397,10 +397,9 @@ describe('AdminPage', () => {
     expect(statusEl.textContent).toContain(
       fixture.componentInstance.language.t.deleteSuccess.replace('{title}', 'Test Article'),
     );
-    const link = statusEl.querySelector(
-      'a[routerLink="/articles/deleted"], a[href="/articles/deleted"]',
-    );
+    const link = statusEl.querySelector('a[href="/articles/deleted"]');
     expect(link).toBeTruthy();
+    expect(link.textContent.trim()).toBe(fixture.componentInstance.language.t.viewDeleted);
   });
 
   it('confirms before disabling a user', async () => {
@@ -414,10 +413,12 @@ describe('AdminPage', () => {
       .flush([{ id: 'user-1', displayName: 'Mina', role: 'AUTHOR', enabled: true }]);
     fixture.detectChanges();
 
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     fixture.componentInstance.toggleUserEnabled(fixture.componentInstance.items[0]);
 
-    expect(confirmSpy).toHaveBeenCalledOnce();
+    expect(fixture.componentInstance.modalState).not.toBeNull();
+    expect(fixture.componentInstance.modalState?.title).toBe(
+      fixture.componentInstance.language.t.disabled,
+    );
     http.expectNone('/api/v1/admin/users/user-1');
   });
 

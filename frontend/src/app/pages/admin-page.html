@@ -314,16 +314,16 @@
     <p class="empty">{{ language.t.empty }}</p>
   }
 
-  <dialog #permanentDialog class="confirm-dialog" (close)="closePermanentDeleteDialog()">
-    @if (selectedDeletedArticle) {
-      <h2>{{ language.t.permanentDelete }}</h2>
-      <p>{{ confirmPermanentDeleteMessage(selectedDeletedArticle) }}</p>
+  <dialog #permanentDialog class="confirm-dialog" (close)="closeModal()">
+    @if (modalState) {
+      <h2>{{ modalState.title }}</h2>
+      <p>{{ modalState.message }}</p>
       <div class="dialog-actions">
-        <button class="ui-outline" type="button" (click)="closePermanentDeleteDialog()">
+        <button class="ui-outline" type="button" (click)="closeModal()">
           {{ language.t.cancel }}
         </button>
-        <button class="ui-primary danger-btn" type="button" (click)="confirmPermanentDelete()">
-          {{ language.t.permanentDelete }}
+        <button class="ui-primary danger-btn" type="button" (click)="confirmModal()">
+          {{ modalState.confirmText }}
         </button>
       </div>
     }

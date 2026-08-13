@@ -69,8 +69,15 @@ export class AdminPage implements OnInit {
   currentMinimum: number | null = null;
   deletedSuccess = false;
   selectedDeletedArticle: Row | null = null;
+  modalState: {
+    title: string;
+    message: string;
+    confirmText: string;
+    isDanger: boolean;
+    action: () => void;
+  } | null = null;
   private originalUsers: Map<unknown, Row> = new Map();
-  readonly confirmDelete = (row: Row) => window.confirm(this.confirmMessage(row));
+  readonly confirmDelete = () => true;
 
   ngOnInit() {
     this.routeKey = this.route.snapshot.routeConfig?.path ?? '';
@@ -100,16 +107,26 @@ export class AdminPage implements OnInit {
   confirmPermanentDeleteMessage(row: Row) {
     return this.language.t.confirmPermanentDelete.replace('{title}', String(row['title'] ?? ''));
   }
-  openPermanentDeleteDialog(row: Row, trigger?: EventTarget | null) {
-    this.selectedDeletedArticle = row;
+  openModal(
+    state: {
+      title: string;
+      message: string;
+      confirmText: string;
+      isDanger: boolean;
+      action: () => void;
+    },
+    trigger?: EventTarget | null,
+  ) {
+    this.modalState = state;
     if (trigger instanceof HTMLElement) {
       this.triggerElement = trigger;
     }
     this.cdr.markForCheck();
     this.permanentDialog?.nativeElement.showModal?.();
   }
-  closePermanentDeleteDialog() {
+  closeModal() {
     this.permanentDialog?.nativeElement.close?.();
+    this.modalState = null;
     this.selectedDeletedArticle = null;
     this.cdr.markForCheck();
     if (this.triggerElement) {
@@ -117,10 +134,35 @@ export class AdminPage implements OnInit {
       this.triggerElement = null;
     }
   }
+  confirmModal() {
+    const action = this.modalState?.action;
+    this.closeModal();
+    if (action) {
+      action();
+    }
+  }
+  openPermanentDeleteDialog(row: Row, trigger?: EventTarget | null) {
+    this.selectedDeletedArticle = row;
+    this.openModal(
+      {
+        title: this.language.t.permanentDelete,
+        message: this.confirmPermanentDeleteMessage(row),
+        confirmText: this.language.t.permanentDelete,
+        isDanger: true,
+        action: () => this.executePermanentDelete(row),
+      },
+      trigger,
+    );
+  }
+  closePermanentDeleteDialog() {
+    this.closeModal();
+  }
   confirmPermanentDelete() {
-    const target = this.selectedDeletedArticle;
-    if (!target) return;
-    this.closePermanentDeleteDialog();
+    if (this.selectedDeletedArticle) {
+      this.executePermanentDelete(this.selectedDeletedArticle);
+    }
+  }
+  executePermanentDelete(target: Row) {
     this.loading = true;
     this.http.delete(`/api/v1/articles/deleted/${target['id']}`).subscribe({
       next: () => {
@@ -209,8 +251,19 @@ export class AdminPage implements OnInit {
       this.read();
     }
   }
-  deleteArticle(row: Row) {
-    if (!this.confirmDelete(row)) return;
+  deleteArticle(row: Row, trigger?: EventTarget | null) {
+    this.openModal(
+      {
+        title: this.language.t.delete,
+        message: this.confirmMessage(row),
+        confirmText: this.language.t.delete,
+        isDanger: true,
+        action: () => this.executeDeleteArticle(row),
+      },
+      trigger,
+    );
+  }
+  executeDeleteArticle(row: Row) {
     this.loading = true;
     this.http.delete(`/api/v1/articles/${row['id']}`).subscribe({
       next: () => {
@@ -262,16 +315,28 @@ export class AdminPage implements OnInit {
   updateUserEnabled(change: { row: Row; value: unknown }) {
     this.replaceUser(change.row, { enabled: change.value });
   }
-  toggleUserEnabled(row: Row) {
+  toggleUserEnabled(row: Row, trigger?: EventTarget | null) {
     const current = this.items.find((item) => item['id'] === row['id']) ?? row;
     if (current['enabled'] === true) {
       const name = String(current['displayName'] || current['email'] || current['id']);
-      if (!window.confirm(this.language.t.confirmDisable.replace('{name}', name))) {
-        return;
-      }
+      this.openModal(
+        {
+          title: this.language.t.disabled,
+          message: this.language.t.confirmDisable.replace('{name}', name),
+          confirmText: this.language.t.disabled,
+          isDanger: true,
+          action: () => {
+            const updated = { ...current, enabled: false };
+            this.replaceUser(current, { enabled: false });
+            this.updateUser(updated);
+          },
+        },
+        trigger,
+      );
+      return;
     }
-    const updated = { ...current, enabled: !current['enabled'] };
-    this.replaceUser(current, { enabled: updated['enabled'] });
+    const updated = { ...current, enabled: true };
+    this.replaceUser(current, { enabled: true });
     this.updateUser(updated);
   }
   private replaceUser(row: Row, changes: Row) {

@@ -30,23 +30,20 @@
                 <span class="user-email">{{ row['email'] }}</span>
               </td>
               <td [attr.data-label]="roleLabel">
-                @if (canEditRow(row)) {
-                  <label class="field-label">
-                    <span class="sr-only">{{ roleLabel }}: {{ row['displayName'] }}</span>
-                    <select
-                      class="control role-select"
-                      [value]="row['role']"
-                      (change)="roleChange.emit({ row, value: $any($event.target).value })"
-                      [name]="'role-' + row['id']"
-                      [attr.aria-label]="roleLabel + ': ' + row['displayName']"
-                    >
-                      <option value="AUTHOR">{{ authorLabel }}</option>
-                      <option value="ADMIN">{{ adminLabel }}</option>
-                    </select>
-                  </label>
-                } @else {
-                  <span class="role-text">{{ roleText(row) }}</span>
-                }
+                <label class="field-label">
+                  <span class="sr-only">{{ roleLabel }}: {{ row['displayName'] }}</span>
+                  <select
+                    class="control role-select"
+                    [value]="row['role']"
+                    [disabled]="!canEditRow(row)"
+                    (change)="roleChange.emit({ row, value: $any($event.target).value })"
+                    [name]="'role-' + row['id']"
+                    [attr.aria-label]="roleLabel + ': ' + row['displayName']"
+                  >
+                    <option value="AUTHOR">{{ authorLabel }}</option>
+                    <option value="ADMIN">{{ adminLabel }}</option>
+                  </select>
+                </label>
               </td>
               <td [attr.data-label]="statusLabel">
                 <span

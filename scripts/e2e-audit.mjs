@@ -146,13 +146,9 @@ async function runAudit() {
     // 7. Soft Delete & Restore & Permanent Delete (Issue #15)
     console.log("\n--- 7. Soft Delete & Trash Management ---");
     await session.navigate("http://localhost:4200/articles");
-    await session.eval(`
-      (() => {
-        window.confirm = () => true;
-        const delBtn = document.querySelector('app-article-management-list button.danger');
-        delBtn?.click();
-      })()
-    `);
+    await session.click("app-article-management-list button.danger");
+    await new Promise((r) => setTimeout(r, 600));
+    await session.click("dialog.confirm-dialog button.danger-btn");
     await new Promise((r) => setTimeout(r, 1200));
     let successMsg = await session.eval(
       'document.querySelector(".success")?.textContent',
