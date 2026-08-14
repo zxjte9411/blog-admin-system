@@ -1,7 +1,10 @@
 package com.blogadmin.identity.web.exception;
 
 import com.blogadmin.identity.application.AccountService.InvalidAccountException;
-import com.blogadmin.identity.application.AdminUserService.*;
+import com.blogadmin.identity.application.AdminUserService.AlreadyExistsException;
+import com.blogadmin.identity.application.AdminUserService.ForbiddenException;
+import com.blogadmin.identity.application.AdminUserService.InvalidMinimumException;
+import com.blogadmin.identity.application.AdminUserService.LastAdminException;
 import com.blogadmin.identity.application.AuthenticationService.BadCredentialsException;
 import com.blogadmin.identity.application.AuthenticationService.SessionNotFoundException;
 import com.blogadmin.identity.application.RegistrationService.InvalidRegistrationException;
@@ -15,6 +18,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -60,18 +64,19 @@ public class ApiExceptionHandler {
 
   @ExceptionHandler(BadCredentialsException.class)
   ResponseEntity<ProblemDetail> unauthorized() {
-    var p = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Authentication failed");
+    var problem =
+        ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Authentication failed");
     return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
         .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-        .body(p);
+        .body(problem);
   }
 
   @ExceptionHandler(SessionNotFoundException.class)
   ResponseEntity<ProblemDetail> sessionNotFound() {
-    var p = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Session not found");
+    var problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Session not found");
     return ResponseEntity.status(HttpStatus.NOT_FOUND)
         .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-        .body(p);
+        .body(problem);
   }
 
   @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -90,7 +95,11 @@ public class ApiExceptionHandler {
         ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Request validation failed");
     Map<String, String> errors =
         exception.getBindingResult().getFieldErrors().stream()
-            .collect(Collectors.toMap(e -> e.getField(), e -> e.getDefaultMessage(), (a, b) -> a));
+            .collect(
+                Collectors.toMap(
+                    FieldError::getField,
+                    FieldError::getDefaultMessage,
+                    (existing, replacement) -> existing));
     problem.setProperty("fieldErrors", errors);
     return ResponseEntity.badRequest()
         .contentType(MediaType.APPLICATION_PROBLEM_JSON)

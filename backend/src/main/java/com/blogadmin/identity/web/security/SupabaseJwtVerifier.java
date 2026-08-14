@@ -18,26 +18,26 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class SupabaseJwtVerifier {
-  private final JwtDecoder decoder;
+  private final JwtDecoder jwtDecoder;
 
   public SupabaseJwtVerifier(
       @Value("${app.security.supabase.issuer}") String issuer,
       @Value("${app.security.supabase.audience:authenticated}") String audience,
       @Value("${app.security.supabase.jwks-url}") String jwksUrl) {
-    NimbusJwtDecoder jwtDecoder =
+    NimbusJwtDecoder decoder =
         NimbusJwtDecoder.withJwkSetUri(jwksUrl).jwsAlgorithm(SignatureAlgorithm.ES256).build();
-    jwtDecoder.setJwtValidator(
+    decoder.setJwtValidator(
         new DelegatingOAuth2TokenValidator<>(
             new JwtIssuerValidator(issuer),
             new JwtTimestampValidator(Duration.ZERO),
             new JwtAudienceValidator(audience),
             new JwtClaimValidator<Instant>("exp", Objects::nonNull)));
-    this.decoder = jwtDecoder;
+    this.jwtDecoder = decoder;
   }
 
   public Claims verify(String compact) {
     try {
-      Jwt jwt = decoder.decode(compact);
+      Jwt jwt = jwtDecoder.decode(compact);
       String subject = jwt.getSubject();
       String email = jwt.getClaimAsString("email");
       Map<String, Object> appMetadata = jwt.getClaimAsMap("app_metadata");

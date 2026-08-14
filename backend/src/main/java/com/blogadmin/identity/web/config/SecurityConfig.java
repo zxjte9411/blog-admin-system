@@ -38,26 +38,30 @@ public class SecurityConfig {
   @Bean
   SecurityFilterChain api(
       HttpSecurity http,
-      UserRepository users,
-      RefreshSessionRepository sessions,
+      UserRepository userRepository,
+      RefreshSessionRepository refreshSessionRepository,
       ObjectMapper objectMapper,
       JwtDecoder accessTokenDecoder,
       BearerTokenResolver bearerTokenResolver)
       throws Exception {
     return http.csrf(csrf -> csrf.disable())
-        .cors(c -> {})
-        .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .cors(corsConfigurer -> {})
+        .sessionManagement(
+            sessionManagement ->
+                sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .exceptionHandling(
-            e ->
-                e.authenticationEntryPoint(
+            exceptionHandling ->
+                exceptionHandling
+                    .authenticationEntryPoint(
                         (request, response, exception) ->
                             problem(response, objectMapper, 401, "Authentication required"))
                     .accessDeniedHandler(
                         (request, response, exception) ->
                             problem(response, objectMapper, 403, "Access denied")))
         .authorizeHttpRequests(
-            a ->
-                a.requestMatchers(PUBLIC_ROUTES)
+            authorizeRequests ->
+                authorizeRequests
+                    .requestMatchers(PUBLIC_ROUTES)
                     .permitAll()
                     .requestMatchers("/api/v1/admin/**")
                     .hasRole("ADMIN")
@@ -75,7 +79,8 @@ public class SecurityConfig {
                             jwtConfigurer
                                 .decoder(accessTokenDecoder)
                                 .jwtAuthenticationConverter(
-                                    new AccessTokenAuthenticationConverter(users, sessions))))
+                                    new AccessTokenAuthenticationConverter(
+                                        userRepository, refreshSessionRepository))))
         .build();
   }
 
@@ -110,14 +115,14 @@ public class SecurityConfig {
 
   @Bean
   CorsConfigurationSource corsConfigurationSource() {
-    var c = new CorsConfiguration();
-    c.setAllowedOrigins(List.of("*"));
-    c.setAllowedMethods(List.of("GET", "OPTIONS"));
-    c.setAllowedHeaders(List.of("*"));
-    c.setAllowCredentials(false);
-    var s = new UrlBasedCorsConfigurationSource();
-    s.registerCorsConfiguration("/api/v1/public/**", c);
-    return s;
+    var corsConfiguration = new CorsConfiguration();
+    corsConfiguration.setAllowedOrigins(List.of("*"));
+    corsConfiguration.setAllowedMethods(List.of("GET", "OPTIONS"));
+    corsConfiguration.setAllowedHeaders(List.of("*"));
+    corsConfiguration.setAllowCredentials(false);
+    var source = new UrlBasedCorsConfigurationSource();
+    source.registerCorsConfiguration("/api/v1/public/**", corsConfiguration);
+    return source;
   }
 
   private static void problem(

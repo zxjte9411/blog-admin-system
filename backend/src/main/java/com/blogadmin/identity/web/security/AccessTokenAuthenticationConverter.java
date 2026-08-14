@@ -1,9 +1,12 @@
 package com.blogadmin.identity.web.security;
 
+import com.blogadmin.identity.domain.session.RefreshSession;
 import com.blogadmin.identity.domain.session.RefreshSessionRepository;
+import com.blogadmin.identity.domain.user.User;
 import com.blogadmin.identity.domain.user.UserRepository;
 import java.util.List;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -12,16 +15,11 @@ import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.jwt.Jwt;
 
+@RequiredArgsConstructor
 public final class AccessTokenAuthenticationConverter
     implements Converter<Jwt, AbstractAuthenticationToken> {
-  private final UserRepository users;
-  private final RefreshSessionRepository sessions;
-
-  public AccessTokenAuthenticationConverter(
-      UserRepository users, RefreshSessionRepository sessions) {
-    this.users = users;
-    this.sessions = sessions;
-  }
+  private final UserRepository userRepository;
+  private final RefreshSessionRepository refreshSessionRepository;
 
   @Override
   public AbstractAuthenticationToken convert(Jwt token) {
@@ -30,8 +28,9 @@ public final class AccessTokenAuthenticationConverter
       UUID sessionId = UUID.fromString(token.getClaimAsString("sid"));
       Integer sessionVersion = numberClaim(token, "ver");
       Integer userVersion = numberClaim(token, "uver");
-      var session = sessions.findByIdAndRevokedAtIsNull(sessionId).orElse(null);
-      var user = users.findById(userId).orElse(null);
+      RefreshSession session =
+          refreshSessionRepository.findByIdAndRevokedAtIsNull(sessionId).orElse(null);
+      User user = userRepository.findById(userId).orElse(null);
       if (session == null
           || user == null
           || !session.getUserId().equals(userId)

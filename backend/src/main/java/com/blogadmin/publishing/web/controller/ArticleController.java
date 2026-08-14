@@ -8,6 +8,7 @@ import com.blogadmin.publishing.web.dto.CreateArticleRequest;
 import com.blogadmin.publishing.web.dto.UpdateArticleRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -25,21 +26,24 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/v1/articles")
 public class ArticleController {
-  private final ArticleService service;
-
-  public ArticleController(ArticleService service) {
-    this.service = service;
-  }
+  private final ArticleService articleService;
 
   @PostMapping
   public ResponseEntity<ArticleView> create(
-      @AuthenticationPrincipal User u, @Valid @RequestBody CreateArticleRequest r) {
+      @AuthenticationPrincipal User user, @Valid @RequestBody CreateArticleRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
             ArticleView.of(
-                service.create(u, r.title(), r.content(), r.status(), r.tagIds(), r.tagNames())));
+                articleService.create(
+                    user,
+                    request.title(),
+                    request.content(),
+                    request.status(),
+                    request.tagIds(),
+                    request.tagNames())));
   }
 
   @GetMapping
@@ -47,45 +51,52 @@ public class ArticleController {
       @RequestParam(required = false) String title,
       @RequestParam(required = false) PublicationStatus status,
       @RequestParam(required = false) UUID tagId,
-      Pageable p,
-      @AuthenticationPrincipal User u) {
-    return service.list(u, title, status, tagId, p).map(ArticleView::of);
+      Pageable pageable,
+      @AuthenticationPrincipal User user) {
+    return articleService.list(user, title, status, tagId, pageable).map(ArticleView::of);
   }
 
   @GetMapping("/{id}")
-  public ArticleView get(@PathVariable UUID id, @AuthenticationPrincipal User u) {
-    return ArticleView.of(service.get(u, id));
+  public ArticleView get(@PathVariable UUID id, @AuthenticationPrincipal User user) {
+    return ArticleView.of(articleService.get(user, id));
   }
 
   @PutMapping("/{id}")
   public ArticleView update(
-      @AuthenticationPrincipal User u,
+      @AuthenticationPrincipal User user,
       @PathVariable UUID id,
-      @Valid @RequestBody UpdateArticleRequest r) {
+      @Valid @RequestBody UpdateArticleRequest request) {
     return ArticleView.of(
-        service.update(
-            u, id, r.title(), r.content(), r.status(), r.version(), r.tagIds(), r.tagNames()));
+        articleService.update(
+            user,
+            id,
+            request.title(),
+            request.content(),
+            request.status(),
+            request.version(),
+            request.tagIds(),
+            request.tagNames()));
   }
 
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  public void delete(@AuthenticationPrincipal User u, @PathVariable UUID id) {
-    service.delete(u, id);
+  public void delete(@AuthenticationPrincipal User user, @PathVariable UUID id) {
+    articleService.delete(user, id);
   }
 
   @GetMapping("/deleted")
-  public Page<ArticleView> deleted(@AuthenticationPrincipal User u, Pageable p) {
-    return service.deleted(u, p).map(ArticleView::of);
+  public Page<ArticleView> deleted(@AuthenticationPrincipal User user, Pageable pageable) {
+    return articleService.deleted(user, pageable).map(ArticleView::of);
   }
 
   @PostMapping("/{id}/restore")
-  public ArticleView restore(@AuthenticationPrincipal User u, @PathVariable UUID id) {
-    return ArticleView.of(service.restore(u, id));
+  public ArticleView restore(@AuthenticationPrincipal User user, @PathVariable UUID id) {
+    return ArticleView.of(articleService.restore(user, id));
   }
 
   @DeleteMapping("/deleted/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  public void purge(@AuthenticationPrincipal User u, @PathVariable UUID id) {
-    service.purge(u, id);
+  public void purge(@AuthenticationPrincipal User user, @PathVariable UUID id) {
+    articleService.purge(user, id);
   }
 }

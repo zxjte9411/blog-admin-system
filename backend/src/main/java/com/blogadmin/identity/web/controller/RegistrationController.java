@@ -21,31 +21,32 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/auth")
 public class RegistrationController {
-  private final RegistrationService service;
+  private final RegistrationService registrationService;
 
   @PostMapping("/registrations")
   @ResponseStatus(HttpStatus.ACCEPTED)
   public void register(
-      @Valid @RequestBody RegistrationRequestDTO request, HttpServletRequest http) {
-    service.register(
+      @Valid @RequestBody RegistrationRequestDTO request, HttpServletRequest httpRequest) {
+    registrationService.register(
         request.getEmail(),
         request.getDisplayName(),
         request.getPassword(),
         request.getPreferredLanguage() == null ? "zh-TW" : request.getPreferredLanguage(),
-        http.getRemoteAddr());
+        httpRequest.getRemoteAddr());
   }
 
   @PostMapping("/email-verifications/resend")
   @ResponseStatus(HttpStatus.ACCEPTED)
   public void resend(
-      @Valid @RequestBody ResendEmailVerificationRequestDTO request, HttpServletRequest http) {
-    service.resend(request.getEmail(), http.getRemoteAddr());
+      @Valid @RequestBody ResendEmailVerificationRequestDTO request,
+      HttpServletRequest httpRequest) {
+    registrationService.resend(request.getEmail(), httpRequest.getRemoteAddr());
   }
 
   @PostMapping("/email-verifications")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void verify(@Valid @RequestBody EmailVerificationRequestDTO request) {
-    if (!service.verify(request.getToken())) {
+    if (!registrationService.verify(request.getToken())) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Email verification token not found");
     }
   }
