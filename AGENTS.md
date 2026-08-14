@@ -37,4 +37,4 @@
 ## 子代理實作
 
 - 行為變更交由子代理實作時，先新增並執行一個預期失敗的行為測試，再以最小實作使其通過；回報 red 與 green 的測試命令及結果。純格式、機械重構或僅修正既有測試可例外，但須說明原因。
-- Java 一般情況使用明確 import；格式化工具或可讀性較佳時可使用萬用字元 `*` import。
+- Java 的詳細 coding style 以 `backend/AGENTS.md` 為準；一般使用明確 single-class import，不使用 inline fully-qualified class name。
