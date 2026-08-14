@@ -38,7 +38,7 @@ public class User {
     this.id = id;
     this.email = email;
     this.normalizedEmail = normalizedEmail;
-    this.displayName = displayName;
+    this.displayName = displayName == null ? null : displayName.trim();
     this.passwordHash = passwordHash;
     this.preferredLanguage = preferredLanguage;
     this.role = UserRole.AUTHOR;
@@ -86,7 +86,7 @@ public class User {
   }
 
   public void updateProfile(String name, String language) {
-    displayName = name;
+    displayName = name == null ? null : name.trim();
     preferredLanguage = language;
   }
 

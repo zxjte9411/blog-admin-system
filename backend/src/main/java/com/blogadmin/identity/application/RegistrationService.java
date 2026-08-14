@@ -1,5 +1,6 @@
 package com.blogadmin.identity.application;
 
+import com.blogadmin.identity.application.mail.IdentityEmailEvent;
 import com.blogadmin.identity.domain.user.User;
 import com.blogadmin.identity.domain.user.UserRepository;
 import com.blogadmin.identity.domain.verification.EmailVerificationToken;
@@ -7,46 +8,33 @@ import com.blogadmin.identity.domain.verification.EmailVerificationTokenReposito
 import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 public class RegistrationService {
-  private static final Logger LOGGER = LoggerFactory.getLogger(RegistrationService.class);
   private final UserRepository users;
   private final EmailVerificationTokenRepository tokens;
   private final RateLimitService rateLimits;
-  private final JavaMailSender mail;
+  private final ApplicationEventPublisher events;
   private final PasswordEncoder passwordEncoder;
   private final PasswordPolicy passwordPolicy;
-  private final String from;
-  private final String frontend;
 
   public RegistrationService(
       UserRepository users,
       EmailVerificationTokenRepository tokens,
       RateLimitService rateLimits,
-      JavaMailSender mail,
+      ApplicationEventPublisher events,
       PasswordEncoder passwordEncoder,
-      PasswordPolicy passwordPolicy,
-      @Value("${app.mail.from:dev@example.com}") String from,
-      @Value("${app.frontend-base-url:http://localhost:4200}") String frontend) {
+      PasswordPolicy passwordPolicy) {
     this.users = users;
     this.tokens = tokens;
     this.rateLimits = rateLimits;
-    this.mail = mail;
+    this.events = events;
     this.passwordEncoder = passwordEncoder;
     this.passwordPolicy = passwordPolicy;
-    this.from = from;
-    this.frontend = frontend;
   }
 
   @Transactional
@@ -71,7 +59,7 @@ public class RegistrationService {
                             UUID.randomUUID(),
                             email.trim(),
                             normalized,
-                            displayName,
+                            trimmedDisplayName,
                             passwordEncoder.encode(password),
                             language)));
     if (user.getVerifiedAt() == null) issue(user);
@@ -102,7 +90,6 @@ public class RegistrationService {
         || row.getUsedAt() != null
         || row.getInvalidatedAt() != null
         || !row.getExpiresAt().isAfter(now)) return false;
-    if (user == null) return false;
     row.use(now);
     user.verify(now);
     return true;
@@ -117,39 +104,9 @@ public class RegistrationService {
         new EmailVerificationToken(
             UUID.randomUUID(), user.getId(), token.digest(), Instant.now().plusSeconds(86400)));
     tokens.flush();
-    try {
-      var m = new SimpleMailMessage();
-      m.setFrom(from);
-      m.setTo(user.getEmail());
-      m.setSubject(user.getPreferredLanguage().equals("en") ? "Verify your email" : "驗證您的 Email");
-      m.setText(
-          (user.getPreferredLanguage().equals("en") ? "Hi " : "您好 ")
-              + user.getDisplayName()
-              + (user.getPreferredLanguage().equals("en")
-                  ? ", verify within 24 hours: "
-                  : "，請於 24 小時內驗證：")
-              + frontend
-              + "/verify-email?token="
-              + token.value());
-      sendAfterCommit(m);
-    } catch (RuntimeException exception) {
-      LOGGER.warn("Identity email delivery failed");
-    }
-  }
-
-  private void sendAfterCommit(SimpleMailMessage message) {
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) return;
-    TransactionSynchronizationManager.registerSynchronization(
-        new TransactionSynchronization() {
-          @Override
-          public void afterCommit() {
-            try {
-              mail.send(message);
-            } catch (RuntimeException exception) {
-              LOGGER.warn("Identity email delivery failed");
-            }
-          }
-        });
+    events.publishEvent(
+        new IdentityEmailEvent.Verification(
+            user.getEmail(), user.getDisplayName(), token.value(), user.getPreferredLanguage()));
   }
 
   private void checkRate(String bucket, String ip, String email) {

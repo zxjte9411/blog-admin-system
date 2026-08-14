@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.blogadmin.identity.application.RegistrationService;
+import com.blogadmin.identity.application.mail.IdentityEmailEventListener;
 import com.blogadmin.identity.domain.user.User;
 import com.blogadmin.identity.domain.user.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -65,6 +65,11 @@ class RegistrationApiIntegrationTest {
     registry.add("app.security.jwt-secret", () -> "test-secret-that-is-at-least-32-bytes-long");
   }
 
+  @org.junit.jupiter.api.BeforeEach
+  void setUp() {
+    jdbc.update("DELETE FROM auth_rate_limit_events");
+  }
+
   @Test
   void acceptsPublicRegistration() {
     ResponseEntity<Void> response =
@@ -80,6 +85,96 @@ class RegistrationApiIntegrationTest {
             Void.class);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+  }
+
+  @Test
+  void displayNameWithWhitespaceIsTrimmedWhenPersisted() {
+    String email = "trim-user-" + System.nanoTime() + "@example.com";
+    ResponseEntity<Void> response =
+        restTemplate.postForEntity(
+            url("/api/v1/auth/registrations"),
+            new HttpEntity<>(
+                json(
+                    Map.of(
+                        "email", email,
+                        "displayName", "  Alice Bob  ",
+                        "password", "safe-password")),
+                headers()),
+            Void.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+    String savedName =
+        jdbc.queryForObject(
+            "select display_name from users where normalized_email = ?",
+            String.class,
+            email.toLowerCase());
+    assertThat(savedName).isEqualTo("Alice Bob");
+  }
+
+  @Test
+  void displayNameBlankOrOnlyWhitespaceIsRejected() {
+    String email = "blank-name-" + System.nanoTime() + "@example.com";
+    ResponseEntity<String> response =
+        restTemplate.postForEntity(
+            url("/api/v1/auth/registrations"),
+            new HttpEntity<>(
+                json(
+                    Map.of(
+                        "email", email,
+                        "displayName", "   ",
+                        "password", "safe-password")),
+                headers()),
+            String.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  @Test
+  void displayNameExceeding100CharsIsRejected() {
+    String email = "long-name-" + System.nanoTime() + "@example.com";
+    ResponseEntity<String> response =
+        restTemplate.postForEntity(
+            url("/api/v1/auth/registrations"),
+            new HttpEntity<>(
+                json(
+                    Map.of(
+                        "email",
+                        email,
+                        "displayName",
+                        "A".repeat(101),
+                        "password",
+                        "safe-password")),
+                headers()),
+            String.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  @Test
+  void displayNameWithWhitespaceExceeding100BeforeTrimButValidAfterTrimIsPersistedTrimmed() {
+    String email = "padded-100-" + System.nanoTime() + "@example.com";
+    String valid100 = "A".repeat(100);
+    String padded = "   " + valid100 + "   ";
+    ResponseEntity<Void> response =
+        restTemplate.postForEntity(
+            url("/api/v1/auth/registrations"),
+            new HttpEntity<>(
+                json(
+                    Map.of(
+                        "email", email,
+                        "displayName", padded,
+                        "password", "safe-password")),
+                headers()),
+            Void.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+    String savedName =
+        jdbc.queryForObject(
+            "select display_name from users where normalized_email = ?",
+            String.class,
+            email.toLowerCase());
+    assertThat(savedName).isEqualTo(valid100);
+    assertThat(savedName.length()).isEqualTo(100);
   }
 
   @Test
@@ -205,7 +300,7 @@ class RegistrationApiIntegrationTest {
     String password = "safe-password";
     users.saveAndFlush(
         new User(UUID.randomUUID(), email, email, "User", "stored-password", "zh-TW"));
-    Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(RegistrationService.class);
+    Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(IdentityEmailEventListener.class);
     ListAppender<ILoggingEvent> appender = new ListAppender<>();
     appender.start();
     logger.addAppender(appender);

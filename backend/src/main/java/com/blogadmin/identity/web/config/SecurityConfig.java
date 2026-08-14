@@ -7,12 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
-import javax.crypto.spec.SecretKeySpec;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -20,12 +15,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.crypto.password.Pbkdf2PasswordEncoder;
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
-import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
@@ -90,21 +80,6 @@ public class SecurityConfig {
   }
 
   @Bean
-  JwtDecoder accessTokenDecoder(@Value("${app.security.jwt-secret}") String secret) {
-    byte[] key = secret.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-    if (key.length < 32) throw new IllegalStateException("JWT secret must be at least 32 bytes");
-    NimbusJwtDecoder decoder =
-        NimbusJwtDecoder.withSecretKey(new SecretKeySpec(key, "HmacSHA256"))
-            .macAlgorithm(MacAlgorithm.HS256)
-            .build();
-    decoder.setJwtValidator(
-        new DelegatingOAuth2TokenValidator<>(
-            new JwtTimestampValidator(Duration.ZERO),
-            new JwtClaimValidator<Instant>("exp", Objects::nonNull)));
-    return decoder;
-  }
-
-  @Bean
   BearerTokenResolver bearerTokenResolver() {
     var delegate = new DefaultBearerTokenResolver();
     return request -> PUBLIC_ROUTES.matches(request) ? null : delegate.resolve(request);
@@ -113,14 +88,24 @@ public class SecurityConfig {
   private static RequestMatcher publicRoutes() {
     return new OrRequestMatcher(
         request -> request.getDispatcherType() == DispatcherType.ERROR,
-        new AntPathRequestMatcher("/actuator/health"),
-        new AntPathRequestMatcher("/api/v1/public/**"),
+        new AntPathRequestMatcher("/actuator/health", HttpMethod.GET.name()),
+        new AntPathRequestMatcher("/api/v1/public/**", HttpMethod.GET.name()),
         new AntPathRequestMatcher("/swagger-ui/**"),
+        new AntPathRequestMatcher("/swagger-ui.html"),
         new AntPathRequestMatcher("/v3/api-docs/**"),
         new AntPathRequestMatcher("/**", HttpMethod.OPTIONS.name()),
-        new AntPathRequestMatcher("/api/v1/auth/**", HttpMethod.POST.name()),
-        new AntPathRequestMatcher("/api/v1/auth/password-resets/**", HttpMethod.PUT.name()),
-        new AntPathRequestMatcher("/api/v1/auth/email-changes/**", HttpMethod.POST.name()));
+        new AntPathRequestMatcher("/api/v1/auth/login", HttpMethod.POST.name()),
+        new AntPathRequestMatcher("/api/v1/auth/google", HttpMethod.POST.name()),
+        new AntPathRequestMatcher("/api/v1/auth/refresh", HttpMethod.POST.name()),
+        new AntPathRequestMatcher("/api/v1/auth/logout", HttpMethod.POST.name()),
+        new AntPathRequestMatcher("/api/v1/auth/registrations", HttpMethod.POST.name()),
+        new AntPathRequestMatcher("/api/v1/auth/email-verifications", HttpMethod.POST.name()),
+        new AntPathRequestMatcher(
+            "/api/v1/auth/email-verifications/resend", HttpMethod.POST.name()),
+        new AntPathRequestMatcher("/api/v1/auth/password-resets", HttpMethod.POST.name()),
+        new AntPathRequestMatcher("/api/v1/auth/password-resets/*", HttpMethod.POST.name()),
+        new AntPathRequestMatcher("/api/v1/auth/invitations/*/redeem", HttpMethod.POST.name()),
+        new AntPathRequestMatcher("/api/v1/auth/email-changes/*", HttpMethod.POST.name()));
   }
 
   @Bean

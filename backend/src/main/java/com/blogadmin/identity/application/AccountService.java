@@ -1,34 +1,26 @@
 package com.blogadmin.identity.application;
 
+import com.blogadmin.identity.application.mail.IdentityEmailEvent;
 import com.blogadmin.identity.domain.emailchange.*;
 import com.blogadmin.identity.domain.password.*;
 import com.blogadmin.identity.domain.session.*;
 import com.blogadmin.identity.domain.user.*;
 import java.time.Instant;
 import java.util.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 public class AccountService {
-  private static final Logger LOGGER = LoggerFactory.getLogger(AccountService.class);
   private final UserRepository users;
   private final RefreshSessionRepository sessions;
   private final PasswordEncoder passwords;
   private final PasswordPolicy passwordPolicy;
   private final PasswordResetTokenRepository resets;
   private final EmailChangeTokenRepository emails;
-  private final JavaMailSender mail;
-  private final String from;
-  private final String frontend;
+  private final ApplicationEventPublisher events;
 
   public AccountService(
       UserRepository users,
@@ -37,18 +29,14 @@ public class AccountService {
       PasswordPolicy passwordPolicy,
       PasswordResetTokenRepository resets,
       EmailChangeTokenRepository emails,
-      JavaMailSender mail,
-      @Value("${app.mail.from:dev@example.com}") String from,
-      @Value("${app.frontend-base-url:http://localhost:4200}") String frontend) {
+      ApplicationEventPublisher events) {
     this.users = users;
     this.sessions = sessions;
     this.passwords = passwords;
     this.passwordPolicy = passwordPolicy;
     this.resets = resets;
     this.emails = emails;
-    this.mail = mail;
-    this.from = from;
-    this.frontend = frontend;
+    this.events = events;
   }
 
   @Transactional
@@ -85,10 +73,7 @@ public class AccountService {
     resets.save(
         new PasswordResetToken(
             UUID.randomUUID(), u.getId(), token.digest(), Instant.now().plusSeconds(86400)));
-    sendAfterCommit(
-        u.getEmail(),
-        "Password reset / 密碼重設",
-        "Reset password / 重設密碼: " + frontend + "/reset-password?token=" + token.value());
+    events.publishEvent(new IdentityEmailEvent.PasswordReset(u.getEmail(), token.value()));
   }
 
   @Transactional
@@ -124,10 +109,7 @@ public class AccountService {
             n,
             token.digest(),
             Instant.now().plusSeconds(86400)));
-    sendAfterCommit(
-        n,
-        "Email change / Email 變更",
-        "Confirm / 確認: " + frontend + "/confirm-email?token=" + token.value());
+    events.publishEvent(new IdentityEmailEvent.EmailChangeConfirmation(n, token.value()));
   }
 
   @Transactional
@@ -145,34 +127,8 @@ public class AccountService {
     String old = u.getEmail();
     u.changeEmail(t.getNewEmail());
     t.use(Instant.now());
-    String subject = "Email changed / Email 已變更";
-    String text = "Your email was changed. / 您的 Email 已變更。";
-    sendAfterCommit(old, subject, text);
-    sendAfterCommit(t.getNewEmail(), subject, text);
-  }
-
-  private void sendAfterCommit(String to, String subject, String text) {
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) return;
-    TransactionSynchronizationManager.registerSynchronization(
-        new TransactionSynchronization() {
-          @Override
-          public void afterCommit() {
-            send(to, subject, text);
-          }
-        });
-  }
-
-  private void send(String to, String subject, String text) {
-    SimpleMailMessage m = new SimpleMailMessage();
-    m.setFrom(from);
-    m.setTo(to);
-    m.setSubject(subject);
-    m.setText(text);
-    try {
-      mail.send(m);
-    } catch (RuntimeException exception) {
-      LOGGER.warn("Identity email delivery failed");
-    }
+    events.publishEvent(new IdentityEmailEvent.EmailChangedNotification(old));
+    events.publishEvent(new IdentityEmailEvent.EmailChangedNotification(t.getNewEmail()));
   }
 
   public static class InvalidAccountException extends RuntimeException {}

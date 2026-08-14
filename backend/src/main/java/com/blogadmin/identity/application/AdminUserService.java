@@ -1,25 +1,19 @@
 package com.blogadmin.identity.application;
 
+import com.blogadmin.identity.application.mail.IdentityEmailEvent;
 import com.blogadmin.identity.domain.invitation.*;
 import com.blogadmin.identity.domain.password.*;
 import com.blogadmin.identity.domain.user.*;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 public class AdminUserService {
-  private static final Logger LOGGER = LoggerFactory.getLogger(AdminUserService.class);
   private static final SecureRandom RANDOM = new SecureRandom();
   private final UserRepository users;
   private final InvitationRepository invitations;
@@ -27,9 +21,7 @@ public class AdminUserService {
   private final PasswordEncoder passwords;
   private final PasswordPolicy passwordPolicy;
   private final PasswordSettingRepository passwordSettings;
-  private final JavaMailSender mail;
-  private final String from;
-  private final String frontend;
+  private final ApplicationEventPublisher events;
 
   public AdminUserService(
       UserRepository users,
@@ -38,18 +30,14 @@ public class AdminUserService {
       PasswordEncoder passwords,
       PasswordPolicy passwordPolicy,
       PasswordSettingRepository passwordSettings,
-      JavaMailSender mail,
-      @Value("${app.mail.from:dev@example.com}") String from,
-      @Value("${app.frontend-base-url:http://localhost:4200}") String frontend) {
+      ApplicationEventPublisher events) {
     this.users = users;
     this.invitations = invitations;
     this.changes = changes;
     this.passwords = passwords;
     this.passwordPolicy = passwordPolicy;
     this.passwordSettings = passwordSettings;
-    this.mail = mail;
-    this.from = from;
-    this.frontend = frontend;
+    this.events = events;
   }
 
   public List<User> list(UserRole role, Boolean enabled, String q) {
@@ -87,17 +75,7 @@ public class AdminUserService {
         new Invitation(
             UUID.randomUUID(), normalized, token.digest(), Instant.now().plusSeconds(86400));
     invitations.save(i);
-    SimpleMailMessage message = new SimpleMailMessage();
-    message.setFrom(from);
-    message.setTo(normalized);
-    message.setSubject("Invitation / 邀請");
-    message.setText(
-        "You are invited / 您收到邀請："
-            + frontend
-            + "/invite?token="
-            + token.value()
-            + " (valid 24 hours / 24 小時有效)");
-    sendAfterCommit(message);
+    events.publishEvent(new IdentityEmailEvent.Invitation(normalized, token.value()));
     return i;
   }
 
@@ -194,25 +172,6 @@ public class AdminUserService {
     byte[] raw = new byte[32];
     RANDOM.nextBytes(raw);
     return Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
-  }
-
-  private void sendAfterCommit(SimpleMailMessage message) {
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) return;
-    TransactionSynchronizationManager.registerSynchronization(
-        new TransactionSynchronization() {
-          @Override
-          public void afterCommit() {
-            send(message);
-          }
-        });
-  }
-
-  private void send(SimpleMailMessage message) {
-    try {
-      mail.send(message);
-    } catch (RuntimeException exception) {
-      LOGGER.warn("Identity email delivery failed");
-    }
   }
 
   public static class ForbiddenException extends RuntimeException {}
