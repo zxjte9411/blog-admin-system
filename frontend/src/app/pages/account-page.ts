@@ -11,6 +11,7 @@ import {
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Auth } from '../core/auth';
+import { UserApi } from '../core/api';
 import { Language } from '../core/language';
 import { AccountLayout } from '../layouts/account-layout';
 import { AppShell } from '../layouts/app-shell';
@@ -44,6 +45,7 @@ export class AccountPage implements OnInit {
   readonly auth = inject(Auth);
   readonly language = inject(Language);
   private readonly http = inject(HttpClient);
+  private readonly userApi = inject(UserApi);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
@@ -190,10 +192,13 @@ export class AccountPage implements OnInit {
   }
   private loadProfile() {
     this.loading = true;
-    this.http.get<Row>('/api/v1/account/me').subscribe({
+    this.userApi.me().subscribe({
       next: (user) => {
-        this.auth.user = user as typeof this.auth.user;
-        this.form.patchValue(user);
+        this.auth.user = user;
+        this.form.patchValue({
+          displayName: user.displayName,
+          preferredLanguage: user.preferredLanguage,
+        });
         this.loading = false;
         this.cdr.markForCheck();
       },

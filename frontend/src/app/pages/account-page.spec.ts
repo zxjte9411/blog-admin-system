@@ -5,7 +5,9 @@ import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { Location } from '@angular/common';
 import { App } from '../app';
 import { routes } from '../app.routes';
+import { UserApi } from '../core/api';
 import { AccountPage } from './account-page';
+import { of } from 'rxjs';
 
 describe('AccountPage', () => {
   it('submits login without requesting portal data', async () => {
@@ -252,6 +254,30 @@ describe('AccountPage', () => {
     });
 
     expect(usePreferred).toHaveBeenCalledWith('en');
+  });
+
+  it('keeps API language and role values when loading the profile', async () => {
+    await TestBed.configureTestingModule({
+      imports: [AccountPage],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(AccountPage);
+    fixture.componentInstance.routeKey = 'account/profile';
+    const user = {
+      id: 'user-1',
+      displayName: 'Ada',
+      preferredLanguage: 'en' as const,
+      role: 'ADMIN' as const,
+    };
+    const me = vi.spyOn(TestBed.inject(UserApi), 'me').mockReturnValue(of(user));
+    fixture.componentInstance.ngOnInit();
+
+    expect(me).toHaveBeenCalled();
+    TestBed.inject(HttpTestingController).expectNone('/api/v1/account/me');
+
+    expect(fixture.componentInstance.auth.user?.preferredLanguage).toBe('en');
+    expect(fixture.componentInstance.auth.user?.role).toBe('ADMIN');
   });
 
   it('does not display password hint on login page', async () => {

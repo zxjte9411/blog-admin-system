@@ -1,20 +1,15 @@
 import { inject, Injectable } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
-import { HttpClient, HttpInterceptorFn } from '@angular/common/http';
+import { HttpInterceptorFn } from '@angular/common/http';
 import { catchError, finalize, map, of, shareReplay, switchMap, tap } from 'rxjs';
 import { Observable } from 'rxjs';
-import { Language } from './language';
-
-export type User = {
-  id: string;
-  displayName: string;
-  preferredLanguage: 'zh-TW' | 'en';
-  role: 'AUTHOR' | 'ADMIN';
-};
+import { AuthenticationApi, User, UserApi } from './api';
+export type { User } from './api';
 
 @Injectable({ providedIn: 'root' })
 export class Auth {
-  private readonly http = inject(HttpClient);
+  private readonly authenticationApi = inject(AuthenticationApi);
+  private readonly userApi = inject(UserApi);
   private refreshRequest?: Observable<{ accessToken: string }>;
 
   user: User | null = null;
@@ -33,7 +28,7 @@ export class Auth {
   }
 
   load() {
-    return this.http.get<User>('/api/v1/account/me').pipe(
+    return this.userApi.me().pipe(
       tap((user) => (this.user = user)),
       catchError(() => {
         this.clear();
@@ -46,20 +41,18 @@ export class Auth {
     if (this.user) {
       this.user.preferredLanguage = language;
     }
-    return this.http.patch('/api/v1/account/profile', {
+    return this.userApi.profile({
       displayName: this.user?.displayName ?? '',
       preferredLanguage: language,
     });
   }
 
   refresh(): Observable<{ accessToken: string }> {
-    this.refreshRequest ??= this.http
-      .post<{ accessToken: string }>('/api/v1/auth/refresh', {})
-      .pipe(
-        tap((result) => this.setToken(result.accessToken)),
-        finalize(() => (this.refreshRequest = undefined)),
-        shareReplay({ bufferSize: 1, refCount: true }),
-      );
+    this.refreshRequest ??= this.authenticationApi.refresh().pipe(
+      tap((result) => this.setToken(result.accessToken)),
+      finalize(() => (this.refreshRequest = undefined)),
+      shareReplay({ bufferSize: 1, refCount: true }),
+    );
 
     return this.refreshRequest;
   }
