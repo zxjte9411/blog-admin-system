@@ -91,6 +91,10 @@ export class AccountPage implements OnInit {
     }
   }
 
+  get isAccountRoute() {
+    return this.routeKey.startsWith('account/');
+  }
+
   fieldLabel(field: string) {
     return (this.language.t.field as Record<string, string>)[field] ?? field;
   }

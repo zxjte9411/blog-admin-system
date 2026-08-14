@@ -11,4 +11,15 @@
   border-radius: 0.45rem;
   background: color-mix(in srgb, var(--cream) 92%, white);
   box-shadow: 0 1rem 3rem rgb(23 22 20 / 8%);
+
+  &.is-flat {
+    width: 100%;
+    max-width: 100%;
+    margin-inline: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
 }

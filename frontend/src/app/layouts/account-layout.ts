@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
 
 @Component({
   selector: 'app-account-layout',
@@ -7,4 +7,6 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
   styleUrl: './account-layout.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class AccountLayout {}
+export class AccountLayout {
+  @Input() flat = false;
+}

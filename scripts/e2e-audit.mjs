@@ -117,6 +117,7 @@ async function runAudit() {
     // 4. Articles Management List & Headers (PRD 2)
     console.log("\n--- 4. Articles Management List (PRD 2) ---");
     await session.navigate("http://localhost:4200/articles");
+    await session.waitFor("table thead th", 5000).catch(() => {});
     let tableHeaders = await session.eval(`
       Array.from(document.querySelectorAll('table thead th')).map(th => th.textContent.trim())
     `);
