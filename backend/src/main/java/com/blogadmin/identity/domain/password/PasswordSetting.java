@@ -11,9 +11,8 @@ import lombok.Setter;
 @Entity
 @Table(name = "password_settings")
 @Getter
-@Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PasswordSetting {
   @Id private boolean id;
-  private int minimumLength;
+  @Setter private int minimumLength;
 }
