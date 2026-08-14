@@ -5,16 +5,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.blogadmin.identity.domain.ratelimit.RateLimitEventRepository;
 import com.blogadmin.identity.domain.session.RefreshSessionRepository;
 import com.blogadmin.identity.domain.user.User;
+import com.blogadmin.identity.domain.user.UserIdentityRepository;
 import com.blogadmin.identity.domain.user.UserRepository;
 import com.blogadmin.identity.domain.user.UserRole;
 import com.blogadmin.identity.domain.verification.EmailVerificationTokenRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.Signature;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +47,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class AuthenticationApiIntegrationTest {
   private static final String PASSWORD = "safe-password";
+  private static final KeyPair GOOGLE_KEY = keyPair();
+  private static final HttpServer JWKS_SERVER = jwksServer();
 
   @Container
   static PostgreSQLContainer<?> postgres =
@@ -47,6 +58,7 @@ class AuthenticationApiIntegrationTest {
   @Autowired private TestRestTemplate restTemplate;
   @Autowired private PasswordEncoder passwords;
   @Autowired private UserRepository users;
+  @Autowired private UserIdentityRepository identities;
   @Autowired private RefreshSessionRepository sessions;
   @Autowired private EmailVerificationTokenRepository tokens;
   @Autowired private RateLimitEventRepository limits;
@@ -58,6 +70,137 @@ class AuthenticationApiIntegrationTest {
     registry.add("spring.datasource.username", postgres::getUsername);
     registry.add("spring.datasource.password", postgres::getPassword);
     registry.add("app.security.jwt-secret", () -> "test-secret-that-is-at-least-32-bytes-long");
+    registry.add("app.security.supabase.issuer", () -> "https://example.supabase.co/auth/v1");
+    registry.add("app.security.supabase.audience", () -> "authenticated");
+    registry.add(
+        "app.security.supabase.jwks-url",
+        () -> "http://localhost:" + JWKS_SERVER.getAddress().getPort());
+  }
+
+  @AfterAll
+  static void stopJwksServer() {
+    JWKS_SERVER.stop(0);
+  }
+
+  @Test
+  void googleLoginRejectsUnknownLocalUser() {
+    String email = "google@example.com";
+    String subject = UUID.randomUUID().toString();
+    ResponseEntity<Map> login =
+        post(
+            "/api/v1/auth/google", Map.of("accessToken", supabaseToken(subject, email)), Map.class);
+
+    assertThat(login.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(users.findAll()).isEmpty();
+    assertThat(identities.count()).isZero();
+  }
+
+  @Test
+  void googleLoginUsesSubjectAfterFirstBindingAndKeepsLocalEmail() {
+    String originalEmail = "original@example.com";
+    String subject = UUID.randomUUID().toString();
+    UUID userId = createUser(true, true);
+    assertThat(email(userId)).isNotEqualTo(originalEmail);
+
+    User existing = users.findById(userId).orElseThrow();
+    existing.changeEmail(originalEmail);
+    users.saveAndFlush(existing);
+
+    assertThat(
+            post(
+                    "/api/v1/auth/google",
+                    Map.of("accessToken", supabaseToken(subject, originalEmail)),
+                    Map.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    assertThat(
+            post(
+                    "/api/v1/auth/google",
+                    Map.of("accessToken", supabaseToken(subject, "changed@example.com")),
+                    Map.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+
+    assertThat(users.findAll()).hasSize(1);
+    assertThat(users.findById(userId).orElseThrow().getEmail()).isEqualTo(originalEmail);
+  }
+
+  @Test
+  void googleLoginRejectsUnacceptedJwtClaimsWithoutLeakingReason() {
+    String subject = UUID.randomUUID().toString();
+    String valid = supabaseToken(subject, "claims@example.com");
+    int signatureStart = valid.lastIndexOf('.') + 1;
+    assertGoogleUnauthorized(
+        valid.substring(0, signatureStart) + "A" + valid.substring(signatureStart + 1));
+    assertGoogleUnauthorized(
+        supabaseToken(
+            subject,
+            "claims@example.com",
+            "https://wrong.example",
+            "authenticated",
+            300,
+            -1,
+            "google",
+            true));
+    assertGoogleUnauthorized(
+        supabaseToken(
+            subject,
+            "claims@example.com",
+            "https://example.supabase.co/auth/v1",
+            "wrong",
+            300,
+            -1,
+            "google",
+            true));
+    assertGoogleUnauthorized(
+        supabaseToken(
+            subject,
+            "claims@example.com",
+            "https://example.supabase.co/auth/v1",
+            "authenticated",
+            -1,
+            -1,
+            "google",
+            true));
+    assertGoogleUnauthorized(
+        supabaseToken(
+            subject,
+            "claims@example.com",
+            "https://example.supabase.co/auth/v1",
+            "authenticated",
+            300,
+            301,
+            "google",
+            true));
+    assertGoogleUnauthorized(
+        supabaseToken(
+            subject,
+            "claims@example.com",
+            "https://example.supabase.co/auth/v1",
+            "authenticated",
+            300,
+            -1,
+            "email",
+            true));
+    assertGoogleUnauthorized(
+        supabaseToken(
+            "",
+            "claims@example.com",
+            "https://example.supabase.co/auth/v1",
+            "authenticated",
+            300,
+            -1,
+            "google",
+            true));
+  }
+
+  @Test
+  void googleLoginOnlyBindsExistingVerifiedEnabledUser() {
+    UUID unverified = createUser(false, true);
+    assertGoogleUnauthorized(supabaseToken(UUID.randomUUID().toString(), email(unverified)));
+    UUID disabled = createUser(true, false);
+    assertGoogleUnauthorized(supabaseToken(UUID.randomUUID().toString(), email(disabled)));
+    assertThat(identities.count()).isZero();
   }
 
   @BeforeEach
@@ -65,6 +208,7 @@ class AuthenticationApiIntegrationTest {
     sessions.deleteAll();
     tokens.deleteAll();
     limits.deleteAll();
+    identities.deleteAll();
     users.deleteAll();
   }
 
@@ -361,5 +505,122 @@ class AuthenticationApiIntegrationTest {
 
   private String url(String path) {
     return "http://localhost:" + port + path;
+  }
+
+  private static KeyPair keyPair() {
+    try {
+      var generator = KeyPairGenerator.getInstance("RSA");
+      generator.initialize(2048);
+      return generator.generateKeyPair();
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
+  }
+
+  private static HttpServer jwksServer() {
+    try {
+      HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+      String modulus =
+          Base64.getUrlEncoder()
+              .withoutPadding()
+              .encodeToString(
+                  ((java.security.interfaces.RSAPublicKey) GOOGLE_KEY.getPublic())
+                      .getModulus()
+                      .toByteArray());
+      String exponent =
+          Base64.getUrlEncoder()
+              .withoutPadding()
+              .encodeToString(
+                  ((java.security.interfaces.RSAPublicKey) GOOGLE_KEY.getPublic())
+                      .getPublicExponent()
+                      .toByteArray());
+      server.createContext(
+          "/",
+          exchange -> {
+            byte[] body =
+                ("{\"keys\":[{\"kty\":\"RSA\",\"kid\":\"google-test\",\"alg\":\"RS256\",\"use\":\"sig\",\"n\":\""
+                        + modulus
+                        + "\",\"e\":\""
+                        + exponent
+                        + "\"}]}")
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            try (var output = exchange.getResponseBody()) {
+              output.write(body);
+            }
+          });
+      server.start();
+      return server;
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
+  }
+
+  private static String supabaseToken(String subject, String email) {
+    return supabaseToken(
+        subject,
+        email,
+        "https://example.supabase.co/auth/v1",
+        "authenticated",
+        300,
+        -1,
+        "google",
+        true);
+  }
+
+  private static String supabaseToken(
+      String subject,
+      String email,
+      String issuer,
+      String audience,
+      long expiresIn,
+      long notBeforeOffset,
+      String provider,
+      boolean emailVerified) {
+    long now = Instant.now().getEpochSecond();
+    String header = base64("{\"alg\":\"RS256\",\"kid\":\"google-test\",\"typ\":\"JWT\"}");
+    String payload =
+        base64(
+            "{\"iss\":\""
+                + issuer
+                + "\",\"aud\":\""
+                + audience
+                + "\",\"sub\":\""
+                + subject
+                + "\",\"email\":\""
+                + email
+                + "\",\"email_verified\":"
+                + emailVerified
+                + ",\"app_metadata\":{\"provider\":\""
+                + provider
+                + "\"},\"user_metadata\":{\"name\":\"Google User\"},\"nbf\":"
+                + (now + notBeforeOffset)
+                + ",\"exp\":"
+                + (now + expiresIn)
+                + "}");
+    try {
+      String signingInput = header + "." + payload;
+      Signature signature = Signature.getInstance("SHA256withRSA");
+      signature.initSign(GOOGLE_KEY.getPrivate());
+      signature.update(signingInput.getBytes(StandardCharsets.US_ASCII));
+      return signingInput
+          + "."
+          + Base64.getUrlEncoder().withoutPadding().encodeToString(signature.sign());
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
+  }
+
+  private static String base64(String value) {
+    return Base64.getUrlEncoder()
+        .withoutPadding()
+        .encodeToString(value.getBytes(StandardCharsets.UTF_8));
+  }
+
+  private void assertGoogleUnauthorized(String token) {
+    ResponseEntity<String> response =
+        post("/api/v1/auth/google", Map.of("accessToken", token), String.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(response.getBody()).doesNotContain("signature", "issuer", "audience", "provider");
   }
 }

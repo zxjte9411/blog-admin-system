@@ -8,8 +8,10 @@ import {
 } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { catchError, defer, forkJoin, of } from 'rxjs';
 import { Auth } from '../core/auth';
 import { Language } from '../core/language';
+import { SUPABASE_AUTH } from '../core/supabase';
 
 @Component({
   selector: 'app-shell',
@@ -25,6 +27,7 @@ export class AppShell implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly supabase = inject(SUPABASE_AUTH);
 
   @Input() loading = false;
 
@@ -95,15 +98,14 @@ export class AppShell implements OnInit {
   }
 
   logout() {
-    this.http.post('/api/v1/auth/logout', {}, { withCredentials: true }).subscribe({
-      next: () => {
-        this.auth.clear();
-        void this.router.navigateByUrl('/login');
-      },
-      error: () => {
-        this.auth.clear();
-        void this.router.navigateByUrl('/login');
-      },
+    forkJoin([
+      this.http
+        .post('/api/v1/auth/logout', {}, { withCredentials: true })
+        .pipe(catchError(() => of(null))),
+      defer(() => this.supabase.signOut({ scope: 'local' })).pipe(catchError(() => of(null))),
+    ]).subscribe(() => {
+      this.auth.clear();
+      void this.router.navigateByUrl('/login');
     });
   }
 }

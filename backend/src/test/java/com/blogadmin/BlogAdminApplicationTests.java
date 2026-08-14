@@ -9,6 +9,7 @@ import com.blogadmin.identity.domain.password.PasswordSettingChangeRepository;
 import com.blogadmin.identity.domain.password.PasswordSettingRepository;
 import com.blogadmin.identity.domain.ratelimit.RateLimitEventRepository;
 import com.blogadmin.identity.domain.session.RefreshSessionRepository;
+import com.blogadmin.identity.domain.user.UserIdentityRepository;
 import com.blogadmin.identity.domain.user.UserRepository;
 import com.blogadmin.identity.domain.verification.EmailVerificationTokenRepository;
 import com.blogadmin.publishing.domain.article.ArticleRepository;
@@ -34,6 +35,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 class BlogAdminApplicationTests {
 
   @MockitoBean private UserRepository users;
+  @MockitoBean private UserIdentityRepository identities;
   @MockitoBean private EmailVerificationTokenRepository tokens;
   @MockitoBean private EmailChangeTokenRepository emailChangeTokens;
   @MockitoBean private RateLimitEventRepository limits;

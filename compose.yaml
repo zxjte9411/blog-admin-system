@@ -26,6 +26,8 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-blog_admin}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-blog_admin}
       APP_SECURITY_JWT_SECRET: ${APP_SECURITY_JWT_SECRET:?Set a randomly generated value of at least 32 bytes}
+      SUPABASE_JWT_ISSUER: ${SUPABASE_JWT_ISSUER:?Set the Supabase JWT issuer URL}
+      SUPABASE_JWKS_URL: ${SUPABASE_JWKS_URL:?Set the Supabase JWKS URL}
       APP_BOOTSTRAP_ADMIN_EMAIL: ${APP_BOOTSTRAP_ADMIN_EMAIL:?Set the development bootstrap Admin email}
       APP_BOOTSTRAP_ADMIN_PASSWORD: ${APP_BOOTSTRAP_ADMIN_PASSWORD:?Set the development bootstrap Admin password}
       SPRING_LIQUIBASE_ENABLED: "true"

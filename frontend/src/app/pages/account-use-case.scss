@@ -67,6 +67,25 @@ form {
 .form-submit {
   align-self: flex-start;
 }
+.oauth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 26rem;
+  margin-top: 0.75rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+
+  &::before,
+  &::after {
+    flex: 1;
+    content: '';
+    border-top: 1px solid var(--line);
+  }
+}
+.google-login {
+  margin-top: 0.75rem;
+}
 .account-links {
   display: flex;
   flex-wrap: wrap;

@@ -2,6 +2,26 @@
 
 This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.20.
 
+## Google Login local setup
+
+Copy `public/config.example.js` to `public/config.js`, then set the Supabase
+project URL and publishable key. In Supabase Authentication URL Configuration,
+add `http://localhost:4200/login` to the redirect allow list. `config.js` is
+ignored by Git and must not contain a service role key or any other secret.
+
+The backend also requires the Supabase JWT issuer and JWKS URL. For a project
+URL such as `https://<project-ref>.supabase.co`, set these non-secret values in
+the root `.env`:
+
+```text
+SUPABASE_JWT_ISSUER=https://<project-ref>.supabase.co/auth/v1
+SUPABASE_JWKS_URL=https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json
+```
+
+Do not put secrets in these URLs or in `config.js`. If either frontend public
+setting (project URL or publishable key) is missing, Google Login is hidden;
+Email/Password login remains available.
+
 ## Development server
 
 To start a local development server, run:

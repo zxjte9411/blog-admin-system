@@ -2,6 +2,7 @@ package com.blogadmin.identity.web.controller;
 
 import com.blogadmin.identity.application.AuthenticationService;
 import com.blogadmin.identity.domain.user.User;
+import com.blogadmin.identity.web.dto.GoogleLoginRequest;
 import com.blogadmin.identity.web.dto.LoginRequest;
 import com.blogadmin.identity.web.dto.LoginResponse;
 import com.blogadmin.identity.web.dto.SessionResponse;
@@ -27,6 +28,15 @@ public class AuthenticationController {
   public LoginResponse login(
       @Valid @RequestBody LoginRequest request, HttpServletResponse response) {
     var result = service.login(request.email(), request.password());
+    cookie(response, result.refreshToken());
+    var accessToken = jwt.create(result.user(), result.sessionId(), result.accessTokenVersion());
+    return new LoginResponse(accessToken.value(), accessToken.expiresAt());
+  }
+
+  @PostMapping("/google")
+  public LoginResponse google(
+      @Valid @RequestBody GoogleLoginRequest request, HttpServletResponse response) {
+    var result = service.googleLogin(request.accessToken());
     cookie(response, result.refreshToken());
     var accessToken = jwt.create(result.user(), result.sessionId(), result.accessTokenVersion());
     return new LoginResponse(accessToken.value(), accessToken.expiresAt());

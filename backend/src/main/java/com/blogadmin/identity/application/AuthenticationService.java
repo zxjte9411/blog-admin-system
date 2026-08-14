@@ -3,7 +3,10 @@ package com.blogadmin.identity.application;
 import com.blogadmin.identity.domain.session.RefreshSession;
 import com.blogadmin.identity.domain.session.RefreshSessionRepository;
 import com.blogadmin.identity.domain.user.User;
+import com.blogadmin.identity.domain.user.UserIdentity;
+import com.blogadmin.identity.domain.user.UserIdentityRepository;
 import com.blogadmin.identity.domain.user.UserRepository;
+import com.blogadmin.identity.web.security.SupabaseJwtVerifier;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -22,22 +25,60 @@ public class AuthenticationService {
   private final UserRepository users;
   private final RefreshSessionRepository sessions;
   private final PasswordEncoder passwords;
+  private final UserIdentityRepository identities;
+  private final SupabaseJwtVerifier supabase;
 
   public AuthenticationService(
-      UserRepository users, RefreshSessionRepository sessions, PasswordEncoder passwords) {
+      UserRepository users,
+      RefreshSessionRepository sessions,
+      PasswordEncoder passwords,
+      UserIdentityRepository identities,
+      SupabaseJwtVerifier supabase) {
     this.users = users;
     this.sessions = sessions;
     this.passwords = passwords;
+    this.identities = identities;
+    this.supabase = supabase;
   }
 
   @Transactional
   public Result login(String email, String password) {
-    User user = users.findByNormalizedEmail(email.trim().toLowerCase(Locale.ROOT)).orElse(null);
+    User user = users.findByNormalizedEmail(normalize(email)).orElse(null);
     if (user == null
         || user.getVerifiedAt() == null
         || !user.isEnabled()
         || !passwords.matches(password, user.getPasswordHash()))
       throw new BadCredentialsException();
+    return issue(user);
+  }
+
+  @Transactional
+  public Result googleLogin(String accessToken) {
+    SupabaseJwtVerifier.Claims claims;
+    try {
+      claims = supabase.verify(accessToken);
+    } catch (SupabaseJwtVerifier.InvalidTokenException exception) {
+      throw new BadCredentialsException();
+    }
+
+    User user =
+        identities
+            .findByProviderAndSubject("google", claims.subject())
+            .map(identity -> users.findById(identity.getUserId()).orElse(null))
+            .orElse(null);
+    if (user == null) {
+      String email = normalize(claims.email());
+      users.lockNormalizedEmail(email);
+      user = users.findByNormalizedEmail(email).orElse(null);
+      if (user == null || user.getVerifiedAt() == null || !user.isEnabled()) {
+        throw new BadCredentialsException();
+      }
+      if (identities.findByUserIdAndProvider(user.getId(), "google").isPresent())
+        throw new BadCredentialsException();
+      identities.save(
+          new UserIdentity(UUID.randomUUID(), user.getId(), "google", claims.subject()));
+    }
+    if (!user.isEnabled() || user.getVerifiedAt() == null) throw new BadCredentialsException();
     return issue(user);
   }
 
@@ -101,6 +142,10 @@ public class AuthenticationService {
     } catch (Exception e) {
       throw new IllegalStateException(e);
     }
+  }
+
+  private static String normalize(String email) {
+    return email.trim().toLowerCase(Locale.ROOT);
   }
 
   public record Result(User user, String refreshToken, UUID sessionId, int accessTokenVersion) {}

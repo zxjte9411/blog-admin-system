@@ -29,6 +29,10 @@ app:
       password: ${APP_BOOTSTRAP_ADMIN_PASSWORD:}
   security:
     jwt-secret: ${APP_SECURITY_JWT_SECRET}
+    supabase:
+      issuer: ${SUPABASE_JWT_ISSUER:}
+      audience: ${SUPABASE_JWT_AUDIENCE:authenticated}
+      jwks-url: ${SUPABASE_JWKS_URL:http://localhost:54321/auth/v1/.well-known/jwks.json}
   mail:
     from: ${APP_MAIL_FROM:dev@example.com}
   frontend-base-url: ${APP_FRONTEND_BASE_URL:http://localhost:4200}

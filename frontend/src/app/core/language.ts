@@ -5,6 +5,8 @@ const dictionary = {
   'zh-TW': {
     title: '部落格管理',
     login: '登入',
+    googleLogin: '使用 Google 登入',
+    or: '或',
     accountLinks: '帳號入口',
     needAccount: '註冊新帳號',
     hasAccount: '返回登入',
@@ -130,6 +132,8 @@ const dictionary = {
   en: {
     title: 'Blog Admin',
     login: 'Sign in',
+    googleLogin: 'Continue with Google',
+    or: 'or',
     accountLinks: 'Account access',
     needAccount: 'Create an account',
     hasAccount: 'Back to sign in',
