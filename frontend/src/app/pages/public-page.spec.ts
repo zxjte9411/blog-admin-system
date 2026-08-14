@@ -73,6 +73,33 @@ describe('PublicPage', () => {
     expect(fixture.nativeElement.querySelector('a[href="/public/articles/one"]')).toBeTruthy();
   });
 
+  it('uses nested Page metadata for public article pagination', async () => {
+    await TestBed.configureTestingModule({
+      imports: [PublicPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'public/articles' },
+              paramMap: { get: () => null },
+              queryParamMap: { get: () => null },
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(PublicPage);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/public/articles?page=0')
+      .flush({ content: [], page: { totalPages: 4 } });
+    expect(fixture.componentInstance.totalPages).toBe(4);
+  });
+
   it('offers a clear-filter link when a tag filter is active', async () => {
     await TestBed.configureTestingModule({
       imports: [PublicPage],

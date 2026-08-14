@@ -28,22 +28,18 @@
       <p class="empty">{{ language.t.empty }}</p>
     }
     <ul class="items">
-      @for (row of items; track row['id']) {
+      @for (row of items; track id(row)) {
         <li>
           @if (routeKey === 'public/articles') {
-            <a class="row-title" [routerLink]="['/public/articles', row['id']]">{{
-              row['title']
-            }}</a>
-            <span class="meta"
-              >{{ row['authorAttribution'] }} · {{ dateValue(row) | date: 'yyyy-MM-dd' }}</span
-            >
+            <a class="row-title" [routerLink]="['/public/articles', id(row)]">{{ title(row) }}</a>
+            <span class="meta">{{ author(row) }} · {{ dateValue(row) | date: 'yyyy-MM-dd' }}</span>
           } @else {
             <a
               class="tag-pill-link"
               [routerLink]="['/public/articles']"
               [queryParams]="tagQuery(row)"
             >
-              {{ row['name'] }}
+              {{ title(row) }}
             </a>
           }
         </li>

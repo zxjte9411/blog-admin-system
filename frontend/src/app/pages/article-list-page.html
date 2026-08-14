@@ -1,0 +1,73 @@
+<app-shell [loading]="loading">
+  <div class="page-intro">
+    <div>
+      <p class="eyebrow">{{ language.t.title }}</p>
+      <h1>{{ language.t.nav.articles }}</h1>
+    </div>
+    <a class="ui-primary" routerLink="/articles/new">{{ language.t.newArticle }}</a>
+  </div>
+  @if (loading) {
+    <progress class="loading-bar" [attr.aria-label]="language.t.loading"></progress>
+  }
+  @if (error) {
+    <div class="error" role="alert">
+      <span>{{ error }}</span
+      ><button class="ui-outline retry-button" type="button" (click)="retry()">
+        {{ language.t.retryAction }}
+      </button>
+    </div>
+  }
+  @if (message) {
+    <div class="success" role="status">
+      <span>{{ message }}</span>
+      @if (deletedSuccess) {
+        <a routerLink="/articles/deleted">{{ language.t.viewDeleted }}</a>
+      }
+    </div>
+  }
+  <app-article-management-list
+    [items]="items"
+    [loading]="loading"
+    [totalPages]="totalPages"
+    [page]="page"
+    [searchTitle]="searchTitle"
+    [canManageArticle]="canManageArticle"
+    [titleLabel]="language.t.field.title"
+    [statusLabel]="language.t.field.status"
+    [draftLabel]="language.t.draft"
+    [publishedLabel]="language.t.published"
+    [authorLabel]="language.t.authorAttribution"
+    [createdLabel]="language.t.sessionCreatedAt"
+    [actionsLabel]="language.t.actions"
+    [caption]="language.t.data"
+    [emptyLabel]="language.t.empty"
+    [loadingLabel]="language.t.loading"
+    [searchLabel]="language.t.searchAction"
+    [editLabel]="language.t.edit"
+    [deleteLabel]="language.t.delete"
+    [previousLabel]="language.t.previous"
+    [nextLabel]="language.t.next"
+    [pageLabel]="language.t.page"
+    [ofLabel]="language.t.of"
+    [pageSuffix]="language.t.pageSuffix"
+    (searchChange)="search($event)"
+    (open)="open($event)"
+    (delete)="deleteArticle($event.row, $event.trigger)"
+    (previousPage)="previousPage()"
+    (nextPage)="nextPage()"
+    (selectPage)="goToPage($event)"
+  />
+  <dialog #confirmDialog class="confirm-dialog" (close)="closeModal()">
+    @if (modalState) {
+      <h2>{{ modalState.title }}</h2>
+      <p>{{ modalState.message }}</p>
+      <div class="dialog-actions">
+        <button class="ui-outline" type="button" (click)="closeModal()">
+          {{ language.t.cancel }}</button
+        ><button class="ui-primary danger-btn" type="button" (click)="confirmModal()">
+          {{ modalState.confirmText }}
+        </button>
+      </div>
+    }
+  </dialog>
+</app-shell>

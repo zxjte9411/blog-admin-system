@@ -1,0 +1,105 @@
+<app-shell [loading]="loading"
+  ><div class="page-intro">
+    <div>
+      <p class="eyebrow">{{ language.t.title }}</p>
+      <h1>{{ language.t.nav.deletedArticles }}</h1>
+    </div>
+  </div>
+  <p class="notice deleted-notice">{{ language.t.deletedNotice }}</p>
+  @if (error) {
+    <p class="error" role="alert">{{ error }}</p>
+  }
+  @if (message) {
+    <p class="success" role="status">{{ message }}</p>
+  }
+  @if (!loading && !items.length && !error) {
+    <p class="empty">{{ language.t.empty }}</p>
+  }
+  @if (items.length) {
+    <div class="table-wrap">
+      <table class="data-table">
+        <caption>
+          {{
+            language.t.data
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ language.t.field.title }}</th>
+            <th scope="col">{{ language.t.actions }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (article of items; track article.id) {
+            <tr>
+              <td>{{ article.title }}</td>
+              <td>
+                <button class="text-link" type="button" (click)="restore(article)">
+                  {{ language.t.restore }}
+                </button>
+                @if (auth.user?.role === 'ADMIN') {
+                  <button
+                    class="text-link danger"
+                    type="button"
+                    (click)="purge(article, $event.currentTarget)"
+                  >
+                    {{ language.t.permanentDelete }}
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    @if (totalPages > 1) {
+      <nav class="pagination" [attr.aria-label]="language.t.data">
+        <button
+          class="page-btn"
+          type="button"
+          (click)="previousPage()"
+          [disabled]="page === 0"
+          aria-label="Previous page"
+        >
+          &lsaquo;
+        </button>
+        @for (p of pageNumbers; track p) {
+          <button
+            class="page-btn"
+            type="button"
+            [class.is-active]="p === page"
+            [attr.aria-current]="p === page ? 'page' : null"
+            (click)="goToPage(p)"
+          >
+            {{ p + 1 }}
+          </button>
+        }
+        <button
+          class="page-btn"
+          type="button"
+          (click)="nextPage()"
+          [disabled]="page + 1 >= totalPages"
+          aria-label="Next page"
+        >
+          &rsaquo;
+        </button>
+        <span class="page-indicator" aria-live="polite"
+          >{{ language.t.page }} {{ page + 1 }} {{ language.t.of }} {{ totalPages }}</span
+        >
+      </nav>
+    }
+  }
+  <dialog #confirmDialog class="confirm-dialog" (close)="closeModal()">
+    @if (modalState) {
+      <h2>{{ modalState.title }}</h2>
+      <p>{{ modalState.message }}</p>
+      <div class="dialog-actions">
+        <button class="ui-outline" type="button" (click)="closeModal()">
+          {{ language.t.cancel }}</button
+        ><button class="ui-primary danger-btn" type="button" (click)="confirmModal()">
+          {{ modalState.confirmText }}
+        </button>
+      </div>
+    }
+  </dialog>
+</app-shell>

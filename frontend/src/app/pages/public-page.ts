@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
@@ -11,8 +11,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Language } from '../core/language';
 import { AppShell } from '../layouts/app-shell';
 import { getPageNumbers } from '../core/pagination';
-
-type Row = Record<string, unknown>;
+import { Page, PublicArticle, PublicArticleApi, PublicTag } from '../core/api';
 
 @Component({
   selector: 'app-public-page',
@@ -23,20 +22,20 @@ type Row = Record<string, unknown>;
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PublicPage implements OnInit {
-  private readonly http = inject(HttpClient);
+  private readonly api = inject(PublicArticleApi);
   private readonly route = inject(ActivatedRoute);
   private readonly cdr = inject(ChangeDetectorRef);
   readonly language = inject(Language);
   routeKey = '';
-  items: Row[] = [];
-  detail: Row | null = null;
+  items: (PublicArticle | PublicTag)[] = [];
+  detail: PublicArticle | null = null;
   page = 0;
   totalPages = 0;
   loading = false;
   private errorKey: 'forbidden' | 'notFound' | 'error' | '' = '';
 
-  dateValue(row: Row) {
-    return row['createdAt'] as string | number | Date | null | undefined;
+  dateValue(row: PublicArticle | PublicTag) {
+    return 'createdAt' in row ? row.createdAt : null;
   }
 
   ngOnInit() {
@@ -65,36 +64,30 @@ export class PublicPage implements OnInit {
     );
   }
 
-  private endpoint() {
-    if (this.routeKey === 'public/tags') return '/api/v1/public/tags';
-    const id = this.route.snapshot.paramMap.get('id');
-    return id ? `/api/v1/public/articles/${id}` : '/api/v1/public/articles';
-  }
-
   private read() {
     this.loading = true;
-    const params: Record<string, string | number> = { page: this.page };
     const tagId = this.route.snapshot.queryParamMap.get('tagId');
-    if (tagId && this.routeKey === 'public/articles') params['tagId'] = tagId;
-    this.http.get<Row[] | Row>(this.endpoint(), { params }).subscribe({
-      next: (value) => {
-        const response = Array.isArray(value) ? { content: value, totalPages: 1 } : value;
-        this.items = Array.isArray(response['content'])
-          ? (response['content'] as Row[])
-          : [response];
-        this.totalPages = Number(
-          (response['page'] as Row | undefined)?.['totalPages'] ?? response['totalPages'] ?? 0,
-        );
-        this.loading = false;
-        this.cdr.markForCheck();
-      },
-      error: (e: HttpErrorResponse) => this.fail(e.status),
-    });
+    const next = (value: Page<PublicArticle | PublicTag> | (PublicArticle | PublicTag)[]) => {
+      const response: Page<PublicArticle | PublicTag> = Array.isArray(value)
+        ? { content: value, totalPages: 1 }
+        : value;
+      this.items = response.content;
+      this.totalPages = response.page?.totalPages ?? response.totalPages;
+      this.loading = false;
+      this.cdr.markForCheck();
+    };
+    const fail = (e: HttpErrorResponse) => this.fail(e.status);
+    if (this.routeKey === 'public/tags') this.api.tags(this.page).subscribe({ next, error: fail });
+    else
+      this.api.list({ page: this.page, ...(tagId ? { tagId } : {}) }).subscribe({
+        next,
+        error: fail,
+      });
   }
 
   private readDetail() {
     this.loading = true;
-    this.http.get<Row>(this.endpoint()).subscribe({
+    this.api.get(this.route.snapshot.paramMap.get('id')!).subscribe({
       next: (value) => {
         this.detail = value;
         this.loading = false;
@@ -125,8 +118,17 @@ export class PublicPage implements OnInit {
   get pageNumbers(): number[] {
     return getPageNumbers(this.page, this.totalPages);
   }
-  tagQuery(row: Row) {
-    return { tagId: String(row['id']) };
+  tagQuery(row: PublicArticle | PublicTag) {
+    return { tagId: row.id };
+  }
+  title(row: PublicArticle | PublicTag) {
+    return 'title' in row ? row.title : row.name;
+  }
+  id(row: PublicArticle | PublicTag) {
+    return row.id;
+  }
+  author(row: PublicArticle | PublicTag) {
+    return 'authorAttribution' in row ? row.authorAttribution : '';
   }
   private fail(status: number) {
     this.loading = false;

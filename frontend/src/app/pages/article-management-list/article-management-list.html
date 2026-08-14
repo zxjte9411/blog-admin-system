@@ -33,25 +33,25 @@
           </tr>
         </thead>
         <tbody>
-          @for (row of items; track row['id'] || row) {
+          @for (row of items; track rowId(row) || row) {
             <tr class="mat-mdc-row">
               <td [attr.data-label]="titleLabel">
-                <span class="row-title">{{ row['title'] || row['id'] }}</span>
+                <span class="row-title">{{ rowTitle(row) }}</span>
               </td>
               @if (statusLabel) {
                 <td [attr.data-label]="statusLabel">
                   <span
                     class="status-badge"
-                    [class.is-draft]="row['status'] === 'DRAFT'"
-                    [class.is-published]="row['status'] === 'PUBLISHED'"
+                    [class.is-draft]="rowStatus(row) === 'DRAFT'"
+                    [class.is-published]="rowStatus(row) === 'PUBLISHED'"
                   >
-                    {{ row['status'] === 'PUBLISHED' ? publishedLabel : draftLabel }}
+                    {{ rowStatus(row) === 'PUBLISHED' ? publishedLabel : draftLabel }}
                   </span>
                 </td>
               }
-              <td [attr.data-label]="authorLabel">{{ row['authorAttribution'] || '—' }}</td>
+              <td [attr.data-label]="authorLabel">{{ rowAuthor(row) || '—' }}</td>
               <td [attr.data-label]="createdLabel">
-                <time [attr.datetime]="row['createdAt']">
+                <time [attr.datetime]="row.createdAt">
                   {{ dateValue(row) | date: dateFormat }}
                 </time>
               </td>
@@ -62,15 +62,15 @@
                       class="text-link"
                       type="button"
                       (click)="open.emit(row)"
-                      [attr.aria-label]="editLabel + ' ' + row['title']"
+                      [attr.aria-label]="editLabel + ' ' + rowTitle(row)"
                     >
                       {{ editLabel }}
                     </button>
                     <button
                       class="text-link danger"
                       type="button"
-                      (click)="delete.emit(row)"
-                      [attr.aria-label]="deleteLabel + ' ' + row['title']"
+                      (click)="delete.emit({ row, trigger: $event.currentTarget })"
+                      [attr.aria-label]="deleteLabel + ' ' + rowTitle(row)"
                     >
                       {{ deleteLabel }}
                     </button>

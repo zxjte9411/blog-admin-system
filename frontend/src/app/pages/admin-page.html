@@ -210,7 +210,7 @@
       [pageSuffix]="language.t.pageSuffix"
       (searchChange)="search($event)"
       (open)="open($event)"
-      (delete)="deleteArticle($event)"
+      (delete)="deleteArticle($event.row, $event.trigger)"
       (previousPage)="previousPage()"
       (nextPage)="nextPage()"
       (selectPage)="goToPage($event)"

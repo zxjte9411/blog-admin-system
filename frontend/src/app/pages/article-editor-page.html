@@ -1,0 +1,103 @@
+<app-shell [loading]="loading">
+  <div class="page-intro">
+    <div>
+      <p class="eyebrow">{{ language.t.title }}</p>
+      <h1>{{ edit ? language.t.edit : language.t.newArticle }}</h1>
+    </div>
+  </div>
+  @if (error) {
+    <p class="error" role="alert">{{ error }}</p>
+  }
+  <form class="admin-form article-form" [formGroup]="form" (ngSubmit)="submit()">
+    <label for="field-title"
+      >{{ language.t.field.title
+      }}<input
+        id="field-title"
+        class="control title-control"
+        formControlName="title"
+        [placeholder]="language.t.titlePlaceholder"
+        [attr.aria-invalid]="fieldHasError('title') ? 'true' : null"
+        [attr.aria-describedby]="fieldHasError('title') ? 'field-title-error' : null"
+      />
+      @if (fieldHasError('title')) {
+        <span class="field-error" id="field-title-error" role="alert">{{
+          fieldError('title')
+        }}</span>
+      }
+    </label>
+    <label for="field-content"
+      >{{ language.t.field.content
+      }}<textarea
+        id="field-content"
+        class="control content-control"
+        formControlName="content"
+        [placeholder]="language.t.contentPlaceholder"
+        [attr.aria-invalid]="fieldHasError('content') ? 'true' : null"
+        [attr.aria-describedby]="fieldHasError('content') ? 'field-content-error' : null"
+      ></textarea>
+      @if (fieldHasError('content')) {
+        <span class="field-error" id="field-content-error" role="alert">{{
+          fieldError('content')
+        }}</span>
+      }
+    </label>
+    <fieldset class="tag-field">
+      <legend>{{ language.t.availableTags }}</legend>
+      @if (availableTags.length) {
+        <div class="tag-checkboxes">
+          @for (tag of availableTags; track tag.id) {
+            <label class="tag-checkbox" [for]="'tag-' + tag.id"
+              ><input
+                type="checkbox"
+                [id]="'tag-' + tag.id"
+                [checked]="selectedTagIds.has(tag.id)"
+                (change)="toggleTag(tag.id, $event)"
+              />{{ tag.name }}</label
+            >
+          }
+        </div>
+      }
+    </fieldset>
+    <label for="field-tagNames"
+      >{{ language.t.field.tagNames
+      }}<input
+        id="field-tagNames"
+        class="control"
+        formControlName="tagNames"
+        aria-describedby="field-tagNames-hint"
+      /><span class="field-hint" id="field-tagNames-hint">{{
+        language.t.customTagsHint
+      }}</span></label
+    >
+    <input type="hidden" formControlName="version" id="field-version" />
+    <fieldset
+      class="status-field status-options"
+      [attr.aria-invalid]="fieldHasError('status') ? 'true' : null"
+    >
+      <legend>{{ language.t.field.status }}</legend>
+      <label class="status-option" for="status-draft"
+        ><input
+          id="status-draft"
+          type="radio"
+          value="DRAFT"
+          formControlName="status"
+          [attr.aria-describedby]="fieldHasError('status') ? 'field-status-error' : null"
+        />{{ language.t.draft }}</label
+      ><label class="status-option" for="status-published"
+        ><input
+          id="status-published"
+          type="radio"
+          value="PUBLISHED"
+          formControlName="status"
+          [attr.aria-describedby]="fieldHasError('status') ? 'field-status-error' : null"
+        />{{ language.t.published }}</label
+      >
+      @if (fieldHasError('status')) {
+        <span class="field-error" id="field-status-error" role="alert">{{
+          fieldError('status')
+        }}</span>
+      }
+    </fieldset>
+    <button class="ui-primary" type="submit" [disabled]="loading">{{ language.t.submit }}</button>
+  </form>
+</app-shell>

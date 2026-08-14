@@ -9,6 +9,7 @@ export type PublicationStatus = 'DRAFT' | 'PUBLISHED';
 export interface Page<T> {
   content: T[];
   totalPages: number;
+  page?: { totalPages: number };
   totalElements?: number;
   number?: number;
   size?: number;

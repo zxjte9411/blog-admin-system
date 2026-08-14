@@ -122,6 +122,12 @@ describe('AdminPage', () => {
   it('sends the article editor payload with enum status and remaining tags', async () => {
     await setup('articles/:id/edit', 'article-1');
     const fixture = TestBed.createComponent(AdminPage);
+    fixture.componentInstance.auth.user = {
+      id: 'author-1',
+      displayName: 'Ada',
+      preferredLanguage: 'en',
+      role: 'AUTHOR',
+    };
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
     http.expectOne('/api/v1/public/tags?size=100').flush([

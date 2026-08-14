@@ -17,6 +17,7 @@ import { Language } from '../core/language';
 import { AppShell } from '../layouts/app-shell';
 import { AdminUserManagement } from './admin-user-management/admin-user-management';
 import { ArticleManagementList } from './article-management-list/article-management-list';
+import { ManagementRow } from './article-management-list/article-management-list';
 import { getPageNumbers } from '../core/pagination';
 
 type Row = Record<string, unknown>;
@@ -101,12 +102,12 @@ export class AdminPage implements OnInit {
     this.read();
   }
 
-  confirmMessage(row: Row) {
-    return this.language.t.confirmDelete.replace('{title}', String(row['title'] ?? ''));
+  confirmMessage(row: ManagementRow) {
+    return this.language.t.confirmDelete.replace('{title}', String(row.title ?? ''));
   }
   private triggerElement: HTMLElement | null = null;
-  confirmPermanentDeleteMessage(row: Row) {
-    return this.language.t.confirmPermanentDelete.replace('{title}', String(row['title'] ?? ''));
+  confirmPermanentDeleteMessage(row: ManagementRow) {
+    return this.language.t.confirmPermanentDelete.replace('{title}', String(row.title ?? ''));
   }
   openModal(
     state: {
@@ -201,10 +202,10 @@ export class AdminPage implements OnInit {
       String(status ?? '')
     );
   }
-  canManageArticle = (row: Row) =>
+  canManageArticle = (row: ManagementRow) =>
     this.auth.user?.role === 'ADMIN' ||
-    row['ownerId'] === this.auth.user?.id ||
-    row['owner'] === this.auth.user?.id;
+    ('ownerId' in row && row.ownerId === this.auth.user?.id) ||
+    row.owner === this.auth.user?.id;
   canManageUser = (row: Row) => row['id'] !== this.auth.user?.id;
   toggleTag(id: string, event: Event) {
     const input = event.target as HTMLInputElement;
@@ -232,8 +233,8 @@ export class AdminPage implements OnInit {
       error: (e: HttpErrorResponse) => this.fail(e.status),
     });
   }
-  open(row: Row) {
-    void this.router.navigate(['/articles', row['id'], 'edit']);
+  open(row: ManagementRow) {
+    void this.router.navigate(['/articles', row.id, 'edit']);
   }
   search(value?: string) {
     if (value !== undefined) this.searchTitle = value;
@@ -261,7 +262,7 @@ export class AdminPage implements OnInit {
   get pageNumbers(): number[] {
     return getPageNumbers(this.page, this.totalPages);
   }
-  deleteArticle(row: Row, trigger?: EventTarget | null) {
+  deleteArticle(row: ManagementRow, trigger?: EventTarget | null) {
     this.openModal(
       {
         title: this.language.t.delete,
@@ -273,13 +274,13 @@ export class AdminPage implements OnInit {
       trigger,
     );
   }
-  executeDeleteArticle(row: Row) {
+  executeDeleteArticle(row: ManagementRow) {
     this.loading = true;
-    this.http.delete(`/api/v1/articles/${row['id']}`).subscribe({
+    this.http.delete(`/api/v1/articles/${row.id}`).subscribe({
       next: () => {
         this.loading = false;
         this.error = '';
-        const title = String(row['title'] ?? '');
+        const title = String(row.title ?? '');
         this.message = this.language.t.deleteSuccess.replace('{title}', title);
         this.deletedSuccess = true;
         this.read();
@@ -287,8 +288,8 @@ export class AdminPage implements OnInit {
       error: (e: HttpErrorResponse) => this.fail(e.status),
     });
   }
-  restoreArticle(row: Row) {
-    this.action('POST', `/api/v1/articles/${row['id']}/restore`);
+  restoreArticle(row: ManagementRow) {
+    this.action('POST', `/api/v1/articles/${row.id}/restore`);
   }
   updateUser(row: Row) {
     const current = this.items.find((item) => item['id'] === row['id']) ?? row;
