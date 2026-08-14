@@ -129,6 +129,43 @@ describe('account use cases', () => {
     expect(fixture.componentInstance.auth.token).toBe('local-token');
   });
 
+  it('routes a Google callback user without a display name to the profile', async () => {
+    const supabase = fakeSupabase();
+    setSupabaseConfig(true);
+    supabase.getSession.mockResolvedValue({
+      data: { session: { access_token: 'supabase-token' } },
+      error: null,
+    });
+    await TestBed.configureTestingModule({
+      imports: [LoginPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: SUPABASE_AUTH, useValue: supabase },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(LoginPage);
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+    vi.spyOn(router, 'url', 'get').mockReturnValue('/login?code=oauth-code');
+
+    fixture.componentInstance.ngOnInit();
+    await Promise.resolve();
+
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/auth/google').flush({ accessToken: 'local-token' });
+    http.expectOne('/api/v1/account/me').flush({
+      id: 'user-1',
+      displayName: '   ',
+      preferredLanguage: 'en',
+      role: 'AUTHOR',
+    });
+
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/account/profile');
+  });
+
   it('does not exchange an existing Supabase session on an ordinary login load', async () => {
     const supabase = fakeSupabase();
     setSupabaseConfig(true);

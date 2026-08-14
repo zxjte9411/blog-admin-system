@@ -83,16 +83,54 @@ class AuthenticationApiIntegrationTest {
   }
 
   @Test
-  void googleLoginRejectsUnknownLocalUser() {
-    String email = "google@example.com";
-    String subject = UUID.randomUUID().toString();
-    ResponseEntity<Map> login =
-        post(
-            "/api/v1/auth/google", Map.of("accessToken", supabaseToken(subject, email)), Map.class);
+  void googleLoginCreatesVerifiedEnabledAuthorWithoutEmailPasswordOrVerificationEmail() {
+    String namedEmail = "new-google@example.com";
+    String blankNameEmail = "blank-name@example.com";
 
-    assertThat(login.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-    assertThat(users.findAll()).isEmpty();
-    assertThat(identities.count()).isZero();
+    assertThat(
+            post(
+                    "/api/v1/auth/google",
+                    Map.of(
+                        "accessToken",
+                        supabaseToken(
+                            UUID.randomUUID().toString(), namedEmail, "Google Display Name", true)),
+                    Map.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    assertThat(
+            post(
+                    "/api/v1/auth/google",
+                    Map.of(
+                        "accessToken",
+                        supabaseToken(UUID.randomUUID().toString(), blankNameEmail, null, true)),
+                    Map.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+
+    User named =
+        users.findAll().stream()
+            .filter(user -> user.getEmail().equals(namedEmail))
+            .findFirst()
+            .orElseThrow();
+    User blankName =
+        users.findAll().stream()
+            .filter(user -> user.getEmail().equals(blankNameEmail))
+            .findFirst()
+            .orElseThrow();
+    assertThat(named.getDisplayName()).isEqualTo("Google Display Name");
+    assertThat(blankName.getDisplayName()).isBlank();
+    assertThat(List.of(named, blankName))
+        .allSatisfy(
+            user -> {
+              assertThat(user.getRole()).isEqualTo(UserRole.AUTHOR);
+              assertThat(user.isEnabled()).isTrue();
+              assertThat(user.getVerifiedAt()).isNotNull();
+              assertThat(user.getPreferredLanguage()).isEqualTo("zh-TW");
+              assertThat(user.getPasswordHash()).isNotBlank();
+              assertThat(passwords.matches(PASSWORD, user.getPasswordHash())).isFalse();
+            });
+    assertThat(named.getPasswordHash()).isNotEqualTo(blankName.getPasswordHash());
+    assertThat(tokens.count()).isZero();
   }
 
   @Test
@@ -569,6 +607,20 @@ class AuthenticationApiIntegrationTest {
   }
 
   private static String supabaseToken(
+      String subject, String email, String displayName, boolean emailVerified) {
+    return supabaseToken(
+        subject,
+        email,
+        "https://example.supabase.co/auth/v1",
+        "authenticated",
+        300,
+        -1,
+        "google",
+        emailVerified,
+        displayName);
+  }
+
+  private static String supabaseToken(
       String subject,
       String email,
       String issuer,
@@ -577,6 +629,28 @@ class AuthenticationApiIntegrationTest {
       long notBeforeOffset,
       String provider,
       boolean emailVerified) {
+    return supabaseToken(
+        subject,
+        email,
+        issuer,
+        audience,
+        expiresIn,
+        notBeforeOffset,
+        provider,
+        emailVerified,
+        "Google User");
+  }
+
+  private static String supabaseToken(
+      String subject,
+      String email,
+      String issuer,
+      String audience,
+      long expiresIn,
+      long notBeforeOffset,
+      String provider,
+      boolean emailVerified,
+      String displayName) {
     long now = Instant.now().getEpochSecond();
     String header = base64("{\"alg\":\"RS256\",\"kid\":\"google-test\",\"typ\":\"JWT\"}");
     String payload =
@@ -593,7 +667,9 @@ class AuthenticationApiIntegrationTest {
                 + emailVerified
                 + ",\"app_metadata\":{\"provider\":\""
                 + provider
-                + "\"},\"user_metadata\":{\"name\":\"Google User\"},\"nbf\":"
+                + "\"},\"user_metadata\":"
+                + (displayName == null ? "{}" : "{\"name\":\"" + displayName + "\"}")
+                + ",\"nbf\":"
                 + (now + notBeforeOffset)
                 + ",\"exp\":"
                 + (now + expiresIn)

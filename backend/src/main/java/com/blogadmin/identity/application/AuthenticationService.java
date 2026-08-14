@@ -70,7 +70,20 @@ public class AuthenticationService {
       String email = normalize(claims.email());
       users.lockNormalizedEmail(email);
       user = users.findByNormalizedEmail(email).orElse(null);
-      if (user == null || user.getVerifiedAt() == null || !user.isEnabled()) {
+      if (user == null) {
+        String displayName = claims.displayName() == null ? "" : claims.displayName().trim();
+        if (displayName.length() > 100) displayName = "";
+        user =
+            users.save(
+                new User(
+                    UUID.randomUUID(),
+                    claims.email().trim(),
+                    email,
+                    displayName,
+                    passwords.encode(randomPassword()),
+                    "zh-TW"));
+        user.verify(Instant.now());
+      } else if (user.getVerifiedAt() == null || !user.isEnabled()) {
         throw new BadCredentialsException();
       }
       if (identities.findByUserIdAndProvider(user.getId(), "google").isPresent())
@@ -142,6 +155,12 @@ public class AuthenticationService {
     } catch (Exception e) {
       throw new IllegalStateException(e);
     }
+  }
+
+  private static String randomPassword() {
+    byte[] raw = new byte[32];
+    RANDOM.nextBytes(raw);
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
   }
 
   private static String normalize(String email) {

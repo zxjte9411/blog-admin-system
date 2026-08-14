@@ -65,7 +65,7 @@ public class SupabaseJwtVerifier {
         throw new IllegalArgumentException();
       if (!"google".equals(body.path("app_metadata").path("provider").asText()))
         throw new IllegalArgumentException();
-      String displayName = body.path("user_metadata").path("name").asText(email);
+      String displayName = body.path("user_metadata").path("name").asText();
       return new Claims(subject, email, displayName);
     } catch (Exception exception) {
       throw new InvalidTokenException();

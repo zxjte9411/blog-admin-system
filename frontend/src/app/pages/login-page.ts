@@ -78,7 +78,7 @@ export class LoginPage extends FormUseCase implements OnInit {
       } else if (data.session) {
         this.loading = true;
         this.api.googleLogin(data.session.access_token).subscribe({
-          next: (result) => this.finishLogin(result.accessToken),
+          next: (result) => this.finishLogin(result.accessToken, true),
           error: (requestError) => this.handleError(requestError),
         });
       }
@@ -87,12 +87,16 @@ export class LoginPage extends FormUseCase implements OnInit {
     }
   }
 
-  private finishLogin(accessToken: string) {
+  private finishLogin(accessToken: string, redirectToProfileIfIncomplete = false) {
     this.auth.setToken(accessToken);
     this.loading = false;
     this.auth.load().subscribe((user) => {
       if (user) this.language.usePreferred(user.preferredLanguage);
-      void this.router.navigateByUrl('/articles');
+      const destination =
+        redirectToProfileIfIncomplete && !user?.displayName?.trim()
+          ? '/account/profile'
+          : '/articles';
+      void this.router.navigateByUrl(destination);
     });
   }
 }
