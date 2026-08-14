@@ -122,7 +122,8 @@ public class AuthenticationService {
       throw new BadCredentialsException();
     }
     if (session.getUserAccessTokenVersion() != user.getAccessTokenVersion()) {
-      session.revoke(Instant.now());
+      // User's access token version has bumped (e.g. password/role change or toggle enabled),
+      // rendering this session permanently invalid without needing an explicit persisted revoke.
       throw new BadCredentialsException();
     }
     OpaqueToken.Issued nextToken = OpaqueToken.generate();

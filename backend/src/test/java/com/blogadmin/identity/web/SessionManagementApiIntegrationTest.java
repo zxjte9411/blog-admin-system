@@ -64,6 +64,50 @@ class SessionManagementApiIntegrationTest extends AbstractPostgresIntegrationTes
   }
 
   @Test
+  void refreshTokenWithMismatchedAccessTokenVersionIsPermanentlyRejected() {
+    UUID userId = createVerifiedUser();
+    ResponseEntity<Map> loginResponse =
+        restTemplate.postForEntity(url("/api/v1/auth/login"), loginPayload(userId), Map.class);
+    String refreshCookie = extractRefreshTokenCookie(loginResponse);
+
+    RefreshSession sessionBefore = refreshSessionRepository.findAll().get(0);
+    assertThat(sessionBefore.getUserAccessTokenVersion()).isEqualTo(0);
+    assertThat(sessionBefore.getRevokedAt()).isNull();
+
+    // Bump user accessTokenVersion via role change (or password change)
+    User user = userRepository.findById(userId).orElseThrow();
+    user.changeRole(UserRole.ADMIN);
+    userRepository.saveAndFlush(user);
+    entityManager.clear();
+
+    // Refresh request must be rejected with 401 UNAUTHORIZED
+    ResponseEntity<Map> refreshResponse =
+        postWithCookie("/api/v1/auth/refresh", refreshCookie, Map.class);
+    assertThat(refreshResponse.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+
+    // Verify DB state: version mismatch invalidates the session via epoch comparison
+    entityManager.clear();
+    RefreshSession reloadedSession =
+        refreshSessionRepository.findById(sessionBefore.getId()).orElseThrow();
+    assertThat(reloadedSession.getUserAccessTokenVersion()).isEqualTo(0);
+    assertThat(reloadedSession.getRevokedAt())
+        .as("Revocation is enforced via userAccessTokenVersion epoch mismatch rather than DB write")
+        .isNull();
+
+    // Subsequent refresh attempts must consistently and permanently fail
+    ResponseEntity<Map> secondRefreshResponse =
+        postWithCookie("/api/v1/auth/refresh", refreshCookie, Map.class);
+    assertThat(secondRefreshResponse.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+
+    // Active session list query strictly excludes mismatched versions
+    List<RefreshSession> activeSessions =
+        refreshSessionRepository
+            .findByUserIdAndRevokedAtIsNullAndExpiresAtAfterAndUserAccessTokenVersionEqualsOrderByCreatedAtDesc(
+                userId, Instant.now(), user.getAccessTokenVersion());
+    assertThat(activeSessions).isEmpty();
+  }
+
+  @Test
   void adminAuthorizationUsesRoleAndRevokesSessionsOnRoleDemotion() throws Exception {
     UUID userId = createVerifiedUser();
     String authorToken = loginAndGetAccessToken(userId);

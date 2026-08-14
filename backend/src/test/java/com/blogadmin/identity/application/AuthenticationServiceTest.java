@@ -112,7 +112,7 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    void revokesSessionAndRejectsWhenUserAccessTokenVersionMismatches() {
+    void rejectsWhenUserAccessTokenVersionMismatches() {
       UUID sessionId = UUID.randomUUID();
       UUID userId = UUID.randomUUID();
 
@@ -126,9 +126,8 @@ class AuthenticationServiceTest {
       assertThatThrownBy(() -> authenticationService.refresh("valid-token"))
           .isInstanceOf(AuthenticationService.BadCredentialsException.class);
 
-      // Verify that the session was revoked as a crucial security side-effect
-      assertThat(session.getRevokedAt()).isNotNull();
-      assertThat(session.active()).isFalse();
+      // Session is invalidated via version epoch mismatch, not by mutating session state
+      verify(refreshSessionRepository, never()).save(any(RefreshSession.class));
     }
 
     @Test
