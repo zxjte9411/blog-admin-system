@@ -133,3 +133,4 @@ Compose 啟動時會依 `.env` 的 `APP_BOOTSTRAP_ADMIN_EMAIL` 與 `APP_BOOTSTRA
 - 公開 API 位於 `/api/v1/public/**`，並只回傳已發布且未刪除的文章。
 - bootstrap Admin 透過環境變數注入，避免把開發密碼寫進原始碼或文件。
 - 其他設計理念、權限邊界、測試與額外功能請見[繳交補充說明](docs/SUBMISSION.md)。
+- 核心資料模型、完整系統流程與應用層關係請見[系統圖表](docs/diagrams/)（ERD、SSD、Class Diagram）。
