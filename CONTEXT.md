@@ -32,6 +32,14 @@ _Avoid_: Audit Log、Configuration History
 代表單一裝置或瀏覽器登入狀態的可撤銷憑證；User 可查看並撤銷自己的 Refresh Session，清單只顯示是否為目前工作階段、建立時間與最後使用時間。
 _Avoid_: Login Token、Device
 
+**Google Login（Google 登入）**:
+User 以 Google 已驗證 Email 登入管理後台的方式；相同 Email 的既有 User 會連結此登入方式，否則建立一位已驗證且 enabled 的 Author，不再要求 Email 驗證連結。連結後的 Google 身分不因其 Email 變更而改寫 User Email。
+_Avoid_: Social Login、OAuth Login
+
+**Google Invitation Redemption（Google 邀請兌換）**:
+Invitation 收件者以相同 Email 的 Google Login 完成 Invitation 的方式；它不要求設定 Password。
+_Avoid_: Google Registration、Social Invitation
+
 **Admin（管理員）**:
 可管理使用者與所有文章的 User 角色；可調整其他 User 的角色與狀態，但不能調整自己，且不能讓最後一位同時 enabled 與已驗證的 Admin 被降級或停用。
 _Avoid_: Administrator、Superuser
