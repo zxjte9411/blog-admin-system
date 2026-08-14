@@ -55,9 +55,10 @@ PY
 )
 call login POST "$API_BASE/api/v1/auth/login" "$login"
 token=$(value login accessToken)
-article=$(python3 - <<'PY'
-import json
-print(json.dumps({'title':'Compose smoke article','content':'HTTP smoke','status':'DRAFT','tagNames':['compose-smoke']}))
+smoke_tag="compose-smoke-$RANDOM"
+article=$(python3 - "$smoke_tag" <<'PY'
+import json,sys
+print(json.dumps({'title':'Compose smoke article','content':'HTTP smoke','status':'DRAFT','tagNames':[sys.argv[1]]}))
 PY
 )
 call create POST "$API_BASE/api/v1/articles" "$article" "$token"
@@ -73,9 +74,9 @@ PY
 )
 call publish PUT "$API_BASE/api/v1/articles/$id" "$publish" "$token"
 call tags GET "$API_BASE/api/v1/public/tags"
-python3 - "$tmp/tags" <<'PY'
+python3 - "$tmp/tags" "$smoke_tag" <<'PY'
 import json,sys
-assert any(x['name']=='compose-smoke' for x in json.load(open(sys.argv[1]))['content'])
+assert any(x['name']==sys.argv[2] for x in json.load(open(sys.argv[1]))['content'])
 PY
 version=$(value publish version); call public GET "$API_BASE/api/v1/public/articles/$id"
 python3 - "$tmp/public" "$tag" <<'PY'
@@ -85,9 +86,9 @@ PY
 expect delete DELETE "$API_BASE/api/v1/articles/$id" 204 "$token"
 expect deleted GET "$API_BASE/api/v1/public/articles/$id" 404
 call deleted-tags GET "$API_BASE/api/v1/public/tags"
-python3 - "$tmp/deleted-tags" <<'PY'
+python3 - "$tmp/deleted-tags" "$smoke_tag" <<'PY'
 import json,sys
-assert not any(x['name']=='compose-smoke' for x in json.load(open(sys.argv[1]))['content'])
+assert not any(x['name']==sys.argv[2] for x in json.load(open(sys.argv[1]))['content'])
 PY
 call restore POST "$API_BASE/api/v1/articles/$id/restore" '' "$token"
 call restored-admin GET "$API_BASE/api/v1/articles/$id" '' "$token"
