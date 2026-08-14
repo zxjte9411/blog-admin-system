@@ -1,6 +1,7 @@
 package com.blogadmin;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.reset;
 
 import com.blogadmin.identity.application.AccountService;
@@ -48,6 +49,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -300,6 +302,62 @@ class ConcurrencyAndTransactionIntegrationTest {
   }
 
   @Test
+  @Timeout(15)
+  void testConcurrentOrphanTagReuseVsCleanup() throws Exception {
+    User author =
+        new User(
+            UUID.randomUUID(),
+            "reusetest@example.com",
+            "reusetest@example.com",
+            "Reuse Author",
+            passwords.encode("Password123!"),
+            "zh-TW");
+    author.verify(Instant.now());
+    users.save(author);
+
+    // Create an existing unreferenced (orphan) tag
+    tags.saveAndFlush(new Tag(UUID.randomUUID(), "OrphanReuseTag"));
+
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    CyclicBarrier barrier = new CyclicBarrier(2);
+
+    // Thread A: create article reusing the orphan tag
+    Callable<ArticleService.ArticleView> createTask =
+        () -> {
+          barrier.await(5, TimeUnit.SECONDS);
+          return articleService.create(
+              author,
+              "Reusing Article",
+              "Content",
+              PublicationStatus.PUBLISHED,
+              null,
+              Set.of("OrphanReuseTag"));
+        };
+
+    // Thread B: maintenance cleanup runs concurrently
+    Callable<Void> cleanupTask =
+        () -> {
+          barrier.await(5, TimeUnit.SECONDS);
+          articleCleanupExecutor.cleanup();
+          return null;
+        };
+
+    Future<ArticleService.ArticleView> f1 = executor.submit(createTask);
+    Future<Void> f2 = executor.submit(cleanupTask);
+
+    ArticleService.ArticleView created = f1.get(10, TimeUnit.SECONDS);
+    f2.get(10, TimeUnit.SECONDS);
+    executor.shutdown();
+
+    assertThat(created).isNotNull();
+    assertThat(created.tagNames()).contains("OrphanReuseTag");
+
+    // The tag must still exist and be properly linked
+    Tag existingTag = tags.findByNameIgnoreCase("OrphanReuseTag").orElseThrow();
+    assertThat(articles.countByTagsId(existingTag.getId())).isEqualTo(1);
+  }
+
+  @Test
   void testArticleQueryBatchFetchingNoNPlusOne() {
     User author =
         new User(
@@ -364,8 +422,7 @@ class ConcurrencyAndTransactionIntegrationTest {
     Article article = articles.findById(view.id()).orElseThrow();
     article.delete();
     // Simulate expired deletedAt
-    org.springframework.test.util.ReflectionTestUtils.setField(
-        article, "deletedAt", Instant.now().minus(35, ChronoUnit.DAYS));
+    ReflectionTestUtils.setField(article, "deletedAt", Instant.now().minus(35, ChronoUnit.DAYS));
     articles.saveAndFlush(article);
 
     // Run cleanup executor
@@ -374,5 +431,67 @@ class ConcurrencyAndTransactionIntegrationTest {
     // Article and orphan tags should be cleaned up
     assertThat(articles.findById(view.id())).isEmpty();
     assertThat(tags.findAll()).isEmpty();
+  }
+
+  @Test
+  void testStartupCleanupRollbackOnFailure() {
+    User author =
+        new User(
+            UUID.randomUUID(),
+            "rollbackauthor@example.com",
+            "rollbackauthor@example.com",
+            "Rollback Author",
+            passwords.encode("Password123!"),
+            "zh-TW");
+    author.verify(Instant.now());
+    users.save(author);
+
+    ArticleService.ArticleView view =
+        articleService.create(
+            author,
+            "Expired Article To Rollback",
+            "Content",
+            PublicationStatus.PUBLISHED,
+            null,
+            Set.of("RollbackTag1"));
+
+    Article article = articles.findById(view.id()).orElseThrow();
+    article.delete();
+    ReflectionTestUtils.setField(article, "deletedAt", Instant.now().minus(35, ChronoUnit.DAYS));
+    articles.saveAndFlush(article);
+
+    // Inject failure into TagRepository during cleanup via standard dynamic proxy
+    TagRepository failingTags =
+        (TagRepository)
+            java.lang.reflect.Proxy.newProxyInstance(
+                TagRepository.class.getClassLoader(),
+                new Class<?>[] {TagRepository.class},
+                (proxy, method, methodArgs) -> {
+                  if ("findCandidateOrphanTagNames".equals(method.getName())) {
+                    throw new IllegalStateException("Simulated crash mid-cleanup transaction");
+                  }
+                  return method.invoke(tags, methodArgs);
+                });
+
+    // Unwrap CGLIB/JDK proxy to access target object
+    ArticleCleanupExecutor targetExecutor =
+        org.springframework.test.util.AopTestUtils.getTargetObject(articleCleanupExecutor);
+    TagRepository originalTags =
+        (TagRepository) ReflectionTestUtils.getField(targetExecutor, "tags");
+    ReflectionTestUtils.setField(targetExecutor, "tags", failingTags);
+
+    try {
+      assertThatThrownBy(() -> articleCleanupExecutor.cleanup())
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("Simulated crash mid-cleanup transaction");
+    } finally {
+      ReflectionTestUtils.setField(targetExecutor, "tags", originalTags);
+    }
+
+    // Verify atomic ROLLBACK: Article and its tags MUST still exist in PostgreSQL
+    Article rolledBackArticle = articles.findById(view.id()).orElse(null);
+    assertThat(rolledBackArticle).isNotNull();
+    assertThat(rolledBackArticle.getDeletedAt()).isNotNull();
+    assertThat(tags.findByNameIgnoreCase("RollbackTag1")).isPresent();
   }
 }

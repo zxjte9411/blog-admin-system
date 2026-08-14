@@ -187,7 +187,6 @@ public class ArticleService {
     a.update(t, c, s);
     replace(a, ids, names);
     Article r = articles.saveAndFlush(a);
-    tags.deleteOrphanTags();
     return view(r);
   }
 
@@ -202,7 +201,6 @@ public class ArticleService {
       throw new ArticleException(ArticleException.Code.NOT_FOUND, "Not found");
     a.delete();
     articles.saveAndFlush(a);
-    tags.deleteOrphanTags();
   }
 
   @Transactional(readOnly = true)
@@ -238,8 +236,6 @@ public class ArticleService {
       throw new ArticleException(ArticleException.Code.NOT_FOUND, "Not found");
     a.getTags().clear();
     articles.delete(a);
-    articles.flush();
-    tags.deleteOrphanTags();
   }
 
   private ArticleView view(Article a) {

@@ -4,6 +4,8 @@ import com.blogadmin.publishing.domain.article.ArticleRepository;
 import com.blogadmin.publishing.domain.tag.TagRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +28,11 @@ public class ArticleCleanupExecutor {
           articles.delete(article);
         });
     articles.flush();
-    tags.deleteOrphanTags();
+    List<String> candidateNames = tags.findCandidateOrphanTagNames();
+    for (String name : candidateNames) {
+      String normalized = name.toLowerCase(Locale.ROOT);
+      tags.lockNormalizedName(normalized);
+      tags.deleteIfOrphan(normalized);
+    }
   }
 }

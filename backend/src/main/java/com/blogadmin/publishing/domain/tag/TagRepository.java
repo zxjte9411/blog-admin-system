@@ -1,5 +1,6 @@
 package com.blogadmin.publishing.domain.tag;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,6 +30,19 @@ public interface TagRepository extends JpaRepository<Tag, UUID> {
     return findByNameIgnoreCase(name)
         .orElseGet(() -> saveAndFlush(new Tag(UUID.randomUUID(), name)));
   }
+
+  @Query(
+      value =
+          "SELECT name FROM tags WHERE id NOT IN (SELECT tag_id FROM article_tags) ORDER BY lower(name)",
+      nativeQuery = true)
+  List<String> findCandidateOrphanTagNames();
+
+  @Modifying
+  @Query(
+      value =
+          "DELETE FROM tags WHERE lower(name) = :lowerName AND id NOT IN (SELECT tag_id FROM article_tags)",
+      nativeQuery = true)
+  int deleteIfOrphan(@Param("lowerName") String lowerName);
 
   @Modifying
   @Query(

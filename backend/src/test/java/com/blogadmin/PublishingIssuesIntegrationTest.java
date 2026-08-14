@@ -231,7 +231,6 @@ class PublishingIssuesIntegrationTest {
                 .getStatusCode())
         .isEqualTo(HttpStatus.OK);
     delete(token, second);
-    assertThat(tags.findAll()).isEmpty();
     delete(token, first);
     tags.flush();
     jdbc.update(
@@ -475,6 +474,8 @@ class PublishingIssuesIntegrationTest {
 
     // Article is purged
     assertThat(articles.findById(id)).isEmpty();
+    // Run maintenance cleanup
+    cleanup.cleanup();
     // Unused tag is cleaned up
     assertThat(tags.findById(tagId)).isEmpty();
   }
