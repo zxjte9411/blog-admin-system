@@ -159,7 +159,7 @@ public class AdminUserService {
     users.lockNormalizedEmail(normalized);
     if (users.findByNormalizedEmail(normalized).isPresent()) throw new AlreadyExistsException();
     String name = displayName == null ? "" : displayName.trim();
-    if (name.length() > 100) name = "";
+    if (name.isEmpty() || name.length() > 100) throw new InvalidInvitationException();
     User user =
         new User(
             UUID.randomUUID(),

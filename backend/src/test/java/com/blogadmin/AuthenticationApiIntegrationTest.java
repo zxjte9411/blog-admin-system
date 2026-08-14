@@ -366,6 +366,24 @@ class AuthenticationApiIntegrationTest {
   }
 
   @Test
+  void googleLoginRejectsInvitationWhenDisplayNameIsInvalid() {
+    InvitationLink blankName = invitation("blank-google-name@example.com");
+    assertGoogleUnauthorized(
+        supabaseToken(UUID.randomUUID().toString(), blankName.invitation().getEmail(), "  ", true),
+        blankName.token());
+    assertThat(invitations.findById(blankName.invitation().getId()).orElseThrow().getUsedAt())
+        .isNull();
+
+    InvitationLink longName = invitation("long-google-name@example.com");
+    assertGoogleUnauthorized(
+        supabaseToken(
+            UUID.randomUUID().toString(), longName.invitation().getEmail(), "x".repeat(101), true),
+        longName.token());
+    assertThat(invitations.findById(longName.invitation().getId()).orElseThrow().getUsedAt())
+        .isNull();
+  }
+
+  @Test
   void googleLoginUserCanResetPasswordWithoutAcceptingInvalidPassword() {
     String email = "google-reset@example.com";
     assertThat(
