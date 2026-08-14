@@ -1,105 +1,65 @@
 package com.blogadmin.identity.web.security;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.math.BigInteger;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.security.KeyFactory;
-import java.security.PublicKey;
-import java.security.Signature;
-import java.security.spec.RSAPublicKeySpec;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Base64;
+import java.util.Map;
+import java.util.Objects;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtAudienceValidator;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.stereotype.Component;
 
 @Component
 public class SupabaseJwtVerifier {
-  private final ObjectMapper objectMapper;
-  private final HttpClient httpClient = HttpClient.newHttpClient();
-  private final String issuer;
-  private final String audience;
-  private final URI jwksUri;
+  private final JwtDecoder decoder;
 
   public SupabaseJwtVerifier(
-      ObjectMapper objectMapper,
       @Value("${app.security.supabase.issuer}") String issuer,
       @Value("${app.security.supabase.audience:authenticated}") String audience,
       @Value("${app.security.supabase.jwks-url}") String jwksUrl) {
-    this.objectMapper = objectMapper;
-    this.issuer = issuer;
-    this.audience = audience;
-    this.jwksUri = URI.create(jwksUrl);
+    NimbusJwtDecoder jwtDecoder =
+        NimbusJwtDecoder.withJwkSetUri(jwksUrl).jwsAlgorithm(SignatureAlgorithm.ES256).build();
+    jwtDecoder.setJwtValidator(
+        new DelegatingOAuth2TokenValidator<>(
+            new JwtIssuerValidator(issuer),
+            new JwtTimestampValidator(Duration.ZERO),
+            new JwtAudienceValidator(audience),
+            new JwtClaimValidator<Instant>("exp", Objects::nonNull)));
+    this.decoder = jwtDecoder;
   }
 
   public Claims verify(String compact) {
     try {
-      if (issuer.isBlank() || audience.isBlank()) throw new IllegalArgumentException();
-      String[] parts = compact.split("\\.", -1);
-      if (parts.length != 3) throw new IllegalArgumentException();
-      JsonNode header = objectMapper.readTree(decode(parts[0]));
-      if (!"RS256".equals(header.path("alg").asText()) || header.path("kid").isMissingNode())
+      Jwt jwt = decoder.decode(compact);
+      String subject = jwt.getSubject();
+      String email = jwt.getClaimAsString("email");
+      Map<String, Object> appMetadata = jwt.getClaimAsMap("app_metadata");
+      Map<String, Object> userMetadata = jwt.getClaimAsMap("user_metadata");
+      boolean emailVerified =
+          Boolean.TRUE.equals(jwt.getClaim("email_verified"))
+              || (userMetadata != null && Boolean.TRUE.equals(userMetadata.get("email_verified")));
+      if (subject == null
+          || subject.isBlank()
+          || email == null
+          || !validEmail(email)
+          || !emailVerified
+          || appMetadata == null
+          || !"google".equals(appMetadata.get("provider"))) {
         throw new IllegalArgumentException();
-      PublicKey key = key(header.path("kid").asText());
-      Signature signature = Signature.getInstance("SHA256withRSA");
-      signature.initVerify(key);
-      signature.update((parts[0] + "." + parts[1]).getBytes(StandardCharsets.US_ASCII));
-      if (!signature.verify(Base64.getUrlDecoder().decode(parts[2])))
-        throw new IllegalArgumentException();
-
-      JsonNode body = objectMapper.readTree(decode(parts[1]));
-      if (!issuer.equals(body.path("iss").asText()) || !audienceMatches(body.path("aud")))
-        throw new IllegalArgumentException();
-      long now = Instant.now().getEpochSecond();
-      if (!body.has("exp") || body.path("exp").asLong() <= now)
-        throw new IllegalArgumentException();
-      if (body.has("nbf") && body.path("nbf").asLong() > now) throw new IllegalArgumentException();
-      String subject = body.path("sub").asText();
-      String email = body.path("email").asText();
-      if (subject.isBlank() || !validEmail(email) || !emailVerified(body))
-        throw new IllegalArgumentException();
-      if (!"google".equals(body.path("app_metadata").path("provider").asText()))
-        throw new IllegalArgumentException();
-      String displayName = body.path("user_metadata").path("name").asText();
+      }
+      String displayName =
+          userMetadata == null ? "" : userMetadata.get("name") instanceof String name ? name : "";
       return new Claims(subject, email, displayName);
     } catch (Exception exception) {
       throw new InvalidTokenException();
     }
-  }
-
-  private PublicKey key(String kid) throws Exception {
-    HttpRequest request =
-        HttpRequest.newBuilder(jwksUri).timeout(Duration.ofSeconds(2)).GET().build();
-    HttpResponse<String> response =
-        httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-    if (response.statusCode() != 200) throw new IllegalArgumentException();
-    for (JsonNode jwk : objectMapper.readTree(response.body()).path("keys")) {
-      if (kid.equals(jwk.path("kid").asText()) && "RSA".equals(jwk.path("kty").asText())) {
-        var modulus = new BigInteger(1, Base64.getUrlDecoder().decode(jwk.path("n").asText()));
-        var exponent = new BigInteger(1, Base64.getUrlDecoder().decode(jwk.path("e").asText()));
-        return KeyFactory.getInstance("RSA")
-            .generatePublic(new RSAPublicKeySpec(modulus, exponent));
-      }
-    }
-    throw new IllegalArgumentException();
-  }
-
-  private boolean audienceMatches(JsonNode audienceClaim) {
-    return audienceClaim.isTextual()
-        ? audience.equals(audienceClaim.asText())
-        : audienceClaim.isArray()
-            && java.util.stream.StreamSupport.stream(audienceClaim.spliterator(), false)
-                .anyMatch(a -> audience.equals(a.asText()));
-  }
-
-  private static boolean emailVerified(JsonNode body) {
-    return body.path("email_verified").asBoolean(false)
-        || body.path("user_metadata").path("email_verified").asBoolean(false);
   }
 
   private static boolean validEmail(String email) {
@@ -108,10 +68,6 @@ public class SupabaseJwtVerifier {
         && email.indexOf('@') == email.lastIndexOf('@')
         && email.indexOf('@') < email.length() - 1
         && email.chars().noneMatch(Character::isWhitespace);
-  }
-
-  private static String decode(String value) {
-    return new String(Base64.getUrlDecoder().decode(value), StandardCharsets.UTF_8);
   }
 
   public record Claims(String subject, String email, String displayName) {}

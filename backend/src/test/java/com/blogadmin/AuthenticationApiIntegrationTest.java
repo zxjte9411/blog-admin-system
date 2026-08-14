@@ -16,6 +16,17 @@ import com.blogadmin.identity.domain.user.UserRepository;
 import com.blogadmin.identity.domain.user.UserRole;
 import com.blogadmin.identity.domain.verification.EmailVerificationTokenRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nimbusds.jose.JOSEObjectType;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.JWSSigner;
+import com.nimbusds.jose.crypto.ECDSASigner;
+import com.nimbusds.jose.crypto.RSASSASigner;
+import com.nimbusds.jose.jwk.Curve;
+import com.nimbusds.jose.jwk.ECKey;
+import com.nimbusds.jose.jwk.KeyUse;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
 import com.sun.net.httpserver.HttpServer;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -24,10 +35,12 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
-import java.security.Signature;
+import java.security.interfaces.ECPrivateKey;
+import java.security.interfaces.ECPublicKey;
+import java.security.spec.ECGenParameterSpec;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Base64;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -59,7 +72,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class AuthenticationApiIntegrationTest {
   private static final String PASSWORD = "safe-password";
-  private static final KeyPair GOOGLE_KEY = keyPair();
+  private static final ECKey GOOGLE_KEY = ecKey();
+  private static final KeyPair RS256_KEY = rsaKeyPair();
   private static final HttpServer JWKS_SERVER = jwksServer();
 
   @Container
@@ -186,6 +200,7 @@ class AuthenticationApiIntegrationTest {
     int signatureStart = valid.lastIndexOf('.') + 1;
     assertGoogleUnauthorized(
         valid.substring(0, signatureStart) + "!" + valid.substring(signatureStart + 1));
+    assertGoogleUnauthorized(rs256SupabaseToken(subject, "claims@example.com"));
     assertGoogleUnauthorized(
         supabaseToken(
             subject,
@@ -685,7 +700,23 @@ class AuthenticationApiIntegrationTest {
     return "http://localhost:" + port + path;
   }
 
-  private static KeyPair keyPair() {
+  private static ECKey ecKey() {
+    try {
+      KeyPairGenerator generator = KeyPairGenerator.getInstance("EC");
+      generator.initialize(new ECGenParameterSpec("secp256r1"));
+      KeyPair keyPair = generator.generateKeyPair();
+      return new ECKey.Builder(Curve.P_256, (ECPublicKey) keyPair.getPublic())
+          .privateKey((ECPrivateKey) keyPair.getPrivate())
+          .keyID("google-test")
+          .algorithm(JWSAlgorithm.ES256)
+          .keyUse(KeyUse.SIGNATURE)
+          .build();
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
+  }
+
+  private static KeyPair rsaKeyPair() {
     try {
       var generator = KeyPairGenerator.getInstance("RSA");
       generator.initialize(2048);
@@ -698,30 +729,12 @@ class AuthenticationApiIntegrationTest {
   private static HttpServer jwksServer() {
     try {
       HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-      String modulus =
-          Base64.getUrlEncoder()
-              .withoutPadding()
-              .encodeToString(
-                  ((java.security.interfaces.RSAPublicKey) GOOGLE_KEY.getPublic())
-                      .getModulus()
-                      .toByteArray());
-      String exponent =
-          Base64.getUrlEncoder()
-              .withoutPadding()
-              .encodeToString(
-                  ((java.security.interfaces.RSAPublicKey) GOOGLE_KEY.getPublic())
-                      .getPublicExponent()
-                      .toByteArray());
+      byte[] body =
+          new ObjectMapper()
+              .writeValueAsBytes(Map.of("keys", List.of(GOOGLE_KEY.toPublicJWK().toJSONObject())));
       server.createContext(
           "/",
           exchange -> {
-            byte[] body =
-                ("{\"keys\":[{\"kty\":\"RSA\",\"kid\":\"google-test\",\"alg\":\"RS256\",\"use\":\"sig\",\"n\":\""
-                        + modulus
-                        + "\",\"e\":\""
-                        + exponent
-                        + "\"}]}")
-                    .getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, body.length);
             try (var output = exchange.getResponseBody()) {
               output.write(body);
@@ -792,45 +805,78 @@ class AuthenticationApiIntegrationTest {
       boolean emailVerified,
       String displayName) {
     long now = Instant.now().getEpochSecond();
-    String header = base64("{\"alg\":\"RS256\",\"kid\":\"google-test\",\"typ\":\"JWT\"}");
-    String payload =
-        base64(
-            "{\"iss\":\""
-                + issuer
-                + "\",\"aud\":\""
-                + audience
-                + "\",\"sub\":\""
-                + subject
-                + "\",\"email\":\""
-                + email
-                + "\",\"email_verified\":"
-                + emailVerified
-                + ",\"app_metadata\":{\"provider\":\""
-                + provider
-                + "\"},\"user_metadata\":"
-                + (displayName == null ? "{}" : "{\"name\":\"" + displayName + "\"}")
-                + ",\"nbf\":"
-                + (now + notBeforeOffset)
-                + ",\"exp\":"
-                + (now + expiresIn)
-                + "}");
+    JWTClaimsSet claims =
+        claims(
+            subject,
+            email,
+            issuer,
+            audience,
+            expiresIn,
+            notBeforeOffset,
+            provider,
+            emailVerified,
+            displayName,
+            now);
     try {
-      String signingInput = header + "." + payload;
-      Signature signature = Signature.getInstance("SHA256withRSA");
-      signature.initSign(GOOGLE_KEY.getPrivate());
-      signature.update(signingInput.getBytes(StandardCharsets.US_ASCII));
-      return signingInput
-          + "."
-          + Base64.getUrlEncoder().withoutPadding().encodeToString(signature.sign());
+      return signedToken(claims, JWSAlgorithm.ES256, new ECDSASigner(GOOGLE_KEY.toECPrivateKey()));
     } catch (Exception exception) {
       throw new IllegalStateException(exception);
     }
   }
 
-  private static String base64(String value) {
-    return Base64.getUrlEncoder()
-        .withoutPadding()
-        .encodeToString(value.getBytes(StandardCharsets.UTF_8));
+  private static String rs256SupabaseToken(String subject, String email) {
+    long now = Instant.now().getEpochSecond();
+    return signedToken(
+        claims(
+            subject,
+            email,
+            "https://example.supabase.co/auth/v1",
+            "authenticated",
+            300,
+            -1,
+            "google",
+            true,
+            "Google User",
+            now),
+        JWSAlgorithm.RS256,
+        new RSASSASigner(RS256_KEY.getPrivate()));
+  }
+
+  private static JWTClaimsSet claims(
+      String subject,
+      String email,
+      String issuer,
+      String audience,
+      long expiresIn,
+      long notBeforeOffset,
+      String provider,
+      boolean emailVerified,
+      String displayName,
+      long now) {
+    return new JWTClaimsSet.Builder()
+        .issuer(issuer)
+        .audience(audience)
+        .subject(subject)
+        .claim("email", email)
+        .claim("email_verified", emailVerified)
+        .claim("app_metadata", Map.of("provider", provider))
+        .claim("user_metadata", displayName == null ? Map.of() : Map.of("name", displayName))
+        .notBeforeTime(Date.from(Instant.ofEpochSecond(now + notBeforeOffset)))
+        .expirationTime(Date.from(Instant.ofEpochSecond(now + expiresIn)))
+        .build();
+  }
+
+  private static String signedToken(JWTClaimsSet claims, JWSAlgorithm algorithm, JWSSigner signer) {
+    SignedJWT token =
+        new SignedJWT(
+            new JWSHeader.Builder(algorithm).keyID("google-test").type(JOSEObjectType.JWT).build(),
+            claims);
+    try {
+      token.sign(signer);
+      return token.serialize();
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
   }
 
   private void assertGoogleUnauthorized(String token) {

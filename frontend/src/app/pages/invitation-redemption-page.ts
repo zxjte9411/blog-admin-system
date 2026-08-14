@@ -44,7 +44,9 @@ export class InvitationRedemptionPage extends FormUseCase implements OnInit {
   }
 
   ngOnInit() {
-    if (this.token && this.router.parseUrl(this.router.url).queryParams['code']) {
+    const hasCodeCallback = this.router.parseUrl(this.router.url).queryParams['code'];
+    const hasImplicitCallback = window.location.hash.includes('access_token=');
+    if (this.token && (hasCodeCallback || hasImplicitCallback)) {
       void this.restoreSupabaseSession();
     }
   }
