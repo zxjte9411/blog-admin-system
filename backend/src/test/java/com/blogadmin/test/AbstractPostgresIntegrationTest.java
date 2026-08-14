@@ -9,6 +9,19 @@ import org.testcontainers.containers.PostgreSQLContainer;
 /**
  * Common base class for integration tests requiring a live PostgreSQL instance. Manages a singleton
  * PostgreSQL Testcontainer reused across all integration test suites.
+ *
+ * <p><strong>Maintenance Contract &amp; Invariants:</strong>
+ *
+ * <ul>
+ *   <li><strong>No Unprotected Parallel Execution:</strong> Integration tests sharing this database
+ *       instance must not run concurrently without isolation. Each test suite relies on {@link
+ *       #resetDatabase(JdbcTemplate)} to truncate shared tables; concurrent test execution would
+ *       cause cross-test data loss and flakiness.
+ *   <li><strong>Schema Evolution Maintenance:</strong> Whenever a new persistent application table
+ *       or Liquibase migration is added, maintainers must review and update {@link
+ *       #resetDatabase(JdbcTemplate)} to include the new table in the {@code TRUNCATE TABLE ...
+ *       CASCADE} list and reset any static/seed state.
+ * </ul>
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public abstract class AbstractPostgresIntegrationTest {
@@ -33,6 +46,9 @@ public abstract class AbstractPostgresIntegrationTest {
   /**
    * Resets all application tables in PostgreSQL to a clean state while preserving schema and
    * default settings.
+   *
+   * <p>Invariant: Must be updated whenever new persistent application tables or Liquibase
+   * migrations are introduced to maintain test isolation.
    */
   public static void resetDatabase(JdbcTemplate jdbcTemplate) {
     jdbcTemplate.execute(

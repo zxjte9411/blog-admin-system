@@ -26,11 +26,14 @@ import com.blogadmin.publishing.domain.tag.Tag;
 import com.blogadmin.publishing.domain.tag.TagRepository;
 import com.blogadmin.test.AbstractPostgresIntegrationTest;
 import jakarta.persistence.EntityManagerFactory;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -248,8 +251,12 @@ class ConcurrencyAndTransactionIntegrationTest extends AbstractPostgresIntegrati
     }
 
     // Neither task should have failed with an unexpected error
-    assertThat(r1.status()).isNotEqualTo(RedeemStatus.UNEXPECTED_FAILURE);
-    assertThat(r2.status()).isNotEqualTo(RedeemStatus.UNEXPECTED_FAILURE);
+    assertThat(r1.status())
+        .as("Redeem task 1 failed unexpectedly: %s", r1.exception())
+        .isNotEqualTo(RedeemStatus.UNEXPECTED_FAILURE);
+    assertThat(r2.status())
+        .as("Redeem task 2 failed unexpectedly: %s", r2.exception())
+        .isNotEqualTo(RedeemStatus.UNEXPECTED_FAILURE);
 
     // Exactly one redeem must succeed, the other must be expected rejection
     boolean oneSucceeded =
@@ -517,7 +524,7 @@ class ConcurrencyAndTransactionIntegrationTest extends AbstractPostgresIntegrati
     Tag tagNlp = tagRepository.saveAndFlush(new Tag(UUID.randomUUID(), "自然語言處理"));
 
     Set<String> tagSet1 = Set.of("café", "résumé", "Über", "自然語言處理");
-    Set<String> tagSet2 = Set.of("CAFÉ", "RÉSUMÉ", "über", "架構設計");
+    Set<String> tagSet2 = Set.of("CAFÉ", "RÉSUMÉ", "über", "自然語言處理", "架構設計");
 
     CountDownLatch cleanupDiscoveredCandidates = new CountDownLatch(1);
     CountDownLatch articleStartedLocking = new CountDownLatch(1);
@@ -538,19 +545,37 @@ class ConcurrencyAndTransactionIntegrationTest extends AbstractPostgresIntegrati
                 TagRepository.class.getClassLoader(),
                 new Class<?>[] {TagRepository.class},
                 (proxy, method, args) -> {
-                  if ("findCandidateOrphanTagNames".equals(method.getName())) {
-                    @SuppressWarnings("unchecked")
-                    List<String> result = (List<String>) method.invoke(originalCleanupTags, args);
-                    discoveredCandidatesRef.set(result);
-                    cleanupDiscoveredCandidates.countDown();
-                    // Wait until article thread starts acquiring the first lock
-                    articleStartedLocking.await(5, TimeUnit.SECONDS);
-                    return result;
+                  if (method.isDefault()) {
+                    return InvocationHandler.invokeDefault(proxy, method, args);
                   }
-                  if ("lockNormalizedName".equals(method.getName()) && "café".equals(args[0])) {
-                    cleanupAttemptedFirstLock.countDown();
+                  try {
+                    if ("findCandidateOrphanTagNames".equals(method.getName())) {
+                      @SuppressWarnings("unchecked")
+                      List<String> result = (List<String>) method.invoke(originalCleanupTags, args);
+                      discoveredCandidatesRef.set(result);
+                      cleanupDiscoveredCandidates.countDown();
+                      // Wait until article thread starts acquiring the first lock
+                      awaitLatch(
+                          articleStartedLocking,
+                          5,
+                          TimeUnit.SECONDS,
+                          "article thread did not start acquiring first tag lock ('café')");
+                      return result;
+                    }
+                    if ("lockNormalizedName".equals(method.getName()) && "café".equals(args[0])) {
+                      cleanupAttemptedFirstLock.countDown();
+                    }
+                    return method.invoke(originalCleanupTags, args);
+                  } catch (InvocationTargetException e) {
+                    Throwable targetException = e.getTargetException();
+                    if (targetException instanceof RuntimeException runtimeException) {
+                      throw runtimeException;
+                    }
+                    if (targetException instanceof Error error) {
+                      throw error;
+                    }
+                    throw new RuntimeException("Invocation target failed", targetException);
                   }
-                  return method.invoke(originalCleanupTags, args);
                 });
 
     TagRepository proxyArticleTags =
@@ -559,94 +584,137 @@ class ConcurrencyAndTransactionIntegrationTest extends AbstractPostgresIntegrati
                 TagRepository.class.getClassLoader(),
                 new Class<?>[] {TagRepository.class},
                 (proxy, method, args) -> {
-                  if ("lockNormalizedName".equals(method.getName()) && "café".equals(args[0])) {
-                    // Acquire first lock in article transaction
-                    Object result = method.invoke(originalArticleTags, args);
-                    articleStartedLocking.countDown();
-                    // Ensure cleanup thread reaches and attempts the first lock concurrently
-                    cleanupAttemptedFirstLock.await(5, TimeUnit.SECONDS);
-                    return result;
+                  if (method.isDefault()) {
+                    return InvocationHandler.invokeDefault(proxy, method, args);
                   }
-                  return method.invoke(originalArticleTags, args);
+                  try {
+                    if ("lockNormalizedName".equals(method.getName()) && "café".equals(args[0])) {
+                      // Acquire first lock in article transaction
+                      Object result = method.invoke(originalArticleTags, args);
+                      articleStartedLocking.countDown();
+                      // Ensure cleanup thread reaches and attempts the first lock concurrently
+                      awaitLatch(
+                          cleanupAttemptedFirstLock,
+                          5,
+                          TimeUnit.SECONDS,
+                          "cleanup thread did not attempt first tag lock ('café') concurrently");
+                      return result;
+                    }
+                    return method.invoke(originalArticleTags, args);
+                  } catch (InvocationTargetException e) {
+                    Throwable targetException = e.getTargetException();
+                    if (targetException instanceof RuntimeException runtimeException) {
+                      throw runtimeException;
+                    }
+                    if (targetException instanceof Error error) {
+                      throw error;
+                    }
+                    throw new RuntimeException("Invocation target failed", targetException);
+                  }
                 });
 
-    ReflectionTestUtils.setField(targetExecutor, "tagRepository", proxyCleanupTags);
-    ReflectionTestUtils.setField(targetArticleService, "tagRepository", proxyArticleTags);
+    try {
+      ReflectionTestUtils.setField(targetExecutor, "tagRepository", proxyCleanupTags);
+      ReflectionTestUtils.setField(targetArticleService, "tagRepository", proxyArticleTags);
 
-    try (ExecutorService executor = Executors.newFixedThreadPool(3)) {
-      Callable<ArticleService.ArticleView> t1 =
-          () -> {
-            cleanupDiscoveredCandidates.await(5, TimeUnit.SECONDS);
-            return articleService.create(
-                author,
-                "Article Concurrent 1",
-                "Content 1",
-                PublicationStatus.PUBLISHED,
-                null,
-                tagSet1);
-          };
+      try (ExecutorService executor = Executors.newFixedThreadPool(3)) {
+        Callable<ArticleService.ArticleView> t1 =
+            () -> {
+              awaitLatch(
+                  cleanupDiscoveredCandidates,
+                  5,
+                  TimeUnit.SECONDS,
+                  "cleanup thread did not complete candidate discovery before article 1 creation");
+              return articleService.create(
+                  author,
+                  "Article Concurrent 1",
+                  "Content 1",
+                  PublicationStatus.PUBLISHED,
+                  null,
+                  tagSet1);
+            };
 
-      Callable<ArticleService.ArticleView> t2 =
-          () -> {
-            cleanupDiscoveredCandidates.await(5, TimeUnit.SECONDS);
-            return articleService.create(
-                author,
-                "Article Concurrent 2",
-                "Content 2",
-                PublicationStatus.PUBLISHED,
-                null,
-                tagSet2);
-          };
+        Callable<ArticleService.ArticleView> t2 =
+            () -> {
+              awaitLatch(
+                  cleanupDiscoveredCandidates,
+                  5,
+                  TimeUnit.SECONDS,
+                  "cleanup thread did not complete candidate discovery before article 2 creation");
+              return articleService.create(
+                  author,
+                  "Article Concurrent 2",
+                  "Content 2",
+                  PublicationStatus.PUBLISHED,
+                  null,
+                  tagSet2);
+            };
 
-      Callable<Void> t3 =
-          () -> {
-            articleCleanupExecutor.cleanup();
-            return null;
-          };
+        Callable<Void> t3 =
+            () -> {
+              articleCleanupExecutor.cleanup();
+              return null;
+            };
 
-      Future<ArticleService.ArticleView> f1 = executor.submit(t1);
-      Future<ArticleService.ArticleView> f2 = executor.submit(t2);
-      Future<Void> f3 = executor.submit(t3);
+        Future<ArticleService.ArticleView> f1 = executor.submit(t1);
+        Future<ArticleService.ArticleView> f2 = executor.submit(t2);
+        Future<Void> f3 = executor.submit(t3);
 
-      ArticleService.ArticleView r1 = f1.get(10, TimeUnit.SECONDS);
-      ArticleService.ArticleView r2 = f2.get(10, TimeUnit.SECONDS);
-      f3.get(10, TimeUnit.SECONDS);
+        ArticleService.ArticleView r1 = f1.get(10, TimeUnit.SECONDS);
+        ArticleService.ArticleView r2 = f2.get(10, TimeUnit.SECONDS);
+        f3.get(10, TimeUnit.SECONDS);
 
-      // 1. Verify cleanup candidate discovery actually saw the orphan tags
-      assertThat(discoveredCandidatesRef.get()).contains("café", "résumé", "Über", "自然語言處理");
+        // 1. Verify cleanup candidate discovery actually saw the orphan tags
+        assertThat(discoveredCandidatesRef.get()).contains("café", "résumé", "Über", "自然語言處理");
 
-      // 2. Verify articles were created successfully without deadlock
-      assertThat(r1).isNotNull();
-      assertThat(r2).isNotNull();
-      assertThat(r1.tagNames()).containsExactlyInAnyOrder("café", "résumé", "Über", "自然語言處理");
-      assertThat(r2.tagNames()).contains("架構設計");
+        // 2. Verify articles were created successfully without deadlock
+        assertThat(r1).isNotNull();
+        assertThat(r2).isNotNull();
+        assertThat(r1.tagNames()).containsExactlyInAnyOrder("café", "résumé", "Über", "自然語言處理");
+        assertThat(r2.tagNames()).contains("架構設計");
 
-      // 3. Verify reused tags were not deleted by cleanup
-      Tag persistedCafe = tagRepository.findByNameIgnoreCase("café").orElseThrow();
-      Tag persistedResume = tagRepository.findByNameIgnoreCase("résumé").orElseThrow();
-      Tag persistedUber = tagRepository.findByNameIgnoreCase("über").orElseThrow();
-      Tag persistedNlp = tagRepository.findByNameIgnoreCase("自然語言處理").orElseThrow();
+        // 3. Verify reused tags were not deleted by cleanup
+        Tag persistedCafe = tagRepository.findByNameIgnoreCase("café").orElseThrow();
+        Tag persistedResume = tagRepository.findByNameIgnoreCase("résumé").orElseThrow();
+        Tag persistedUber = tagRepository.findByNameIgnoreCase("über").orElseThrow();
+        Tag persistedNlp = tagRepository.findByNameIgnoreCase("自然語言處理").orElseThrow();
 
-      assertThat(persistedCafe.getId()).isEqualTo(tagCafe.getId());
-      assertThat(persistedResume.getId()).isEqualTo(tagResume.getId());
-      assertThat(persistedUber.getId()).isEqualTo(tagUber.getId());
-      assertThat(persistedNlp.getId()).isEqualTo(tagNlp.getId());
+        assertThat(persistedCafe.getId()).isEqualTo(tagCafe.getId());
+        assertThat(persistedResume.getId()).isEqualTo(tagResume.getId());
+        assertThat(persistedUber.getId()).isEqualTo(tagUber.getId());
+        assertThat(persistedNlp.getId()).isEqualTo(tagNlp.getId());
 
-      // 4. Verify no duplicate tag entities created for case-insensitive variants
-      List<Tag> allTags = tagRepository.findAll();
-      assertThat(allTags).hasSize(5);
+        // 4. Verify no duplicate tag entities created for case-insensitive variants
+        List<Tag> allTags = tagRepository.findAll();
+        assertThat(allTags).hasSize(5);
 
-      // 5. Verify article_tags relationships are accurately linked in DB
-      assertThat(articleRepository.countByTagsId(persistedCafe.getId())).isEqualTo(2);
-      assertThat(articleRepository.countByTagsId(persistedResume.getId())).isEqualTo(2);
-      assertThat(articleRepository.countByTagsId(persistedUber.getId())).isEqualTo(2);
-      assertThat(articleRepository.countByTagsId(persistedNlp.getId())).isEqualTo(1);
+        // 5. Verify article_tags relationships are accurately linked in DB
+        assertThat(articleRepository.countByTagsId(persistedCafe.getId())).isEqualTo(2);
+        assertThat(articleRepository.countByTagsId(persistedResume.getId())).isEqualTo(2);
+        assertThat(articleRepository.countByTagsId(persistedUber.getId())).isEqualTo(2);
+        assertThat(articleRepository.countByTagsId(persistedNlp.getId())).isEqualTo(2);
 
-      Tag persistedArch = tagRepository.findByNameIgnoreCase("架構設計").orElseThrow();
-      assertThat(articleRepository.countByTagsId(persistedArch.getId())).isEqualTo(1);
+        Tag persistedArch = tagRepository.findByNameIgnoreCase("架構設計").orElseThrow();
+        assertThat(articleRepository.countByTagsId(persistedArch.getId())).isEqualTo(1);
+      }
     } finally {
       ReflectionTestUtils.setField(targetExecutor, "tagRepository", originalCleanupTags);
       ReflectionTestUtils.setField(targetArticleService, "tagRepository", originalArticleTags);
+    }
+  }
+
+  private static void awaitLatch(
+      CountDownLatch latch, long timeout, TimeUnit unit, String stageDescription)
+      throws InterruptedException {
+    boolean completed = latch.await(timeout, unit);
+    if (!completed) {
+      throw new IllegalStateException(
+          "Synchronization timeout: "
+              + stageDescription
+              + " did not complete within "
+              + timeout
+              + " "
+              + unit.name().toLowerCase(Locale.ROOT));
     }
   }
 }
