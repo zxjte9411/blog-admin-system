@@ -14,8 +14,6 @@ import com.blogadmin.identity.domain.user.UserRepository;
 import com.blogadmin.identity.domain.verification.EmailVerificationTokenRepository;
 import com.blogadmin.publishing.domain.article.ArticleRepository;
 import com.blogadmin.publishing.domain.tag.TagRepository;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -77,9 +75,9 @@ class BlogAdminApplicationTests {
   }
 
   @Test
-  void liquibaseMasterChangelogExists() {
-    assertThat(Files.exists(Path.of("src/main/resources/db/changelog/db.changelog-master.yaml")))
-        .isTrue();
+  void liquibaseMasterChangelogExistsOnClasspath() {
+    assertThat(getClass().getResourceAsStream("/db/changelog/db.changelog-master.yaml"))
+        .isNotNull();
   }
 
   @Test

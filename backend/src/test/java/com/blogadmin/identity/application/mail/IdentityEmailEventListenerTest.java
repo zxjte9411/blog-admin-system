@@ -17,10 +17,12 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 
 class IdentityEmailEventListenerTest {
-  private JavaMailSender mailSender;
-  private IdentityEmailEventListener listener;
+
   private static final String FROM = "dev@example.com";
   private static final String FRONTEND_URL = "http://localhost:4200";
+
+  private JavaMailSender mailSender;
+  private IdentityEmailEventListener listener;
 
   @BeforeEach
   void setUp() {
@@ -36,10 +38,7 @@ class IdentityEmailEventListenerTest {
 
     listener.handle(event);
 
-    ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
-    verify(mailSender).send(captor.capture());
-    SimpleMailMessage message = captor.getValue();
-
+    SimpleMailMessage message = captureSentMessage();
     assertThat(message.getTo()).containsExactly("alice@example.com");
     assertThat(message.getSubject()).isEqualTo("Verify your email");
     assertThat(message.getText())
@@ -58,10 +57,7 @@ class IdentityEmailEventListenerTest {
 
     listener.handle(event);
 
-    ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
-    verify(mailSender).send(captor.capture());
-    SimpleMailMessage message = captor.getValue();
-
+    SimpleMailMessage message = captureSentMessage();
     assertThat(message.getTo()).containsExactly("bob@example.com");
     assertThat(message.getSubject()).isEqualTo("驗證您的 Email");
     assertThat(message.getText())
@@ -79,10 +75,7 @@ class IdentityEmailEventListenerTest {
 
     listener.handle(event);
 
-    ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
-    verify(mailSender).send(captor.capture());
-    SimpleMailMessage message = captor.getValue();
-
+    SimpleMailMessage message = captureSentMessage();
     assertThat(message.getTo()).containsExactly("charlie@example.com");
     assertThat(message.getSubject()).isEqualTo("Password reset / 密碼重設");
     assertThat(message.getText()).contains(FRONTEND_URL + "/reset-password?token=").contains(token);
@@ -96,10 +89,7 @@ class IdentityEmailEventListenerTest {
 
     listener.handle(event);
 
-    ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
-    verify(mailSender).send(captor.capture());
-    SimpleMailMessage message = captor.getValue();
-
+    SimpleMailMessage message = captureSentMessage();
     assertThat(message.getTo()).containsExactly("david@example.com");
     assertThat(message.getSubject()).isEqualTo("Invitation / 邀請");
     assertThat(message.getText())
@@ -116,10 +106,7 @@ class IdentityEmailEventListenerTest {
 
     listener.handle(event);
 
-    ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
-    verify(mailSender).send(captor.capture());
-    SimpleMailMessage message = captor.getValue();
-
+    SimpleMailMessage message = captureSentMessage();
     assertThat(message.getTo()).containsExactly("new-email@example.com");
     assertThat(message.getSubject()).isEqualTo("Email change / Email 變更");
     assertThat(message.getText()).contains(FRONTEND_URL + "/confirm-email?token=").contains(token);
@@ -132,10 +119,7 @@ class IdentityEmailEventListenerTest {
 
     listener.handle(event);
 
-    ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
-    verify(mailSender).send(captor.capture());
-    SimpleMailMessage message = captor.getValue();
-
+    SimpleMailMessage message = captureSentMessage();
     assertThat(message.getTo()).containsExactly("old-email@example.com");
     assertThat(message.getSubject()).isEqualTo("Email changed / Email 已變更");
     assertThat(message.getText()).contains("Your email was changed.").contains("您的 Email 已變更。");
@@ -170,5 +154,11 @@ class IdentityEmailEventListenerTest {
     } finally {
       logger.detachAppender(appender);
     }
+  }
+
+  private SimpleMailMessage captureSentMessage() {
+    ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+    verify(mailSender).send(captor.capture());
+    return captor.getValue();
   }
 }
