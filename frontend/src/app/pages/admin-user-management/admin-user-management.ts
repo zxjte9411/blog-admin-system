@@ -24,6 +24,8 @@ export class AdminUserManagement {
   @Input() adminLabel = '';
   @Input() enabledLabel = '';
   @Input() disabledLabel = '';
+  @Input() enableActionLabel = '';
+  @Input() disableActionLabel = '';
   @Input() statusLabel = '';
   @Input() toggleLabel = '';
   @Input() updateLabel = '';
@@ -41,5 +43,12 @@ export class AdminUserManagement {
 
   stateText(row: Row) {
     return row['enabled'] === true ? this.enabledLabel : this.disabledLabel;
+  }
+
+  actionText(row: Row) {
+    if (row['enabled'] === true) {
+      return this.disableActionLabel || this.disabledLabel;
+    }
+    return this.enableActionLabel || this.enabledLabel;
   }
 }

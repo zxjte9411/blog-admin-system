@@ -490,7 +490,9 @@ export class AdminPage implements OnInit {
     this.message = this.language.t.success;
     this.cdr.markForCheck();
     this.form.markAsPristine();
-    if (this.routeKey === 'articles/new') void this.router.navigateByUrl('/articles');
+    if (this.routeKey === 'articles/new' || this.routeKey === 'articles/:id/edit') {
+      void this.router.navigateByUrl('/articles');
+    }
   }
   get title() {
     this.language.lang();

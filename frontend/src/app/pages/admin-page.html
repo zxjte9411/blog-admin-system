@@ -47,6 +47,13 @@
     @if (routeKey === 'admin/invitations') {
       <p class="field-hint">{{ language.t.invitationHint }}</p>
     }
+    @if (routeKey === 'articles/:id/edit' && form.get('version')?.value) {
+      <div class="article-meta-bar">
+        <span class="version-badge"
+          >{{ language.t.field.version }}: v{{ form.get('version')?.value }}</span
+        >
+      </div>
+    }
     <form
       class="admin-form"
       [class.article-form]="routeKey === 'articles/new' || routeKey === 'articles/:id/edit'"
@@ -56,8 +63,11 @@
       [formGroup]="form"
       (ngSubmit)="submit()"
     >
+      @if (form.get('version')) {
+        <input type="hidden" formControlName="version" id="field-version" />
+      }
       @for (field of form.controls | keyvalue; track field.key) {
-        @if (field.key !== 'status') {
+        @if (field.key !== 'status' && field.key !== 'version') {
           <label [attr.for]="'field-' + field.key"
             >{{ fieldLabel(field.key) }}
             @if (field.key === 'content') {
@@ -76,6 +86,7 @@
                 class="control"
                 [class.title-control]="field.key === 'title'"
                 [id]="'field-' + field.key"
+                [name]="field.key"
                 [type]="field.key === 'email' ? 'email' : field.key === 'value' ? 'number' : 'text'"
                 [attr.min]="field.key === 'value' ? 8 : null"
                 [attr.max]="field.key === 'value' ? 128 : null"
@@ -215,6 +226,8 @@
       [adminLabel]="language.t.roles.ADMIN"
       [enabledLabel]="language.t.enabled"
       [disabledLabel]="language.t.disabled"
+      [enableActionLabel]="language.t.enableAction"
+      [disableActionLabel]="language.t.disableAction"
       [statusLabel]="language.t.field.status"
       [toggleLabel]="language.t.toggle"
       [updateLabel]="language.t.update"

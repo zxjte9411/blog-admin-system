@@ -71,9 +71,9 @@
                     [class.danger]="row['enabled'] === true"
                     type="button"
                     (click)="toggleRow.emit(row)"
-                    [attr.aria-label]="toggleLabel + ' ' + row['displayName']"
+                    [attr.aria-label]="actionText(row) + ' ' + (row['displayName'] || row['email'])"
                   >
-                    {{ row['enabled'] === true ? disabledLabel : enabledLabel }}
+                    {{ actionText(row) }}
                   </button>
                 } @else {
                   <span>—</span>
