@@ -14,8 +14,7 @@ import com.blogadmin.identity.domain.user.User;
 import com.blogadmin.identity.domain.user.UserRepository;
 import com.blogadmin.identity.domain.user.UserRole;
 import com.blogadmin.identity.domain.verification.EmailVerificationTokenRepository;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
+import com.blogadmin.test.AbstractPostgresIntegrationTest;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
@@ -24,7 +23,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpEntity;
@@ -37,18 +35,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-@Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class AdminUserApiIntegrationTest {
-  @Container
-  static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+class AdminUserApiIntegrationTest extends AbstractPostgresIntegrationTest {
 
   @LocalServerPort private int port;
   @Autowired private TestRestTemplate testRestTemplate;
@@ -60,27 +49,12 @@ class AdminUserApiIntegrationTest {
   @Autowired private EmailVerificationTokenRepository emailVerificationTokenRepository;
   @Autowired private RefreshSessionRepository refreshSessionRepository;
   @Autowired private RateLimitEventRepository rateLimitEventRepository;
-  @PersistenceContext private EntityManager entityManager;
   @MockitoBean private JavaMailSender mailSender;
   @Autowired private JdbcTemplate jdbcTemplate;
 
-  @DynamicPropertySource
-  static void database(DynamicPropertyRegistry registry) {
-    registry.add("spring.datasource.url", postgres::getJdbcUrl);
-    registry.add("spring.datasource.username", postgres::getUsername);
-    registry.add("spring.datasource.password", postgres::getPassword);
-    registry.add("app.security.jwt-secret", () -> "test-secret-that-is-at-least-32-bytes-long");
-  }
-
   @BeforeEach
   void clearDatabase() {
-    refreshSessionRepository.deleteAll();
-    emailVerificationTokenRepository.deleteAll();
-    rateLimitEventRepository.deleteAll();
-    invitationRepository.deleteAll();
-    jdbcTemplate.execute("TRUNCATE TABLE password_setting_changes");
-    userRepository.deleteAll();
-    jdbcTemplate.update("UPDATE password_settings SET minimum_length = 8 WHERE id = TRUE");
+    resetDatabase(jdbcTemplate);
     reset(mailSender);
   }
 
@@ -338,7 +312,7 @@ class AdminUserApiIntegrationTest {
   }
 
   @Test
-  void reads_the_current_password_minimum_length() {
+  void readsCurrentPasswordMinimumLength() {
     User admin = createUser(UserRole.ADMIN, true);
     String token = login(admin);
     ResponseEntity<Map> response =

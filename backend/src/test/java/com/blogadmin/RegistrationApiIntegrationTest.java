@@ -3,6 +3,7 @@ package com.blogadmin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
@@ -12,6 +13,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.blogadmin.identity.application.mail.IdentityEmailEventListener;
 import com.blogadmin.identity.domain.user.User;
 import com.blogadmin.identity.domain.user.UserRepository;
+import com.blogadmin.test.AbstractPostgresIntegrationTest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
@@ -22,10 +24,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpEntity;
@@ -36,19 +38,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-@Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class RegistrationApiIntegrationTest {
-  @Container
-  static PostgreSQLContainer<?> postgres =
-      new PostgreSQLContainer<>("postgres:16-alpine").withDatabaseName("blog_admin");
+class RegistrationApiIntegrationTest extends AbstractPostgresIntegrationTest {
 
   @LocalServerPort private int port;
   @Autowired private TestRestTemplate restTemplate;
@@ -57,17 +49,10 @@ class RegistrationApiIntegrationTest {
   @Autowired private UserRepository userRepository;
   @MockitoBean private JavaMailSender mailSender;
 
-  @DynamicPropertySource
-  static void database(DynamicPropertyRegistry registry) {
-    registry.add("spring.datasource.url", postgres::getJdbcUrl);
-    registry.add("spring.datasource.username", postgres::getUsername);
-    registry.add("spring.datasource.password", postgres::getPassword);
-    registry.add("app.security.jwt-secret", () -> "test-secret-that-is-at-least-32-bytes-long");
-  }
-
-  @org.junit.jupiter.api.BeforeEach
+  @BeforeEach
   void setUp() {
-    jdbcTemplate.update("DELETE FROM auth_rate_limit_events");
+    resetDatabase(jdbcTemplate);
+    reset(mailSender);
   }
 
   @Test
@@ -240,8 +225,7 @@ class RegistrationApiIntegrationTest {
   void rateLimitOnlyConsumesAllowedRequestsAndKeepsBucketsIsolatedUnderConcurrency()
       throws Exception {
     jdbcTemplate.update("DELETE FROM auth_rate_limit_events");
-    ExecutorService executor = Executors.newFixedThreadPool(8);
-    try {
+    try (ExecutorService executor = Executors.newFixedThreadPool(8)) {
       List<Future<ResponseEntity<Void>>> requests = new ArrayList<>();
       for (int i = 0; i < 8; i++) {
         String email = "concurrent-" + i + "-" + System.nanoTime() + "@example.com";
@@ -254,8 +238,9 @@ class RegistrationApiIntegrationTest {
                             "email", email, "displayName", "User", "password", "safe-password"))));
       }
       List<ResponseEntity<Void>> responses = new ArrayList<>();
-      for (Future<ResponseEntity<Void>> request : requests)
+      for (Future<ResponseEntity<Void>> request : requests) {
         responses.add(request.get(10, TimeUnit.SECONDS));
+      }
 
       assertThat(responses.stream().filter(r -> r.getStatusCode() == HttpStatus.ACCEPTED).count())
           .isEqualTo(3);
@@ -289,7 +274,6 @@ class RegistrationApiIntegrationTest {
                   .getStatusCode())
           .isEqualTo(HttpStatus.ACCEPTED);
     } finally {
-      executor.shutdownNow();
       jdbcTemplate.update("DELETE FROM auth_rate_limit_events");
     }
   }

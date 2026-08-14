@@ -7,11 +7,11 @@ import com.blogadmin.identity.application.BootstrapAdminRunner;
 import com.blogadmin.identity.application.PasswordPolicy;
 import com.blogadmin.identity.domain.password.PasswordSettingRepository;
 import com.blogadmin.identity.domain.user.UserRepository;
+import com.blogadmin.test.AbstractPostgresIntegrationTest;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.DefaultApplicationArguments;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
@@ -20,16 +20,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-@Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class BootstrapAdminApiIntegrationTest {
-  @Container
-  static PostgreSQLContainer<?> postgres =
-      new PostgreSQLContainer<>("postgres:16-alpine").withDatabaseName("blog_admin");
+class BootstrapAdminApiIntegrationTest extends AbstractPostgresIntegrationTest {
 
   @LocalServerPort private int port;
   @Autowired private TestRestTemplate testRestTemplate;
@@ -38,11 +30,7 @@ class BootstrapAdminApiIntegrationTest {
   @Autowired private PasswordSettingRepository passwordSettingRepository;
 
   @DynamicPropertySource
-  static void properties(DynamicPropertyRegistry registry) {
-    registry.add("spring.datasource.url", postgres::getJdbcUrl);
-    registry.add("spring.datasource.username", postgres::getUsername);
-    registry.add("spring.datasource.password", postgres::getPassword);
-    registry.add("app.security.jwt-secret", () -> "test-secret-that-is-at-least-32-bytes-long");
+  static void bootstrapProperties(DynamicPropertyRegistry registry) {
     registry.add("app.bootstrap.admin.email", () -> "  Bootstrap@Example.com ");
     registry.add("app.bootstrap.admin.password", () -> "bootstrap-password");
   }

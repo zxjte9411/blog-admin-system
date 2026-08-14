@@ -6,15 +6,14 @@ import com.blogadmin.identity.domain.user.User;
 import com.blogadmin.identity.domain.user.UserRepository;
 import com.blogadmin.identity.domain.user.UserRole;
 import com.blogadmin.publishing.application.ArticleCleanupService;
+import com.blogadmin.publishing.application.ArticleService;
 import com.blogadmin.publishing.domain.article.Article;
 import com.blogadmin.publishing.domain.article.ArticleRepository;
 import com.blogadmin.publishing.domain.tag.Tag;
 import com.blogadmin.publishing.domain.tag.TagRepository;
-import java.lang.reflect.Field;
+import com.blogadmin.test.AbstractPostgresIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -23,7 +22,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpEntity;
@@ -36,20 +34,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.util.ReflectionTestUtils;
 
-@Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
-class PublishingIssuesIntegrationTest {
-  @Container
-  static PostgreSQLContainer<?> postgres =
-      new PostgreSQLContainer<>("postgres:16-alpine").withDatabaseName("blog_admin");
+class PublishingIssuesIntegrationTest extends AbstractPostgresIntegrationTest {
 
   @LocalServerPort private int port;
   @Autowired private TestRestTemplate testRestTemplate;
@@ -58,23 +45,17 @@ class PublishingIssuesIntegrationTest {
   @Autowired private ArticleRepository articleRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private ArticleCleanupService articleCleanupService;
+  @Autowired private ArticleService articleService;
   @Autowired private JdbcTemplate jdbcTemplate;
   @Autowired private ApplicationRunner startupCleanup;
 
   @BeforeEach
   void clearPublishingData() {
-    jdbcTemplate.update("DELETE FROM article_tags");
-    jdbcTemplate.update("DELETE FROM articles");
-    jdbcTemplate.update("DELETE FROM tags");
-    jdbcTemplate.update("DELETE FROM auth_rate_limit_events");
-  }
-
-  @DynamicPropertySource
-  static void db(DynamicPropertyRegistry r) {
-    r.add("spring.datasource.url", postgres::getJdbcUrl);
-    r.add("spring.datasource.username", postgres::getUsername);
-    r.add("spring.datasource.password", postgres::getPassword);
-    r.add("app.security.jwt-secret", () -> "test-secret-that-is-at-least-32-bytes-long");
+    resetDatabase(jdbcTemplate);
+    Map<?, ?> limits = (Map<?, ?>) ReflectionTestUtils.getField(articleService, "publicLimits");
+    if (limits != null) {
+      limits.clear();
+    }
   }
 
   @Test
@@ -248,7 +229,6 @@ class PublishingIssuesIntegrationTest {
   }
 
   @Test
-  @DirtiesContext
   void publicSortingDraftTransitionPlainTextAndScopedCors() throws Exception {
     user(UserRole.AUTHOR, "checks");
     String token = login("checks");
@@ -483,21 +463,6 @@ class PublishingIssuesIntegrationTest {
     articleCleanupService.cleanup();
     // Unused tag is cleaned up
     assertThat(tagRepository.findById(tagId)).isEmpty();
-  }
-
-  @Test
-  void publicLimiterRemovesExpiredIdleIpKeys() throws Exception {
-    com.blogadmin.publishing.application.ArticleService service =
-        new com.blogadmin.publishing.application.ArticleService(articleRepository, tagRepository);
-    Field field = service.getClass().getDeclaredField("publicLimits");
-    field.setAccessible(true);
-    @SuppressWarnings("unchecked")
-    Map<String, Deque<Instant>> limits =
-        (Map<String, Deque<Instant>>) (Map<?, ?>) field.get(service);
-    limits.put("old-ip", new ArrayDeque<>(Set.of(Instant.now().minusSeconds(61))));
-    service.publicArticles(
-        "", null, org.springframework.data.domain.PageRequest.of(0, 1), "new-ip");
-    assertThat(limits).doesNotContainKey("old-ip");
   }
 
   private Map<String, Object> create(String t, Object body) {

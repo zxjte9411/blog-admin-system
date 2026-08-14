@@ -8,15 +8,16 @@ import com.blogadmin.identity.domain.user.UserRole;
 import com.blogadmin.publishing.domain.tag.Tag;
 import com.blogadmin.publishing.domain.tag.TagRepository;
 import com.blogadmin.publishing.web.dto.ArticleView;
+import com.blogadmin.test.AbstractPostgresIntegrationTest;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpEntity;
@@ -25,32 +26,21 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-@Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class ArticleApiIntegrationTest {
-  @Container
-  static PostgreSQLContainer<?> postgres =
-      new PostgreSQLContainer<>("postgres:16-alpine").withDatabaseName("blog_admin");
+class ArticleApiIntegrationTest extends AbstractPostgresIntegrationTest {
 
   @LocalServerPort private int port;
   @Autowired private TestRestTemplate testRestTemplate;
   @Autowired private UserRepository userRepository;
   @Autowired private TagRepository tagRepository;
   @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
-  @DynamicPropertySource
-  static void database(DynamicPropertyRegistry registry) {
-    registry.add("spring.datasource.url", postgres::getJdbcUrl);
-    registry.add("spring.datasource.username", postgres::getUsername);
-    registry.add("spring.datasource.password", postgres::getPassword);
-    registry.add("app.security.jwt-secret", () -> "test-secret-that-is-at-least-32-bytes-long");
+  @BeforeEach
+  void clearDatabase() {
+    resetDatabase(jdbcTemplate);
   }
 
   @Test
