@@ -5,6 +5,7 @@ import {
   ChangeDetectorRef,
   Component,
   OnInit,
+  effect,
   inject,
 } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -57,10 +58,27 @@ export class AccountPage implements OnInit {
   readonly pageSize = 10;
   totalPages = 0;
   form = this.fb.group<Record<string, never>>({});
+  missingToken = false;
+
+  constructor() {
+    effect(() => {
+      const currentLang = this.language.lang();
+      if (this.routeKey === 'account/profile' && this.form.get('preferredLanguage')) {
+        this.form.get('preferredLanguage')?.setValue(currentLang, { emitEvent: false });
+        this.cdr.markForCheck();
+      }
+    });
+  }
 
   ngOnInit() {
     this.routeKey = this.routeKey || this.route.snapshot.routeConfig?.path || '';
     this.fields = fields[this.routeKey] ?? [];
+    if (['reset-password', 'invite', 'confirm-email'].includes(this.routeKey)) {
+      const token = this.route.snapshot.queryParamMap.get('token');
+      if (!token) {
+        this.missingToken = true;
+      }
+    }
     this.makeForm();
     if (this.routeKey === 'verify-email') {
       this.form.patchValue({ token: this.route.snapshot.queryParamMap.get('token') ?? '' });
@@ -97,6 +115,15 @@ export class AccountPage implements OnInit {
       return 'current-password';
     }
     return field === 'email' ? (this.routeKey === 'login' ? 'username' : 'email') : null;
+  }
+
+  onLanguageFieldChange(event: Event) {
+    if (this.routeKey === 'account/profile') {
+      const value = (event.target as HTMLSelectElement).value;
+      if (value === 'zh-TW' || value === 'en') {
+        this.language.set(value);
+      }
+    }
   }
 
   submit() {
@@ -162,7 +189,6 @@ export class AccountPage implements OnInit {
       next: (user) => {
         this.auth.user = user as typeof this.auth.user;
         this.form.patchValue(user);
-        this.language.usePreferred(user['preferredLanguage'] as 'zh-TW' | 'en');
         this.loading = false;
         this.cdr.markForCheck();
       },

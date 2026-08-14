@@ -48,8 +48,7 @@ export class AppShell implements OnInit {
 
   ngOnInit() {
     if (this.auth.token && !this.auth.user) {
-      this.auth.load().subscribe((user) => {
-        if (user) this.language.usePreferred(user.preferredLanguage);
+      this.auth.load().subscribe(() => {
         this.cdr.markForCheck();
       });
     }
@@ -57,12 +56,7 @@ export class AppShell implements OnInit {
 
   toggleLanguage() {
     const next = this.language.lang() === 'en' ? 'zh-TW' : 'en';
-    if (this.auth.token && !this.auth.user) {
-      this.language.usePreferred(next);
-      this.auth.load().subscribe((user) => user && this.language.set(next));
-    } else {
-      this.language.set(next);
-    }
+    this.language.set(next);
   }
 
   navGroupLabel(group: string) {
@@ -96,10 +90,20 @@ export class AppShell implements OnInit {
     );
   }
 
+  hasVisibleLinks(group: { links: string[] }) {
+    return group.links.some((link) => this.canSeeNav(link));
+  }
+
   logout() {
-    this.http.post('/api/v1/auth/logout', {}).subscribe(() => {
-      this.auth.clear();
-      void this.router.navigateByUrl('/login');
+    this.http.post('/api/v1/auth/logout', {}, { withCredentials: true }).subscribe({
+      next: () => {
+        this.auth.clear();
+        void this.router.navigateByUrl('/login');
+      },
+      error: () => {
+        this.auth.clear();
+        void this.router.navigateByUrl('/login');
+      },
     });
   }
 }

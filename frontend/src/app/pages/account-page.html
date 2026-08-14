@@ -16,7 +16,9 @@
     @if (language.error()) {
       <div class="error" role="alert">{{ language.error() }}</div>
     }
-    @if (fields.length || routeKey === 'confirm-email') {
+    @if (missingToken) {
+      <div class="error" role="alert">{{ language.t.invalidToken }}</div>
+    } @else if (fields.length || routeKey === 'confirm-email') {
       <form [formGroup]="form" (ngSubmit)="submit()">
         @for (field of fields; track field) {
           <label class="field" [for]="'field-' + field"
@@ -28,6 +30,7 @@
                 [name]="field"
                 autocomplete="language"
                 [formControlName]="field"
+                (change)="onLanguageFieldChange($event)"
                 [attr.aria-invalid]="fieldInvalid(field) ? 'true' : null"
                 [attr.aria-describedby]="fieldErrorId(field)"
               >
@@ -38,6 +41,7 @@
               <input
                 class="control"
                 [id]="'field-' + field"
+                [name]="field"
                 [type]="
                   field.toLowerCase().includes('password')
                     ? 'password'

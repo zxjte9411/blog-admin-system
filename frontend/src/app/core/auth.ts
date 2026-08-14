@@ -43,6 +43,9 @@ export class Auth {
   }
 
   saveLanguage(language: User['preferredLanguage']) {
+    if (this.user) {
+      this.user.preferredLanguage = language;
+    }
     return this.http.patch('/api/v1/account/profile', {
       displayName: this.user?.displayName ?? '',
       preferredLanguage: language,
@@ -64,7 +67,6 @@ export class Auth {
 
 export const authGuard: CanActivateFn = () => {
   const auth = inject(Auth);
-  const language = inject(Language);
   const router = inject(Router);
 
   if (!auth.token) {
@@ -72,16 +74,12 @@ export const authGuard: CanActivateFn = () => {
   }
 
   return auth.user
-    ? (language.usePreferred(auth.user.preferredLanguage), true)
-    : auth.load().pipe(
-        tap((user) => user && language.usePreferred(user.preferredLanguage)),
-        map((user) => (user ? true : router.createUrlTree(['/login']))),
-      );
+    ? true
+    : auth.load().pipe(map((user) => (user ? true : router.createUrlTree(['/login']))));
 };
 
 export const adminGuard: CanActivateFn = () => {
   const auth = inject(Auth);
-  const language = inject(Language);
   const router = inject(Router);
 
   if (!auth.token) {
@@ -89,7 +87,6 @@ export const adminGuard: CanActivateFn = () => {
   }
 
   return (auth.user ? of(auth.user) : auth.load()).pipe(
-    tap((user) => user && language.usePreferred(user.preferredLanguage)),
     map((user) => (user?.role === 'ADMIN' ? true : router.createUrlTree(['/forbidden']))),
   );
 };

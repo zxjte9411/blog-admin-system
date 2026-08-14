@@ -6,7 +6,9 @@
     {{ language.lang() === 'en' ? '繁中' : 'EN' }}
   </button>
   @if (auth.token) {
-    <button class="ui-ghost" type="button" (click)="logout()">{{ language.t.logout }}</button>
+    <button class="ui-ghost logout-btn" type="button" (click)="logout()">
+      {{ language.t.logout }}
+    </button>
   } @else {
     <a class="ui-ghost" routerLink="/login">{{ language.t.login }}</a>
   }
