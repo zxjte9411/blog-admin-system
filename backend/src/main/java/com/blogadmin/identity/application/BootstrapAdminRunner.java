@@ -1,6 +1,5 @@
 package com.blogadmin.identity.application;
 
-import com.blogadmin.identity.domain.password.PasswordSettingRepository;
 import com.blogadmin.identity.domain.user.User;
 import com.blogadmin.identity.domain.user.UserRepository;
 import com.blogadmin.identity.domain.user.UserRole;
@@ -18,19 +17,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class BootstrapAdminRunner implements ApplicationRunner {
   private final UserRepository users;
   private final PasswordEncoder passwords;
-  private final PasswordSettingRepository settings;
+  private final PasswordPolicy passwordPolicy;
   private final String email;
   private final String password;
 
   public BootstrapAdminRunner(
       UserRepository users,
       PasswordEncoder passwords,
-      PasswordSettingRepository settings,
+      PasswordPolicy passwordPolicy,
       @Value("${app.bootstrap.admin.email:}") String email,
       @Value("${app.bootstrap.admin.password:}") String password) {
     this.users = users;
     this.passwords = passwords;
-    this.settings = settings;
+    this.passwordPolicy = passwordPolicy;
     this.email = email;
     this.password = password;
   }
@@ -41,8 +40,7 @@ public class BootstrapAdminRunner implements ApplicationRunner {
     if (email == null || email.trim().isEmpty() || password == null || password.isEmpty()) return;
     String normalized = email.trim().toLowerCase(Locale.ROOT);
     if (users.findByNormalizedEmail(normalized).isPresent()) return;
-    int minimum = settings.findById(true).orElseThrow().getMinimumLength();
-    if (!AccountService.validPassword(password, minimum))
+    if (!passwordPolicy.isValid(password))
       throw new IllegalStateException("Invalid bootstrap admin password");
 
     User admin =

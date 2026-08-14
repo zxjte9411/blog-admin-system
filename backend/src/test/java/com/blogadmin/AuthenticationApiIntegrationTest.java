@@ -2,6 +2,7 @@ package com.blogadmin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 
 import com.blogadmin.identity.application.AdminUserService;
@@ -63,6 +64,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -98,6 +100,7 @@ class AuthenticationApiIntegrationTest {
   @Autowired private RefreshSessionRepository sessions;
   @Autowired private EmailVerificationTokenRepository tokens;
   @Autowired private RateLimitEventRepository limits;
+  @Autowired private JdbcTemplate jdbc;
   @MockitoBean private JavaMailSender mail;
   @PersistenceContext private EntityManager entityManager;
 
@@ -427,6 +430,36 @@ class AuthenticationApiIntegrationTest {
         .isEqualTo(HttpStatus.OK);
   }
 
+  @Test
+  void passwordPolicyRejectsCommonAndOverlongPasswordsAtAllFourEntrances() {
+    assertPasswordRejectedAtAllEntrances("password123");
+    assertPasswordRejectedAtAllEntrances("x".repeat(129));
+  }
+
+  @Test
+  void passwordMinimumChangeAppliesToAllFourPasswordEntrances() {
+    UUID admin = createUser(true, true);
+    User adminUser = users.findById(admin).orElseThrow();
+    adminUser.changeRole(UserRole.ADMIN);
+    users.saveAndFlush(adminUser);
+    String adminToken =
+        (String)
+            post("/api/v1/auth/login", loginRequest(admin), Map.class).getBody().get("accessToken");
+
+    assertThat(
+            exchange(
+                    "/api/v1/admin/settings/password-minimum-length",
+                    HttpMethod.PUT,
+                    headers(adminToken, null),
+                    Map.of("value", 12),
+                    Map.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+
+    assertPasswordRejectedAtAllEntrances("shortpass");
+    assertPasswordAcceptedAtAllEntrances("valid-pass12");
+  }
+
   @BeforeEach
   void clearDatabase() {
     sessions.deleteAll();
@@ -435,7 +468,10 @@ class AuthenticationApiIntegrationTest {
     limits.deleteAll();
     identities.deleteAll();
     invitations.deleteAll();
+    jdbc.execute("TRUNCATE TABLE password_setting_changes");
     users.deleteAll();
+    jdbc.update("UPDATE password_settings SET minimum_length = 8 WHERE id = TRUE");
+    reset(mail);
   }
 
   @Test
@@ -737,6 +773,132 @@ class AuthenticationApiIntegrationTest {
     if (!enabled) user.disable();
     users.saveAndFlush(user);
     return id;
+  }
+
+  private void assertPasswordRejectedAtAllEntrances(String password) {
+    assertThat(
+            post(
+                    "/api/v1/auth/registrations",
+                    Map.of(
+                        "email",
+                        "policy-" + UUID.randomUUID() + "@example.com",
+                        "displayName",
+                        "Policy User",
+                        "password",
+                        password),
+                    String.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+
+    InvitationLink invitation = invitation("policy-" + UUID.randomUUID() + "@example.com");
+    assertThat(
+            post(
+                    "/api/v1/auth/invitations/" + invitation.token() + "/redeem",
+                    Map.of(
+                        "displayName", "Policy User",
+                        "password", password,
+                        "preferredLanguage", "zh-TW"),
+                    String.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+
+    UUID resetUser = createUser(true, true);
+    assertThat(
+            post("/api/v1/auth/password-resets", Map.of("email", email(resetUser)), Void.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.ACCEPTED);
+    ArgumentCaptor<SimpleMailMessage> resetMail = ArgumentCaptor.forClass(SimpleMailMessage.class);
+    verify(mail, atLeastOnce()).send(resetMail.capture());
+    String resetToken = resetToken(resetMail.getValue().getText());
+    assertThat(
+            post(
+                    "/api/v1/auth/password-resets/" + resetToken,
+                    Map.of("password", password),
+                    String.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+
+    UUID changeUser = createUser(true, true);
+    assertThat(
+            exchange(
+                    "/api/v1/account/password",
+                    HttpMethod.PUT,
+                    headers(
+                        (String)
+                            post("/api/v1/auth/login", loginRequest(changeUser), Map.class)
+                                .getBody()
+                                .get("accessToken"),
+                        null),
+                    Map.of(
+                        "currentPassword", PASSWORD,
+                        "newPassword", password,
+                        "logoutCurrentSession", false),
+                    String.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  private void assertPasswordAcceptedAtAllEntrances(String password) {
+    assertThat(
+            post(
+                    "/api/v1/auth/registrations",
+                    Map.of(
+                        "email",
+                        "policy-" + UUID.randomUUID() + "@example.com",
+                        "displayName",
+                        "Policy User",
+                        "password",
+                        password),
+                    Void.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.ACCEPTED);
+
+    InvitationLink invitation = invitation("policy-" + UUID.randomUUID() + "@example.com");
+    assertThat(
+            post(
+                    "/api/v1/auth/invitations/" + invitation.token() + "/redeem",
+                    Map.of(
+                        "displayName", "Policy User",
+                        "password", password,
+                        "preferredLanguage", "zh-TW"),
+                    Map.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+
+    UUID resetUser = createUser(true, true);
+    assertThat(
+            post("/api/v1/auth/password-resets", Map.of("email", email(resetUser)), Void.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.ACCEPTED);
+    ArgumentCaptor<SimpleMailMessage> resetMail = ArgumentCaptor.forClass(SimpleMailMessage.class);
+    verify(mail, atLeastOnce()).send(resetMail.capture());
+    String resetToken = resetToken(resetMail.getValue().getText());
+    assertThat(
+            post(
+                    "/api/v1/auth/password-resets/" + resetToken,
+                    Map.of("password", password),
+                    Void.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.NO_CONTENT);
+
+    UUID changeUser = createUser(true, true);
+    assertThat(
+            exchange(
+                    "/api/v1/account/password",
+                    HttpMethod.PUT,
+                    headers(
+                        (String)
+                            post("/api/v1/auth/login", loginRequest(changeUser), Map.class)
+                                .getBody()
+                                .get("accessToken"),
+                        null),
+                    Map.of(
+                        "currentPassword", PASSWORD,
+                        "newPassword", password,
+                        "logoutCurrentSession", false),
+                    Void.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.NO_CONTENT);
   }
 
   private Map<String, String> loginRequest(UUID user) {

@@ -20,12 +20,11 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 public class AdminUserService {
   private static final SecureRandom RANDOM = new SecureRandom();
-  private static final Set<String> COMMON =
-      Set.of("password", "password123", "12345678", "qwerty123");
   private final UserRepository users;
   private final InvitationRepository invitations;
   private final PasswordSettingChangeRepository changes;
   private final PasswordEncoder passwords;
+  private final PasswordPolicy passwordPolicy;
   private final PasswordSettingRepository passwordSettings;
   private final JavaMailSender mail;
   private final String from;
@@ -36,6 +35,7 @@ public class AdminUserService {
       InvitationRepository invitations,
       PasswordSettingChangeRepository changes,
       PasswordEncoder passwords,
+      PasswordPolicy passwordPolicy,
       PasswordSettingRepository passwordSettings,
       JavaMailSender mail,
       @Value("${app.mail.from:dev@example.com}") String from,
@@ -44,6 +44,7 @@ public class AdminUserService {
     this.invitations = invitations;
     this.changes = changes;
     this.passwords = passwords;
+    this.passwordPolicy = passwordPolicy;
     this.passwordSettings = passwordSettings;
     this.mail = mail;
     this.from = from;
@@ -123,10 +124,9 @@ public class AdminUserService {
     users.lockNormalizedEmail(invitation.getEmail());
     if (users.findByNormalizedEmail(invitation.getEmail()).isPresent())
       throw new AlreadyExistsException();
-    int minimum = passwordSettings.findById(true).orElseThrow().getMinimumLength();
-    if (password == null || password.length() < minimum || password.length() > 128)
-      throw new InvalidMinimumException();
-    if (COMMON.contains(password.toLowerCase(Locale.ROOT)))
+    PasswordPolicy.Violation violation = passwordPolicy.validate(password);
+    if (violation == PasswordPolicy.Violation.LENGTH) throw new InvalidMinimumException();
+    if (violation == PasswordPolicy.Violation.COMMON)
       throw new RegistrationService.InvalidRegistrationException();
     String name = displayName == null ? null : displayName.trim();
     if (name == null || name.isEmpty() || name.length() > 100)

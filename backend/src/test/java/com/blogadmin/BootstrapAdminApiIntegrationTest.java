@@ -3,6 +3,7 @@ package com.blogadmin;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.blogadmin.identity.application.BootstrapAdminRunner;
+import com.blogadmin.identity.application.PasswordPolicy;
 import com.blogadmin.identity.domain.password.PasswordSettingRepository;
 import com.blogadmin.identity.domain.user.UserRepository;
 import java.util.Map;
@@ -62,7 +63,11 @@ class BootstrapAdminApiIntegrationTest {
     long before = users.count();
     BootstrapAdminRunner runner =
         new BootstrapAdminRunner(
-            users, passwords, passwordSettings, "invalid@example.com", "password");
+            users,
+            passwords,
+            new PasswordPolicy(passwordSettings),
+            "invalid@example.com",
+            "password");
 
     org.assertj.core.api.Assertions.assertThatThrownBy(
             () -> runner.run(new DefaultApplicationArguments()))

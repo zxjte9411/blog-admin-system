@@ -20,12 +20,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 public class AccountService {
   private static final SecureRandom RANDOM = new SecureRandom();
-  private static final Set<String> COMMON =
-      Set.of("password", "password123", "12345678", "qwerty123");
   private final UserRepository users;
   private final RefreshSessionRepository sessions;
   private final PasswordEncoder passwords;
-  private final PasswordSettingRepository settings;
+  private final PasswordPolicy passwordPolicy;
   private final PasswordResetTokenRepository resets;
   private final EmailChangeTokenRepository emails;
   private final JavaMailSender mail;
@@ -36,7 +34,7 @@ public class AccountService {
       UserRepository users,
       RefreshSessionRepository sessions,
       PasswordEncoder passwords,
-      PasswordSettingRepository settings,
+      PasswordPolicy passwordPolicy,
       PasswordResetTokenRepository resets,
       EmailChangeTokenRepository emails,
       JavaMailSender mail,
@@ -45,7 +43,7 @@ public class AccountService {
     this.users = users;
     this.sessions = sessions;
     this.passwords = passwords;
-    this.settings = settings;
+    this.passwordPolicy = passwordPolicy;
     this.resets = resets;
     this.emails = emails;
     this.mail = mail;
@@ -68,8 +66,8 @@ public class AccountService {
   public void password(
       User user, String current, String next, UUID currentSession, boolean logoutCurrent) {
     User managed = users.findLockedById(user.getId()).orElseThrow(InvalidAccountException::new);
-    int min = settings.findById(true).orElseThrow().getMinimumLength();
-    if (!passwords.matches(current, managed.getPasswordHash()) || !validPassword(next, min))
+    if (!passwords.matches(current, managed.getPasswordHash())
+        || passwordPolicy.validate(next) != PasswordPolicy.Violation.NONE)
       throw new InvalidAccountException();
     managed.changePasswordKeepingSessions(passwords.encode(next));
     if (logoutCurrent) sessions.revokeAll(managed.getId(), Instant.now());
@@ -104,10 +102,10 @@ public class AccountService {
             .findByTokenHash(hash(token.getBytes(StandardCharsets.UTF_8)))
             .orElseThrow(ResetTokenNotFound::new);
     User u = users.findById(t.getUserId()).orElseThrow();
-    int min = settings.findById(true).orElseThrow().getMinimumLength();
     if (t.getUsedAt() != null || !t.getExpiresAt().isAfter(Instant.now()))
       throw new ResetTokenNotFound();
-    if (!validPassword(next, min)) throw new InvalidAccountException();
+    if (passwordPolicy.validate(next) != PasswordPolicy.Violation.NONE)
+      throw new InvalidAccountException();
     u.changePassword(passwords.encode(next));
     sessions.revokeAll(u.getId(), Instant.now());
     t.use(Instant.now());
@@ -190,13 +188,6 @@ public class AccountService {
     byte[] b = new byte[32];
     RANDOM.nextBytes(b);
     return b;
-  }
-
-  static boolean validPassword(String password, int minimumLength) {
-    return password != null
-        && password.length() >= minimumLength
-        && password.length() <= 128
-        && !COMMON.contains(password.toLowerCase(Locale.ROOT));
   }
 
   private static byte[] hash(byte[] b) {

@@ -1,6 +1,5 @@
 package com.blogadmin.identity.application;
 
-import com.blogadmin.identity.domain.password.PasswordSettingRepository;
 import com.blogadmin.identity.domain.user.User;
 import com.blogadmin.identity.domain.user.UserRepository;
 import com.blogadmin.identity.domain.verification.EmailVerificationToken;
@@ -11,7 +10,6 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Locale;
-import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
@@ -25,14 +23,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 public class RegistrationService {
   private static final SecureRandom RANDOM = new SecureRandom();
-  private static final Set<String> COMMON =
-      Set.of("password", "password123", "12345678", "qwerty123");
   private final UserRepository users;
   private final EmailVerificationTokenRepository tokens;
   private final RateLimitService rateLimits;
   private final JavaMailSender mail;
   private final PasswordEncoder passwordEncoder;
-  private final PasswordSettingRepository passwordSettings;
+  private final PasswordPolicy passwordPolicy;
   private final String from;
   private final String frontend;
 
@@ -42,7 +38,7 @@ public class RegistrationService {
       RateLimitService rateLimits,
       JavaMailSender mail,
       PasswordEncoder passwordEncoder,
-      PasswordSettingRepository passwordSettings,
+      PasswordPolicy passwordPolicy,
       @Value("${app.mail.from:dev@example.com}") String from,
       @Value("${app.frontend-base-url:http://localhost:4200}") String frontend) {
     this.users = users;
@@ -50,7 +46,7 @@ public class RegistrationService {
     this.rateLimits = rateLimits;
     this.mail = mail;
     this.passwordEncoder = passwordEncoder;
-    this.passwordSettings = passwordSettings;
+    this.passwordPolicy = passwordPolicy;
     this.from = from;
     this.frontend = frontend;
   }
@@ -61,11 +57,7 @@ public class RegistrationService {
     String normalized = normalize(email);
     checkRate("registration", ip, normalized);
     users.lockNormalizedEmail(normalized);
-    int minimum = passwordSettings.findById(true).orElseThrow().getMinimumLength();
-    if (password == null
-        || password.length() < minimum
-        || password.length() > 128
-        || COMMON.contains(password.toLowerCase(Locale.ROOT)))
+    if (passwordPolicy.validate(password) != PasswordPolicy.Violation.NONE)
       throw new InvalidRegistrationException();
     String trimmedDisplayName = displayName == null ? null : displayName.trim();
     if (trimmedDisplayName == null
