@@ -16,6 +16,7 @@ import com.blogadmin.identity.domain.verification.EmailVerificationTokenReposito
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -109,6 +110,42 @@ class AdminUserApiIntegrationTest {
                     Map.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  void adminUserListSearchesTrimmedCaseInsensitiveTextWithoutChangingOtherFilters() {
+    User admin = user(UserRole.ADMIN, true);
+    user("Alice@example.com", "No query match", UserRole.AUTHOR, true);
+    user("name@example.com", "Alice Display", UserRole.AUTHOR, true);
+    user("alice-admin@example.com", "Alice Admin", UserRole.ADMIN, true);
+    user("alice-disabled@example.com", "Alice Disabled", UserRole.AUTHOR, false);
+    String token = login(admin);
+
+    for (String query : new String[] {"", "&q=", "&q=++"}) {
+      ResponseEntity<Object[]> response =
+          exchange(
+              "/api/v1/admin/users?role=AUTHOR&enabled=true" + query,
+              HttpMethod.GET,
+              token,
+              null,
+              Object[].class);
+      assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+      assertThat(response.getBody()).hasSize(2);
+    }
+
+    ResponseEntity<Map[]> search =
+        exchange(
+            "/api/v1/admin/users?role=AUTHOR&enabled=true&q=+aLiCe+",
+            HttpMethod.GET,
+            token,
+            null,
+            Map[].class);
+    assertThat(search.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(search.getBody()).hasSize(2);
+    assertThat(search.getBody()[0].get("email")).isIn("Alice@example.com", "name@example.com");
+    assertThat(search.getBody()[1].get("email"))
+        .isIn("Alice@example.com", "name@example.com")
+        .isNotEqualTo(search.getBody()[0].get("email"));
   }
 
   @Test
@@ -318,9 +355,26 @@ class AdminUserApiIntegrationTest {
   private User user(UserRole role, boolean verified) {
     UUID id = UUID.randomUUID();
     String email = id + "@example.com";
+    return user(email, "User", role, true, verified);
+  }
+
+  private User user(String email, String displayName, UserRole role, boolean enabled) {
+    return user(email, displayName, role, enabled, true);
+  }
+
+  private User user(
+      String email, String displayName, UserRole role, boolean enabled, boolean verified) {
     User u =
-        users.save(new User(id, email, email, "User", passwords.encode("safe-password"), "zh-TW"));
+        users.save(
+            new User(
+                UUID.randomUUID(),
+                email,
+                email.toLowerCase(Locale.ROOT),
+                displayName,
+                passwords.encode("safe-password"),
+                "zh-TW"));
     u.changeRole(role);
+    u.setEnabled(enabled);
     if (verified) u.verify(Instant.now());
     return users.saveAndFlush(u);
   }

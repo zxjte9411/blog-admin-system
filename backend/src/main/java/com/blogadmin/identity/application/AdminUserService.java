@@ -53,17 +53,8 @@ public class AdminUserService {
   }
 
   public List<User> list(UserRole role, Boolean enabled, String q) {
-    return users.findAll().stream()
-        .filter(u -> role == null || u.getRole() == role)
-        .filter(u -> enabled == null || u.isEnabled() == enabled)
-        .filter(
-            u ->
-                q == null
-                    || u.getEmail().toLowerCase(Locale.ROOT).contains(q.toLowerCase(Locale.ROOT))
-                    || u.getDisplayName()
-                        .toLowerCase(Locale.ROOT)
-                        .contains(q.toLowerCase(Locale.ROOT)))
-        .toList();
+    String query = q == null || q.isBlank() ? null : q.trim();
+    return users.findAllForAdmin(role == null ? null : role.name(), enabled, query);
   }
 
   @Transactional

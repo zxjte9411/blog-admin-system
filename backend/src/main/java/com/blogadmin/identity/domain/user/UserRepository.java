@@ -1,6 +1,7 @@
 package com.blogadmin.identity.domain.user;
 
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -9,12 +10,24 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
-  @org.springframework.data.jpa.repository.Query(
-      value = "SELECT pg_advisory_xact_lock(9006)",
-      nativeQuery = true)
+  @Query(value = "SELECT pg_advisory_xact_lock(9006)", nativeQuery = true)
   void lockAdminMutation();
 
-  java.util.List<User> findByRoleAndEnabled(UserRole role, boolean enabled);
+  @Query(
+      value =
+          """
+      select * from users
+      where (cast(:role as text) is null or role = cast(:role as text))
+        and (cast(:enabled as boolean) is null or enabled = cast(:enabled as boolean))
+        and (cast(:q as text) is null
+          or position(lower(cast(:q as text)) in lower(email)) > 0
+          or position(lower(cast(:q as text)) in lower(display_name)) > 0)
+      """,
+      nativeQuery = true)
+  List<User> findAllForAdmin(
+      @Param("role") String role, @Param("enabled") Boolean enabled, @Param("q") String q);
+
+  List<User> findByRoleAndEnabled(UserRole role, boolean enabled);
 
   long countByRoleAndEnabledTrueAndVerifiedAtIsNotNull(UserRole role);
 

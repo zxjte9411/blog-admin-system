@@ -14,8 +14,14 @@ import com.blogadmin.identity.domain.user.User;
 import com.blogadmin.identity.domain.user.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -133,6 +139,64 @@ class RegistrationApiIntegrationTest {
                 "password", "password"));
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(response.getBody()).contains("fieldErrors").contains("password");
+  }
+
+  @Test
+  void rateLimitOnlyConsumesAllowedRequestsAndKeepsBucketsIsolatedUnderConcurrency()
+      throws Exception {
+    jdbc.update("DELETE FROM auth_rate_limit_events");
+    ExecutorService executor = Executors.newFixedThreadPool(8);
+    try {
+      List<Future<ResponseEntity<Void>>> requests = new ArrayList<>();
+      for (int i = 0; i < 8; i++) {
+        String email = "concurrent-" + i + "-" + System.nanoTime() + "@example.com";
+        requests.add(
+            executor.submit(
+                () ->
+                    post(
+                        "/api/v1/auth/registrations",
+                        Map.of(
+                            "email", email, "displayName", "User", "password", "safe-password"))));
+      }
+      List<ResponseEntity<Void>> responses = new ArrayList<>();
+      for (Future<ResponseEntity<Void>> request : requests)
+        responses.add(request.get(10, TimeUnit.SECONDS));
+
+      assertThat(responses.stream().filter(r -> r.getStatusCode() == HttpStatus.ACCEPTED).count())
+          .isEqualTo(3);
+      assertThat(
+              responses.stream()
+                  .filter(r -> r.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS)
+                  .count())
+          .isEqualTo(5);
+
+      String rejectedEmail = "rejected-" + System.nanoTime() + "@example.com";
+      ResponseEntity<Void> rejected =
+          post(
+              "/api/v1/auth/registrations",
+              Map.of(
+                  "email", rejectedEmail,
+                  "displayName", "Rejected",
+                  "password", "safe-password"));
+      assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+      assertThat(Long.parseLong(rejected.getHeaders().getFirst("Retry-After")))
+          .isBetween(3590L, 3600L);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from auth_rate_limit_events "
+                      + "where bucket = 'registration' and bucket_key = ?",
+                  Integer.class,
+                  "email:" + rejectedEmail))
+          .isZero();
+
+      assertThat(
+              post("/api/v1/auth/email-verifications/resend", Map.of("email", rejectedEmail))
+                  .getStatusCode())
+          .isEqualTo(HttpStatus.ACCEPTED);
+    } finally {
+      executor.shutdownNow();
+      jdbc.update("DELETE FROM auth_rate_limit_events");
+    }
   }
 
   @Test
