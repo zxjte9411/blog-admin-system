@@ -118,6 +118,8 @@ jobs:
           p=Path('.env'); s=p.read_text()
           s=s.replace('POSTGRES_PASSWORD=', 'POSTGRES_PASSWORD=ci-postgres-password')
           s=s.replace('APP_SECURITY_JWT_SECRET=', 'APP_SECURITY_JWT_SECRET=ci-jwt-secret-012345678901234567890123456789')
+          s=s.replace('SUPABASE_JWT_ISSUER=', 'SUPABASE_JWT_ISSUER=https://ci.supabase.co/auth/v1')
+          s=s.replace('SUPABASE_JWKS_URL=', 'SUPABASE_JWKS_URL=https://ci.supabase.co/auth/v1/.well-known/jwks.json')
           s=s.replace('APP_BOOTSTRAP_ADMIN_PASSWORD=', 'APP_BOOTSTRAP_ADMIN_PASSWORD=ci-bootstrap-password-123')
           p.write_text(s)
           PY
