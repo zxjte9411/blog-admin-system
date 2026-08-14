@@ -3,11 +3,11 @@ package com.blogadmin.identity.application;
 import com.blogadmin.identity.domain.invitation.*;
 import com.blogadmin.identity.domain.password.*;
 import com.blogadmin.identity.domain.user.*;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -19,6 +19,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @Service
 public class AdminUserService {
+  private static final Logger LOGGER = LoggerFactory.getLogger(AdminUserService.class);
   private static final SecureRandom RANDOM = new SecureRandom();
   private final UserRepository users;
   private final InvitationRepository invitations;
@@ -90,16 +91,11 @@ public class AdminUserService {
     if (users.findByNormalizedEmail(normalized).isPresent()) throw new AlreadyExistsException();
     invitations.findByEmailAndUsedAtIsNull(normalized).forEach(i -> i.use(Instant.now()));
     invitations.flush();
-    byte[] raw = new byte[32];
-    RANDOM.nextBytes(raw);
+    OpaqueToken.Issued token = OpaqueToken.generate();
     Invitation i =
         new Invitation(
-            UUID.randomUUID(),
-            normalized,
-            hash(Base64.getUrlEncoder().withoutPadding().encodeToString(raw)),
-            Instant.now().plusSeconds(86400));
+            UUID.randomUUID(), normalized, token.digest(), Instant.now().plusSeconds(86400));
     invitations.save(i);
-    String token = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
     SimpleMailMessage message = new SimpleMailMessage();
     message.setFrom(from);
     message.setTo(normalized);
@@ -108,7 +104,7 @@ public class AdminUserService {
         "You are invited / 您收到邀請："
             + frontend
             + "/invite?token="
-            + token
+            + token.value()
             + " (valid 24 hours / 24 小時有效)");
     sendAfterCommit(message);
     return i;
@@ -117,7 +113,9 @@ public class AdminUserService {
   @Transactional
   public User redeem(String token, String displayName, String password, String language) {
     Invitation invitation =
-        invitations.findByTokenHash(hash(token)).orElseThrow(InvalidInvitationException::new);
+        invitations
+            .findByTokenHash(OpaqueToken.digest(token))
+            .orElseThrow(InvalidInvitationException::new);
     Instant now = Instant.now();
     if (invitation.getUsedAt() != null || !invitation.getExpiresAt().isAfter(now))
       throw new InvalidInvitationException();
@@ -150,7 +148,9 @@ public class AdminUserService {
   @Transactional
   public User redeemGoogle(String token, String email, String displayName) {
     Invitation invitation =
-        invitations.findByTokenHash(hash(token)).orElseThrow(InvalidInvitationException::new);
+        invitations
+            .findByTokenHash(OpaqueToken.digest(token))
+            .orElseThrow(InvalidInvitationException::new);
     Instant now = Instant.now();
     String normalized = email.trim().toLowerCase(Locale.ROOT);
     if (invitation.getUsedAt() != null
@@ -199,14 +199,6 @@ public class AdminUserService {
     return invitations.findAll();
   }
 
-  private static byte[] hash(String s) {
-    try {
-      return MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8));
-    } catch (Exception e) {
-      throw new IllegalStateException(e);
-    }
-  }
-
   private static String randomPassword() {
     byte[] raw = new byte[32];
     RANDOM.nextBytes(raw);
@@ -214,10 +206,7 @@ public class AdminUserService {
   }
 
   private void sendAfterCommit(SimpleMailMessage message) {
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      send(message);
-      return;
-    }
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) return;
     TransactionSynchronizationManager.registerSynchronization(
         new TransactionSynchronization() {
           @Override
@@ -230,7 +219,8 @@ public class AdminUserService {
   private void send(SimpleMailMessage message) {
     try {
       mail.send(message);
-    } catch (RuntimeException ignored) {
+    } catch (RuntimeException exception) {
+      LOGGER.warn("Identity email delivery failed");
     }
   }
 

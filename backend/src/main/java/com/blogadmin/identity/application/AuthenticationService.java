@@ -7,8 +7,6 @@ import com.blogadmin.identity.domain.user.UserIdentity;
 import com.blogadmin.identity.domain.user.UserIdentityRepository;
 import com.blogadmin.identity.domain.user.UserRepository;
 import com.blogadmin.identity.web.security.SupabaseJwtVerifier;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
@@ -120,7 +118,7 @@ public class AuthenticationService {
 
   @Transactional
   public Result refresh(String token) {
-    var session = sessions.findByTokenHash(hash(token)).orElse(null);
+    var session = sessions.findByTokenHash(OpaqueToken.digest(token)).orElse(null);
     if (session == null || !session.active()) throw new BadCredentialsException();
     var user = users.findById(session.getUserId()).orElse(null);
     if (user == null || !user.isEnabled() || user.getVerifiedAt() == null)
@@ -129,17 +127,15 @@ public class AuthenticationService {
       session.revoke(Instant.now());
       throw new BadCredentialsException();
     }
-    byte[] raw = new byte[32];
-    RANDOM.nextBytes(raw);
-    String nextToken = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
-    session.rotate(hash(nextToken), Instant.now());
+    OpaqueToken.Issued next = OpaqueToken.generate();
+    session.rotate(next.digest(), Instant.now());
     sessions.save(session);
-    return new Result(user, nextToken, session.getId(), session.getAccessTokenVersion());
+    return new Result(user, next.value(), session.getId(), session.getAccessTokenVersion());
   }
 
   @Transactional
   public void logout(String token) {
-    sessions.findByTokenHash(hash(token)).ifPresent(s -> s.revoke(Instant.now()));
+    sessions.findByTokenHash(OpaqueToken.digest(token)).ifPresent(s -> s.revoke(Instant.now()));
   }
 
   @Transactional
@@ -158,26 +154,16 @@ public class AuthenticationService {
   }
 
   private Result issue(User user) {
-    byte[] raw = new byte[32];
-    RANDOM.nextBytes(raw);
-    String token = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
+    OpaqueToken.Issued token = OpaqueToken.generate();
     var session =
         new RefreshSession(
             UUID.randomUUID(),
             user.getId(),
-            hash(token),
+            token.digest(),
             Instant.now(),
             user.getAccessTokenVersion());
     sessions.save(session);
-    return new Result(user, token, session.getId(), session.getAccessTokenVersion());
-  }
-
-  private static byte[] hash(String value) {
-    try {
-      return MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
-    } catch (Exception e) {
-      throw new IllegalStateException(e);
-    }
+    return new Result(user, token.value(), session.getId(), session.getAccessTokenVersion());
   }
 
   private static String randomPassword() {

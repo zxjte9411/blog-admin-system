@@ -1,12 +1,21 @@
 package com.blogadmin;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import com.blogadmin.identity.application.RegistrationService;
+import com.blogadmin.identity.domain.user.User;
+import com.blogadmin.identity.domain.user.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +48,7 @@ class RegistrationApiIntegrationTest {
   @Autowired private TestRestTemplate restTemplate;
   @Autowired private ObjectMapper objectMapper;
   @Autowired private JdbcTemplate jdbc;
+  @Autowired private UserRepository users;
   @MockitoBean private JavaMailSender mail;
 
   @DynamicPropertySource
@@ -123,6 +133,46 @@ class RegistrationApiIntegrationTest {
                 "password", "password"));
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(response.getBody()).contains("fieldErrors").contains("password");
+  }
+
+  @Test
+  void mailFailureIsLoggedWithoutSecretsAndRegistrationStillCommits() {
+    String email = "mail-failure-" + System.nanoTime() + "@example.com";
+    String password = "safe-password";
+    users.saveAndFlush(
+        new User(UUID.randomUUID(), email, email, "User", "stored-password", "zh-TW"));
+    Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(RegistrationService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    doThrow(new IllegalStateException("mail failed: " + email + " token=secret"))
+        .when(mail)
+        .send(any(SimpleMailMessage.class));
+
+    try {
+      ResponseEntity<Void> response =
+          restTemplate.postForEntity(
+              url("/api/v1/auth/email-verifications/resend"),
+              new HttpEntity<>(json(Map.of("email", email)), headers()),
+              Void.class);
+
+      assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from email_verification_tokens where user_id = "
+                      + "(select id from users where email = ?)",
+                  Integer.class,
+                  email))
+          .isEqualTo(1);
+      assertThat(appender.list)
+          .anySatisfy(
+              event ->
+                  assertThat(event.getFormattedMessage())
+                      .contains("Identity email delivery failed")
+                      .doesNotContain(email, password, "token=", "secret"));
+    } finally {
+      logger.detachAppender(appender);
+    }
   }
 
   private ResponseEntity<Void> post(String path, Object body) {

@@ -4,13 +4,11 @@ import com.blogadmin.identity.domain.user.User;
 import com.blogadmin.identity.domain.user.UserRepository;
 import com.blogadmin.identity.domain.verification.EmailVerificationToken;
 import com.blogadmin.identity.domain.verification.EmailVerificationTokenRepository;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.time.Instant;
-import java.util.Base64;
 import java.util.Locale;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -22,7 +20,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @Service
 public class RegistrationService {
-  private static final SecureRandom RANDOM = new SecureRandom();
+  private static final Logger LOGGER = LoggerFactory.getLogger(RegistrationService.class);
   private final UserRepository users;
   private final EmailVerificationTokenRepository tokens;
   private final RateLimitService rateLimits;
@@ -93,7 +91,7 @@ public class RegistrationService {
   @Transactional
   public boolean verify(String token) {
     Instant now = Instant.now();
-    byte[] tokenHash = hash(token);
+    byte[] tokenHash = OpaqueToken.digest(token);
     UUID userId = tokens.findUserIdByTokenHash(tokenHash).orElse(null);
     if (userId == null) return false;
     User user = users.findLockedById(userId).orElse(null);
@@ -111,13 +109,13 @@ public class RegistrationService {
   }
 
   private void issue(User user) {
-    String token = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes());
+    OpaqueToken.Issued token = OpaqueToken.generate();
     tokens
         .findByUserIdAndUsedAtIsNullAndInvalidatedAtIsNull(user.getId())
         .forEach(t -> t.invalidate(Instant.now()));
     tokens.save(
         new EmailVerificationToken(
-            UUID.randomUUID(), user.getId(), hash(token), Instant.now().plusSeconds(86400)));
+            UUID.randomUUID(), user.getId(), token.digest(), Instant.now().plusSeconds(86400)));
     tokens.flush();
     try {
       var m = new SimpleMailMessage();
@@ -132,21 +130,26 @@ public class RegistrationService {
                   : "，請於 24 小時內驗證：")
               + frontend
               + "/verify-email?token="
-              + token);
-      if (TransactionSynchronizationManager.isSynchronizationActive()) {
-        TransactionSynchronizationManager.registerSynchronization(
-            new TransactionSynchronization() {
-              @Override
-              public void afterCommit() {
-                try {
-                  mail.send(m);
-                } catch (RuntimeException ignored) {
-                }
-              }
-            });
-      } else mail.send(m);
-    } catch (RuntimeException ignored) {
+              + token.value());
+      sendAfterCommit(m);
+    } catch (RuntimeException exception) {
+      LOGGER.warn("Identity email delivery failed");
     }
+  }
+
+  private void sendAfterCommit(SimpleMailMessage message) {
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) return;
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            try {
+              mail.send(message);
+            } catch (RuntimeException exception) {
+              LOGGER.warn("Identity email delivery failed");
+            }
+          }
+        });
   }
 
   private void checkRate(String bucket, String ip, String email) {
@@ -175,20 +178,6 @@ public class RegistrationService {
 
     public long retryAfterSeconds() {
       return retryAfterSeconds;
-    }
-  }
-
-  private static byte[] randomBytes() {
-    byte[] b = new byte[32];
-    RANDOM.nextBytes(b);
-    return b;
-  }
-
-  private static byte[] hash(String s) {
-    try {
-      return MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8));
-    } catch (Exception e) {
-      throw new IllegalStateException(e);
     }
   }
 }

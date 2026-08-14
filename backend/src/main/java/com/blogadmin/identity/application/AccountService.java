@@ -4,10 +4,10 @@ import com.blogadmin.identity.domain.emailchange.*;
 import com.blogadmin.identity.domain.password.*;
 import com.blogadmin.identity.domain.session.*;
 import com.blogadmin.identity.domain.user.*;
-import java.nio.charset.StandardCharsets;
-import java.security.*;
 import java.time.Instant;
 import java.util.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -19,7 +19,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @Service
 public class AccountService {
-  private static final SecureRandom RANDOM = new SecureRandom();
+  private static final Logger LOGGER = LoggerFactory.getLogger(AccountService.class);
   private final UserRepository users;
   private final RefreshSessionRepository sessions;
   private final PasswordEncoder passwords;
@@ -81,26 +81,21 @@ public class AccountService {
     if (u == null) return;
     resets.findByUserIdAndUsedAtIsNull(u.getId()).forEach(t -> t.use(Instant.now()));
     resets.flush();
-    String token = Base64.getUrlEncoder().withoutPadding().encodeToString(random());
+    OpaqueToken.Issued token = OpaqueToken.generate();
     resets.save(
         new PasswordResetToken(
-            UUID.randomUUID(),
-            u.getId(),
-            hash(token.getBytes(StandardCharsets.UTF_8)),
-            Instant.now().plusSeconds(86400)));
+            UUID.randomUUID(), u.getId(), token.digest(), Instant.now().plusSeconds(86400)));
     sendAfterCommit(
         u.getEmail(),
         "Password reset / 密碼重設",
-        "Reset password / 重設密碼: " + frontend + "/reset-password?token=" + token);
+        "Reset password / 重設密碼: " + frontend + "/reset-password?token=" + token.value());
   }
 
   @Transactional
   public void reset(String token, String next) {
     if (token == null) throw new ResetTokenNotFound();
     PasswordResetToken t =
-        resets
-            .findByTokenHash(hash(token.getBytes(StandardCharsets.UTF_8)))
-            .orElseThrow(ResetTokenNotFound::new);
+        resets.findByTokenHash(OpaqueToken.digest(token)).orElseThrow(ResetTokenNotFound::new);
     User u = users.findById(t.getUserId()).orElseThrow();
     if (t.getUsedAt() != null || !t.getExpiresAt().isAfter(Instant.now()))
       throw new ResetTokenNotFound();
@@ -121,26 +116,24 @@ public class AccountService {
       throw new AlreadyUsedEmail();
     emails.findByUserIdAndUsedAtIsNull(managed.getId()).forEach(t -> t.use(Instant.now()));
     emails.flush();
-    String token = Base64.getUrlEncoder().withoutPadding().encodeToString(random());
+    OpaqueToken.Issued token = OpaqueToken.generate();
     emails.save(
         new EmailChangeToken(
             UUID.randomUUID(),
             managed.getId(),
             n,
-            hash(token.getBytes(StandardCharsets.UTF_8)),
+            token.digest(),
             Instant.now().plusSeconds(86400)));
     sendAfterCommit(
         n,
         "Email change / Email 變更",
-        "Confirm / 確認: " + frontend + "/confirm-email?token=" + token);
+        "Confirm / 確認: " + frontend + "/confirm-email?token=" + token.value());
   }
 
   @Transactional
   public void confirmEmail(String token) {
     EmailChangeToken t =
-        emails
-            .findByTokenHash(hash(token.getBytes(StandardCharsets.UTF_8)))
-            .orElseThrow(InvalidAccountException::new);
+        emails.findByTokenHash(OpaqueToken.digest(token)).orElseThrow(InvalidAccountException::new);
     if (t.getUsedAt() != null || !t.getExpiresAt().isAfter(Instant.now()))
       throw new InvalidAccountException();
     users.lockNormalizedEmail(t.getNewEmail());
@@ -159,10 +152,7 @@ public class AccountService {
   }
 
   private void sendAfterCommit(String to, String subject, String text) {
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      send(to, subject, text);
-      return;
-    }
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) return;
     TransactionSynchronizationManager.registerSynchronization(
         new TransactionSynchronization() {
           @Override
@@ -180,21 +170,8 @@ public class AccountService {
     m.setText(text);
     try {
       mail.send(m);
-    } catch (RuntimeException ignored) {
-    }
-  }
-
-  private static byte[] random() {
-    byte[] b = new byte[32];
-    RANDOM.nextBytes(b);
-    return b;
-  }
-
-  private static byte[] hash(byte[] b) {
-    try {
-      return MessageDigest.getInstance("SHA-256").digest(b);
-    } catch (Exception e) {
-      throw new IllegalStateException(e);
+    } catch (RuntimeException exception) {
+      LOGGER.warn("Identity email delivery failed");
     }
   }
 
