@@ -113,6 +113,39 @@ describe('auth seams', () => {
     ).toEqual(router.createUrlTree(['/forbidden']));
   });
 
+  it('requires an incomplete logged-in user to complete the profile before other protected pages', () => {
+    TestBed.configureTestingModule({
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    });
+    const router = TestBed.inject(Router);
+    const injector = TestBed.inject(EnvironmentInjector);
+    const auth = TestBed.inject(Auth);
+    const route = {} as ActivatedRouteSnapshot;
+    auth.setToken('token');
+
+    for (const displayName of [undefined, '   ']) {
+      auth.user = { ...user, displayName } as typeof user;
+      expect(
+        runInInjectionContext(injector, () =>
+          authGuard(route, { url: '/articles' } as RouterStateSnapshot),
+        ),
+      ).toEqual(router.createUrlTree(['/account/profile']));
+
+      expect(
+        runInInjectionContext(injector, () =>
+          authGuard(route, { url: '/account/profile' } as RouterStateSnapshot),
+        ),
+      ).toBe(true);
+    }
+
+    auth.user = user;
+    expect(
+      runInInjectionContext(injector, () =>
+        authGuard(route, { url: '/articles' } as RouterStateSnapshot),
+      ),
+    ).toBe(true);
+  });
+
   it('persists guest and preferred language choices', () => {
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting()],

@@ -1,7 +1,10 @@
 package com.blogadmin;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 
+import com.blogadmin.identity.domain.password.PasswordResetTokenRepository;
 import com.blogadmin.identity.domain.ratelimit.RateLimitEventRepository;
 import com.blogadmin.identity.domain.session.RefreshSessionRepository;
 import com.blogadmin.identity.domain.user.User;
@@ -26,6 +29,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -36,9 +40,12 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -59,9 +66,11 @@ class AuthenticationApiIntegrationTest {
   @Autowired private PasswordEncoder passwords;
   @Autowired private UserRepository users;
   @Autowired private UserIdentityRepository identities;
+  @Autowired private PasswordResetTokenRepository resetTokens;
   @Autowired private RefreshSessionRepository sessions;
   @Autowired private EmailVerificationTokenRepository tokens;
   @Autowired private RateLimitEventRepository limits;
+  @MockitoBean private JavaMailSender mail;
   @PersistenceContext private EntityManager entityManager;
 
   @DynamicPropertySource
@@ -241,9 +250,54 @@ class AuthenticationApiIntegrationTest {
     assertThat(identities.count()).isZero();
   }
 
+  @Test
+  void googleLoginUserCanResetPasswordWithoutAcceptingInvalidPassword() {
+    String email = "google-reset@example.com";
+    assertThat(
+            post(
+                    "/api/v1/auth/google",
+                    Map.of("accessToken", supabaseToken(UUID.randomUUID().toString(), email)),
+                    Map.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+
+    assertThat(
+            post("/api/v1/auth/password-resets", Map.of("email", email), Void.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.ACCEPTED);
+    ArgumentCaptor<SimpleMailMessage> mailCaptor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+    verify(mail, atLeastOnce()).send(mailCaptor.capture());
+    SimpleMailMessage resetMail = mailCaptor.getValue();
+    assertThat(resetMail.getTo()).containsExactly(email);
+    String resetToken = resetToken(resetMail.getText());
+
+    assertThat(
+            post(
+                    "/api/v1/auth/password-resets/" + resetToken,
+                    Map.of("password", "password"),
+                    Void.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(
+            post(
+                    "/api/v1/auth/password-resets/" + resetToken,
+                    Map.of("password", "reset-password"),
+                    Void.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.NO_CONTENT);
+    assertThat(
+            post(
+                    "/api/v1/auth/login",
+                    Map.of("email", email, "password", "reset-password"),
+                    Map.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+  }
+
   @BeforeEach
   void clearDatabase() {
     sessions.deleteAll();
+    resetTokens.deleteAll();
     tokens.deleteAll();
     limits.deleteAll();
     identities.deleteAll();
@@ -508,6 +562,10 @@ class AuthenticationApiIntegrationTest {
 
   private String email(UUID user) {
     return users.findById(user).orElseThrow().getEmail();
+  }
+
+  private String resetToken(String text) {
+    return text.substring(text.indexOf("token=") + 6).split("[ &)]")[0];
   }
 
   private <T> ResponseEntity<T> post(String path, Object body, Class<T> type) {

@@ -58,17 +58,30 @@ export class Auth {
   }
 }
 
-export const authGuard: CanActivateFn = () => {
+export const authGuard: CanActivateFn = (_route, state) => {
   const auth = inject(Auth);
   const router = inject(Router);
+  const profileRoute = state.url?.split('?')[0] === '/account/profile';
 
   if (!auth.token) {
     return router.createUrlTree(['/login']);
   }
 
   return auth.user
-    ? true
-    : auth.load().pipe(map((user) => (user ? true : router.createUrlTree(['/login']))));
+    ? profileRoute || !!auth.user.displayName?.trim()
+      ? true
+      : router.createUrlTree(['/account/profile'])
+    : auth
+        .load()
+        .pipe(
+          map((user) =>
+            user
+              ? profileRoute || !!user.displayName?.trim()
+                ? true
+                : router.createUrlTree(['/account/profile'])
+              : router.createUrlTree(['/login']),
+          ),
+        );
 };
 
 export const adminGuard: CanActivateFn = () => {
