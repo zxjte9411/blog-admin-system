@@ -18,6 +18,8 @@ import com.blogadmin.identity.domain.user.UserRepository;
 import com.blogadmin.identity.domain.user.UserRole;
 import com.blogadmin.identity.web.security.AccessTokenSecurityConfig;
 import com.blogadmin.identity.web.security.JwtToken;
+import com.blogadmin.test.AbstractPostgresIntegrationTest;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.MACSigner;
@@ -25,17 +27,21 @@ import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.PlainJWT;
 import com.nimbusds.jwt.SignedJWT;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpEntity;
@@ -51,22 +57,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-@Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class AccessTokenCryptoAndSecurityIntegrationTest {
-  private static final String SECRET = "test-secret-that-is-at-least-32-bytes-long";
-
-  @Container
-  static PostgreSQLContainer<?> postgres =
-      new PostgreSQLContainer<>("postgres:16-alpine").withDatabaseName("blog_admin");
+class AccessTokenCryptoAndSecurityIntegrationTest extends AbstractPostgresIntegrationTest {
 
   @LocalServerPort private int port;
   @Autowired private TestRestTemplate restTemplate;
@@ -80,20 +74,14 @@ class AccessTokenCryptoAndSecurityIntegrationTest {
   @Autowired private AccountService accountService;
   @Autowired private JdbcTemplate jdbcTemplate;
   @Autowired private TransactionTemplate transactionTemplate;
+  @Autowired private ObjectMapper objectMapper;
+  @PersistenceContext private EntityManager entityManager;
   @MockitoBean private JavaMailSender mailSender;
-
-  @DynamicPropertySource
-  static void database(DynamicPropertyRegistry registry) {
-    registry.add("spring.datasource.url", postgres::getJdbcUrl);
-    registry.add("spring.datasource.username", postgres::getUsername);
-    registry.add("spring.datasource.password", postgres::getPassword);
-    registry.add("app.security.jwt-secret", () -> SECRET);
-  }
 
   @BeforeEach
   void setUp() {
     reset(mailSender);
-    jdbcTemplate.update("DELETE FROM auth_rate_limit_events");
+    resetDatabase(jdbcTemplate);
   }
 
   @Test
@@ -138,7 +126,7 @@ class AccessTokenCryptoAndSecurityIntegrationTest {
 
     SignedJWT signedJWT = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), claimsSet);
     try {
-      signedJWT.sign(new MACSigner(SECRET.getBytes(StandardCharsets.UTF_8)));
+      signedJWT.sign(new MACSigner(TEST_JWT_SECRET.getBytes(StandardCharsets.UTF_8)));
     } catch (Exception exception) {
       throw new RuntimeException(exception);
     }
@@ -413,6 +401,135 @@ class AccessTokenCryptoAndSecurityIntegrationTest {
   }
 
   @Test
+  void bearerTokenIsRejectedImmediatelyWhenUserIsDisabled() {
+    UUID userId = UUID.randomUUID();
+    User user =
+        userRepository.save(
+            new User(
+                userId,
+                "disabled-bearer-" + userId + "@example.com",
+                "disabled-bearer-" + userId + "@example.com",
+                "DisabledUser",
+                passwordEncoder.encode("safe-password"),
+                "zh-TW"));
+    user.verify(Instant.now());
+    userRepository.saveAndFlush(user);
+
+    UUID sessionId = UUID.randomUUID();
+    refreshSessionRepository.saveAndFlush(
+        new RefreshSession(
+            sessionId,
+            userId,
+            "digest-disabled".getBytes(StandardCharsets.UTF_8),
+            Instant.now(),
+            user.getAccessTokenVersion()));
+    String accessToken = jwtToken.create(user, sessionId, 0).value();
+
+    user.disable();
+    userRepository.saveAndFlush(user);
+    entityManager.clear();
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.setBearerAuth(accessToken);
+    ResponseEntity<String> response =
+        restTemplate.exchange(
+            url("/api/v1/auth/sessions"),
+            HttpMethod.GET,
+            new HttpEntity<>(null, headers),
+            String.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+  }
+
+  @Test
+  void resourceServerRejectsAccessTokenWithNonHs256HeaderWithoutBearerChallenge() {
+    UUID userId = UUID.randomUUID();
+    User user =
+        userRepository.save(
+            new User(
+                userId,
+                "non-hs256-" + userId + "@example.com",
+                "non-hs256-" + userId + "@example.com",
+                "NonHs256User",
+                passwordEncoder.encode("safe-password"),
+                "zh-TW"));
+    user.verify(Instant.now());
+    userRepository.saveAndFlush(user);
+
+    UUID sessionId = UUID.randomUUID();
+    refreshSessionRepository.saveAndFlush(
+        new RefreshSession(
+            sessionId,
+            userId,
+            "digest-non-hs256".getBytes(StandardCharsets.UTF_8),
+            Instant.now(),
+            user.getAccessTokenVersion()));
+    String validToken = jwtToken.create(user, sessionId, 0).value();
+    String invalidAlgorithmToken = createAccessTokenWithTamperedHeader(validToken, "HS512");
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.setBearerAuth(invalidAlgorithmToken);
+
+    ResponseEntity<String> protectedResponse =
+        restTemplate.exchange(
+            url("/api/v1/auth/sessions"),
+            HttpMethod.GET,
+            new HttpEntity<>(null, headers),
+            String.class);
+    assertThat(protectedResponse.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(protectedResponse.getHeaders().getFirst(HttpHeaders.WWW_AUTHENTICATE)).isNull();
+    assertThat(protectedResponse.getBody()).doesNotContain("HS512", "signature", "algorithm");
+
+    ResponseEntity<String> publicResponse =
+        restTemplate.exchange(
+            url("/actuator/health"), HttpMethod.GET, new HttpEntity<>(null, headers), String.class);
+    assertThat(publicResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(publicResponse.getHeaders().getFirst(HttpHeaders.WWW_AUTHENTICATE)).isNull();
+  }
+
+  @Test
+  void expiredAccessTokenReturnsGenericProblemUnauthorizedWithoutBearerChallenge() {
+    UUID userId = UUID.randomUUID();
+    User user =
+        userRepository.save(
+            new User(
+                userId,
+                "expired-bearer-" + userId + "@example.com",
+                "expired-bearer-" + userId + "@example.com",
+                "ExpiredBearerUser",
+                passwordEncoder.encode("safe-password"),
+                "zh-TW"));
+    user.verify(Instant.now());
+    userRepository.saveAndFlush(user);
+
+    UUID sessionId = UUID.randomUUID();
+    refreshSessionRepository.saveAndFlush(
+        new RefreshSession(
+            sessionId,
+            userId,
+            "digest-expired".getBytes(StandardCharsets.UTF_8),
+            Instant.now(),
+            user.getAccessTokenVersion()));
+    String validToken = jwtToken.create(user, sessionId, 0).value();
+    String expiredToken = createExpiredAccessToken(validToken);
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.setBearerAuth(expiredToken);
+
+    ResponseEntity<String> response =
+        restTemplate.exchange(
+            url("/api/v1/auth/sessions"),
+            HttpMethod.GET,
+            new HttpEntity<>(null, headers),
+            String.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_TYPE))
+        .startsWith("application/problem+json");
+    assertThat(response.getHeaders().getFirst(HttpHeaders.WWW_AUTHENTICATE)).isNull();
+    assertThat(response.getBody()).doesNotContain("expired", "expiration", "timestamp");
+  }
+
+  @Test
   void emailMaskingFormatsProperly() {
     assertThat(IdentityEmailEventListener.maskEmail("johndoe@example.com"))
         .isEqualTo("j***e@example.com");
@@ -420,6 +537,52 @@ class AccessTokenCryptoAndSecurityIntegrationTest {
         .isEqualTo("a***@example.com");
     assertThat(IdentityEmailEventListener.maskEmail(null)).isEqualTo("***");
     assertThat(IdentityEmailEventListener.maskEmail("")).isEqualTo("***");
+  }
+
+  private String createAccessTokenWithTamperedHeader(String token, String algorithm) {
+    String[] parts = token.split("\\.");
+    String header =
+        Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(
+                ("{\"alg\":\"" + algorithm + "\",\"typ\":\"JWT\"}")
+                    .getBytes(StandardCharsets.UTF_8));
+    try {
+      Mac mac = Mac.getInstance("HmacSHA256");
+      mac.init(new SecretKeySpec(TEST_JWT_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+      String signature =
+          Base64.getUrlEncoder()
+              .withoutPadding()
+              .encodeToString(
+                  mac.doFinal((header + "." + parts[1]).getBytes(StandardCharsets.UTF_8)));
+      return header + "." + parts[1] + "." + signature;
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
+  }
+
+  private String createExpiredAccessToken(String token) {
+    String[] parts = token.split("\\.");
+    try {
+      @SuppressWarnings("unchecked")
+      Map<String, Object> payload =
+          objectMapper.readValue(Base64.getUrlDecoder().decode(parts[1]), Map.class);
+      payload.put("exp", Instant.now().minusSeconds(1).getEpochSecond());
+      String encodedPayload =
+          Base64.getUrlEncoder()
+              .withoutPadding()
+              .encodeToString(objectMapper.writeValueAsBytes(payload));
+      Mac mac = Mac.getInstance("HmacSHA256");
+      mac.init(new SecretKeySpec(TEST_JWT_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+      String signature =
+          Base64.getUrlEncoder()
+              .withoutPadding()
+              .encodeToString(
+                  mac.doFinal((parts[0] + "." + encodedPayload).getBytes(StandardCharsets.UTF_8)));
+      return parts[0] + "." + encodedPayload + "." + signature;
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
   }
 
   private String url(String path) {
