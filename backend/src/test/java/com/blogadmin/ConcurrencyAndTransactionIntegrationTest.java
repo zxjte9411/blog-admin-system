@@ -24,6 +24,7 @@ import com.blogadmin.publishing.domain.article.PublicationStatus;
 import com.blogadmin.publishing.domain.tag.Tag;
 import com.blogadmin.publishing.domain.tag.TagRepository;
 import jakarta.persistence.EntityManagerFactory;
+import java.lang.reflect.Proxy;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -49,6 +50,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.AopTestUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -463,7 +465,7 @@ class ConcurrencyAndTransactionIntegrationTest {
     // Inject failure into TagRepository during cleanup via standard dynamic proxy
     TagRepository failingTags =
         (TagRepository)
-            java.lang.reflect.Proxy.newProxyInstance(
+            Proxy.newProxyInstance(
                 TagRepository.class.getClassLoader(),
                 new Class<?>[] {TagRepository.class},
                 (proxy, method, methodArgs) -> {
@@ -474,8 +476,7 @@ class ConcurrencyAndTransactionIntegrationTest {
                 });
 
     // Unwrap CGLIB/JDK proxy to access target object
-    ArticleCleanupExecutor targetExecutor =
-        org.springframework.test.util.AopTestUtils.getTargetObject(articleCleanupExecutor);
+    ArticleCleanupExecutor targetExecutor = AopTestUtils.getTargetObject(articleCleanupExecutor);
     TagRepository originalTags =
         (TagRepository) ReflectionTestUtils.getField(targetExecutor, "tags");
     ReflectionTestUtils.setField(targetExecutor, "tags", failingTags);
@@ -493,5 +494,79 @@ class ConcurrencyAndTransactionIntegrationTest {
     assertThat(rolledBackArticle).isNotNull();
     assertThat(rolledBackArticle.getDeletedAt()).isNotNull();
     assertThat(tags.findByNameIgnoreCase("RollbackTag1")).isPresent();
+  }
+
+  @Test
+  @Timeout(15)
+  void testMultiTagDeadlockFreeUnderCollationAndUnicode() throws Exception {
+    User author =
+        new User(
+            UUID.randomUUID(),
+            "unicodetest@example.com",
+            "unicodetest@example.com",
+            "Unicode Author",
+            passwords.encode("Password123!"),
+            "zh-TW");
+    author.verify(Instant.now());
+    users.save(author);
+
+    // Pre-create an orphan tag
+    tags.saveAndFlush(new Tag(UUID.randomUUID(), "résumé"));
+
+    Set<String> tagSet1 = Set.of("café", "résumé", "Über", "自然語言處理");
+    Set<String> tagSet2 = Set.of("RÉSUMÉ", "CAFÉ", "über", "架構設計");
+
+    ArticleService.ArticleView existing =
+        articleService.create(
+            author, "Article To Update", "Content", PublicationStatus.PUBLISHED, null, tagSet1);
+
+    ExecutorService executor = Executors.newFixedThreadPool(3);
+    CyclicBarrier barrier = new CyclicBarrier(3);
+
+    // Thread 1: create article 1 with tagSet1
+    Callable<ArticleService.ArticleView> t1 =
+        () -> {
+          barrier.await(5, TimeUnit.SECONDS);
+          return articleService.create(
+              author,
+              "Article Concurrent 1",
+              "Content 1",
+              PublicationStatus.PUBLISHED,
+              null,
+              tagSet1);
+        };
+
+    // Thread 2: create article 2 with tagSet2 (interleaved case variants)
+    Callable<ArticleService.ArticleView> t2 =
+        () -> {
+          barrier.await(5, TimeUnit.SECONDS);
+          return articleService.create(
+              author,
+              "Article Concurrent 2",
+              "Content 2",
+              PublicationStatus.PUBLISHED,
+              null,
+              tagSet2);
+        };
+
+    // Thread 3: concurrent maintenance cleanup attempting to process orphan tags
+    Callable<Void> t3 =
+        () -> {
+          barrier.await(5, TimeUnit.SECONDS);
+          articleCleanupExecutor.cleanup();
+          return null;
+        };
+
+    Future<ArticleService.ArticleView> f1 = executor.submit(t1);
+    Future<ArticleService.ArticleView> f2 = executor.submit(t2);
+    Future<Void> f3 = executor.submit(t3);
+
+    ArticleService.ArticleView r1 = f1.get(10, TimeUnit.SECONDS);
+    ArticleService.ArticleView r2 = f2.get(10, TimeUnit.SECONDS);
+    f3.get(10, TimeUnit.SECONDS);
+    executor.shutdown();
+
+    assertThat(r1).isNotNull();
+    assertThat(r2).isNotNull();
   }
 }

@@ -10,8 +10,10 @@ import com.blogadmin.publishing.domain.tag.TagRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayDeque;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -270,7 +272,7 @@ public class ArticleService {
       names.stream()
           .map(String::trim)
           .filter(n -> !n.isBlank())
-          .sorted(String.CASE_INSENSITIVE_ORDER)
+          .sorted(Comparator.comparing(n -> n.toLowerCase(Locale.ROOT)))
           .forEach(n -> f.add(tags.getOrCreate(n)));
     a.getTags().clear();
     a.getTags().addAll(f);

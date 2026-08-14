@@ -32,8 +32,7 @@ public interface TagRepository extends JpaRepository<Tag, UUID> {
   }
 
   @Query(
-      value =
-          "SELECT name FROM tags WHERE id NOT IN (SELECT tag_id FROM article_tags) ORDER BY lower(name)",
+      value = "SELECT name FROM tags WHERE id NOT IN (SELECT tag_id FROM article_tags)",
       nativeQuery = true)
   List<String> findCandidateOrphanTagNames();
 
@@ -43,12 +42,6 @@ public interface TagRepository extends JpaRepository<Tag, UUID> {
           "DELETE FROM tags WHERE lower(name) = :lowerName AND id NOT IN (SELECT tag_id FROM article_tags)",
       nativeQuery = true)
   int deleteIfOrphan(@Param("lowerName") String lowerName);
-
-  @Modifying
-  @Query(
-      value = "DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM article_tags)",
-      nativeQuery = true)
-  int deleteOrphanTags();
 
   @Query(
       "select distinct t from Tag t join Article a on t member of a.tags where a.deletedAt is null and a.status = com.blogadmin.publishing.domain.article.PublicationStatus.PUBLISHED")

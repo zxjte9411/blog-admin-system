@@ -2,9 +2,23 @@ package com.blogadmin.publishing.domain.article;
 
 import com.blogadmin.identity.domain.user.User;
 import com.blogadmin.publishing.domain.tag.Tag;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
-import java.util.*;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.UUID;
+import org.hibernate.annotations.BatchSize;
 
 @Entity
 @Table(name = "articles")
@@ -40,7 +54,7 @@ public class Article {
   @Version private long version;
 
   @ManyToMany(fetch = FetchType.LAZY)
-  @org.hibernate.annotations.BatchSize(size = 50)
+  @BatchSize(size = 50)
   @JoinTable(
       name = "article_tags",
       joinColumns = @JoinColumn(name = "article_id"),

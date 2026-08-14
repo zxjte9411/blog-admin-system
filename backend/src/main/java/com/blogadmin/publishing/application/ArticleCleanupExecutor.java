@@ -4,6 +4,7 @@ import com.blogadmin.publishing.domain.article.ArticleRepository;
 import com.blogadmin.publishing.domain.tag.TagRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import org.springframework.stereotype.Service;
@@ -29,8 +30,15 @@ public class ArticleCleanupExecutor {
         });
     articles.flush();
     List<String> candidateNames = tags.findCandidateOrphanTagNames();
-    for (String name : candidateNames) {
-      String normalized = name.toLowerCase(Locale.ROOT);
+    List<String> sortedNormalizedNames =
+        candidateNames.stream()
+            .map(String::trim)
+            .filter(n -> !n.isBlank())
+            .map(n -> n.toLowerCase(Locale.ROOT))
+            .distinct()
+            .sorted(Comparator.naturalOrder())
+            .toList();
+    for (String normalized : sortedNormalizedNames) {
       tags.lockNormalizedName(normalized);
       tags.deleteIfOrphan(normalized);
     }

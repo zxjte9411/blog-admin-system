@@ -1,12 +1,18 @@
 package com.blogadmin.identity.application;
 
 import com.blogadmin.identity.application.mail.IdentityEmailEvent;
-import com.blogadmin.identity.domain.emailchange.*;
-import com.blogadmin.identity.domain.password.*;
-import com.blogadmin.identity.domain.session.*;
-import com.blogadmin.identity.domain.user.*;
+import com.blogadmin.identity.domain.emailchange.EmailChangeToken;
+import com.blogadmin.identity.domain.emailchange.EmailChangeTokenRepository;
+import com.blogadmin.identity.domain.password.PasswordPolicy;
+import com.blogadmin.identity.domain.password.PasswordResetToken;
+import com.blogadmin.identity.domain.password.PasswordResetTokenRepository;
+import com.blogadmin.identity.domain.session.RefreshSessionRepository;
+import com.blogadmin.identity.domain.user.User;
+import com.blogadmin.identity.domain.user.UserRepository;
 import java.time.Instant;
-import java.util.*;
+import java.util.Locale;
+import java.util.Set;
+import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
