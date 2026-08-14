@@ -42,10 +42,13 @@ import java.security.interfaces.RSAPublicKey;
 import java.security.spec.ECGenParameterSpec;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -655,6 +658,59 @@ class AuthenticationApiIntegrationTest {
         .isEqualTo(HttpStatus.UNAUTHORIZED);
   }
 
+  @Test
+  void resourceServerRejectsAccessTokenWithNonHs256HeaderWithoutBearerChallenge() {
+    UUID user = createUser(true, true);
+    String validToken =
+        (String)
+            post("/api/v1/auth/login", loginRequest(user), Map.class).getBody().get("accessToken");
+    String invalidAlgorithmToken = accessTokenWithHeader(validToken, "HS512");
+
+    ResponseEntity<String> protectedResponse =
+        exchange(
+            "/api/v1/auth/sessions",
+            HttpMethod.GET,
+            headers(invalidAlgorithmToken, null),
+            null,
+            String.class);
+    assertThat(protectedResponse.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(protectedResponse.getHeaders().getFirst(HttpHeaders.WWW_AUTHENTICATE)).isNull();
+    assertThat(protectedResponse.getBody()).doesNotContain("HS512", "signature", "algorithm");
+
+    ResponseEntity<String> publicResponse =
+        exchange(
+            "/actuator/health",
+            HttpMethod.GET,
+            headers(invalidAlgorithmToken, null),
+            null,
+            String.class);
+    assertThat(publicResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(publicResponse.getHeaders().getFirst(HttpHeaders.WWW_AUTHENTICATE)).isNull();
+  }
+
+  @Test
+  void expiredAccessTokenReturnsGenericProblemUnauthorizedWithoutBearerChallenge() {
+    UUID user = createUser(true, true);
+    String validToken =
+        (String)
+            post("/api/v1/auth/login", loginRequest(user), Map.class).getBody().get("accessToken");
+    String expiredToken = expiredAccessToken(validToken);
+
+    ResponseEntity<String> response =
+        exchange(
+            "/api/v1/auth/sessions",
+            HttpMethod.GET,
+            headers(expiredToken, null),
+            null,
+            String.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_TYPE))
+        .startsWith("application/problem+json");
+    assertThat(response.getHeaders().getFirst(HttpHeaders.WWW_AUTHENTICATE)).isNull();
+    assertThat(response.getBody()).doesNotContain("expired", "expiration", "timestamp");
+  }
+
   private UUID createUser(boolean verified, boolean enabled) {
     UUID id = UUID.randomUUID();
     String email = "user-" + id + "@example.com";
@@ -714,6 +770,57 @@ class AuthenticationApiIntegrationTest {
 
   private String url(String path) {
     return "http://localhost:" + port + path;
+  }
+
+  private String accessTokenWithHeader(String token, String algorithm) {
+    String[] parts = token.split("\\.");
+    String header =
+        Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(
+                ("{\"alg\":\"" + algorithm + "\",\"typ\":\"JWT\"}")
+                    .getBytes(StandardCharsets.UTF_8));
+    try {
+      Mac mac = Mac.getInstance("HmacSHA256");
+      mac.init(
+          new SecretKeySpec(
+              "test-secret-that-is-at-least-32-bytes-long".getBytes(StandardCharsets.UTF_8),
+              "HmacSHA256"));
+      String signature =
+          Base64.getUrlEncoder()
+              .withoutPadding()
+              .encodeToString(
+                  mac.doFinal((header + "." + parts[1]).getBytes(StandardCharsets.UTF_8)));
+      return header + "." + parts[1] + "." + signature;
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
+  }
+
+  private String expiredAccessToken(String token) {
+    String[] parts = token.split("\\.");
+    try {
+      Map<String, Object> payload =
+          new ObjectMapper().readValue(Base64.getUrlDecoder().decode(parts[1]), Map.class);
+      payload.put("exp", Instant.now().minusSeconds(1).getEpochSecond());
+      String encodedPayload =
+          Base64.getUrlEncoder()
+              .withoutPadding()
+              .encodeToString(new ObjectMapper().writeValueAsBytes(payload));
+      Mac mac = Mac.getInstance("HmacSHA256");
+      mac.init(
+          new SecretKeySpec(
+              "test-secret-that-is-at-least-32-bytes-long".getBytes(StandardCharsets.UTF_8),
+              "HmacSHA256"));
+      String signature =
+          Base64.getUrlEncoder()
+              .withoutPadding()
+              .encodeToString(
+                  mac.doFinal((parts[0] + "." + encodedPayload).getBytes(StandardCharsets.UTF_8)));
+      return parts[0] + "." + encodedPayload + "." + signature;
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
   }
 
   private static ECKey ecKey() {

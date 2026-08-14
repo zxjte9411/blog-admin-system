@@ -2,13 +2,17 @@ package com.blogadmin.identity.web.config;
 
 import com.blogadmin.identity.domain.session.RefreshSessionRepository;
 import com.blogadmin.identity.domain.user.UserRepository;
-import com.blogadmin.identity.web.security.AccessTokenFilter;
-import com.blogadmin.identity.web.security.JwtToken;
+import com.blogadmin.identity.web.security.AccessTokenAuthenticationConverter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
+import javax.crypto.spec.SecretKeySpec;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -16,14 +20,26 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.crypto.password.Pbkdf2PasswordEncoder;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class SecurityConfig {
+  private static final RequestMatcher PUBLIC_ROUTES = publicRoutes();
+
   @Bean
   PasswordEncoder passwordEncoder() {
     return Pbkdf2PasswordEncoder.defaultsForSpringSecurity_v5_8();
@@ -34,14 +50,13 @@ public class SecurityConfig {
       HttpSecurity http,
       UserRepository users,
       RefreshSessionRepository sessions,
-      JwtToken jwt,
-      ObjectMapper objectMapper)
+      ObjectMapper objectMapper,
+      JwtDecoder accessTokenDecoder,
+      BearerTokenResolver bearerTokenResolver)
       throws Exception {
     return http.csrf(csrf -> csrf.disable())
         .cors(c -> {})
         .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-        .addFilterBefore(
-            new AccessTokenFilter(users, jwt, sessions), UsernamePasswordAuthenticationFilter.class)
         .exceptionHandling(
             e ->
                 e.authenticationEntryPoint(
@@ -52,25 +67,60 @@ public class SecurityConfig {
                             problem(response, objectMapper, 403, "Access denied")))
         .authorizeHttpRequests(
             a ->
-                a.dispatcherTypeMatchers(DispatcherType.ERROR)
-                    .permitAll()
-                    .requestMatchers("/actuator/health", "/api/v1/public/**")
-                    .permitAll()
-                    .requestMatchers("/swagger-ui/**", "/v3/api-docs/**")
-                    .permitAll()
-                    .requestMatchers(HttpMethod.OPTIONS, "/**")
-                    .permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/v1/auth/**")
-                    .permitAll()
-                    .requestMatchers(HttpMethod.PUT, "/api/v1/auth/password-resets/**")
-                    .permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/v1/auth/email-changes/**")
+                a.requestMatchers(PUBLIC_ROUTES)
                     .permitAll()
                     .requestMatchers("/api/v1/admin/**")
                     .hasRole("ADMIN")
                     .anyRequest()
                     .authenticated())
+        .oauth2ResourceServer(
+            oauth2 ->
+                oauth2
+                    .bearerTokenResolver(bearerTokenResolver)
+                    .authenticationEntryPoint(
+                        (request, response, exception) ->
+                            problem(response, objectMapper, 401, "Authentication required"))
+                    .jwt(
+                        jwtConfigurer ->
+                            jwtConfigurer
+                                .decoder(accessTokenDecoder)
+                                .jwtAuthenticationConverter(
+                                    new AccessTokenAuthenticationConverter(users, sessions))))
         .build();
+  }
+
+  @Bean
+  JwtDecoder accessTokenDecoder(@Value("${app.security.jwt-secret}") String secret) {
+    byte[] key = secret.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    if (key.length < 32) throw new IllegalStateException("JWT secret must be at least 32 bytes");
+    NimbusJwtDecoder decoder =
+        NimbusJwtDecoder.withSecretKey(new SecretKeySpec(key, "HmacSHA256"))
+            .macAlgorithm(MacAlgorithm.HS256)
+            .build();
+    decoder.setJwtValidator(
+        new DelegatingOAuth2TokenValidator<>(
+            new JwtTimestampValidator(Duration.ZERO),
+            new JwtClaimValidator<Instant>("exp", Objects::nonNull)));
+    return decoder;
+  }
+
+  @Bean
+  BearerTokenResolver bearerTokenResolver() {
+    var delegate = new DefaultBearerTokenResolver();
+    return request -> PUBLIC_ROUTES.matches(request) ? null : delegate.resolve(request);
+  }
+
+  private static RequestMatcher publicRoutes() {
+    return new OrRequestMatcher(
+        request -> request.getDispatcherType() == DispatcherType.ERROR,
+        new AntPathRequestMatcher("/actuator/health"),
+        new AntPathRequestMatcher("/api/v1/public/**"),
+        new AntPathRequestMatcher("/swagger-ui/**"),
+        new AntPathRequestMatcher("/v3/api-docs/**"),
+        new AntPathRequestMatcher("/**", HttpMethod.OPTIONS.name()),
+        new AntPathRequestMatcher("/api/v1/auth/**", HttpMethod.POST.name()),
+        new AntPathRequestMatcher("/api/v1/auth/password-resets/**", HttpMethod.PUT.name()),
+        new AntPathRequestMatcher("/api/v1/auth/email-changes/**", HttpMethod.POST.name()));
   }
 
   @Bean
