@@ -26,7 +26,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 @Configuration
 public class AccessTokenSecurityConfig {
   public static final MacAlgorithm MAC_ALGORITHM = MacAlgorithm.HS256;
-  public static final JWSAlgorithm JWS_ALGORITHM = JWSAlgorithm.HS256;
+  public static final JWSAlgorithm JWS_ALGORITHM = JWSAlgorithm.parse(MAC_ALGORITHM.getName());
 
   private final SecretKey secretKey;
 

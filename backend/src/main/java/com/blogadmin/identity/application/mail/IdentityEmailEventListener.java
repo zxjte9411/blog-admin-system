@@ -51,7 +51,7 @@ public class IdentityEmailEventListener {
         message.setText(
             (isEn ? "Hi " : "您好 ")
                 + verification.displayName()
-                + (isEn ? "，請於 24 小時內驗證：" : "，請於 24 小時內驗證：")
+                + (isEn ? ", verify within 24 hours: " : "，請於 24 小時內驗證：")
                 + frontend
                 + "/verify-email?token="
                 + verification.token());

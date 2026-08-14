@@ -3,7 +3,6 @@ package com.blogadmin.identity.web.security;
 import com.blogadmin.identity.domain.user.User;
 import java.time.Instant;
 import java.util.UUID;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
@@ -28,7 +27,7 @@ public final class JwtToken {
             .claim("uver", user.getAccessTokenVersion())
             .expiresAt(expiresAt)
             .build();
-    JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).type("JWT").build();
+    JwsHeader header = JwsHeader.with(AccessTokenSecurityConfig.MAC_ALGORITHM).type("JWT").build();
     String value = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
     return new Token(value, expiresAt);
   }

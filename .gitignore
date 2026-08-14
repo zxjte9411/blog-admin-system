@@ -23,6 +23,9 @@ _site/
 # Local deepwork state
 .slim/deepwork/
 
+# Supabase local temp
+supabase/.temp/
+
 # BEGIN oh-my-opencode-slim worktrees
 .slim/worktrees/
 .slim/worktrees.json
