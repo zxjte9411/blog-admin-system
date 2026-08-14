@@ -19,7 +19,7 @@ import { getPageNumbers } from '../core/pagination';
   standalone: true,
   imports: [CommonModule, AppShell],
   templateUrl: './deleted-articles-page.html',
-  styleUrl: './admin-page.scss',
+  styleUrl: './admin-pages.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DeletedArticlesPage implements OnInit {

@@ -1,0 +1,46 @@
+<app-shell [loading]="loading">
+  <div class="page-intro">
+    <div>
+      <p class="eyebrow">{{ language.t.title }}</p>
+      <h1>{{ language.t.nav.users }}</h1>
+    </div>
+  </div>
+
+  @if (loading) {
+    <progress class="loading-bar" [attr.aria-label]="language.t.loading"></progress>
+  }
+  @if (message) {
+    <div class="success" role="status" aria-live="polite">{{ message }}</div>
+  }
+  @if (error) {
+    <div class="error" role="alert">
+      {{ error }}
+      <button class="ui-outline retry-button" type="button" (click)="retry()">
+        {{ language.t.retryAction }}
+      </button>
+    </div>
+  }
+
+  <app-admin-user-management
+    [items]="items"
+    [loading]="loading"
+    [emptyLabel]="language.t.empty"
+    [loadingLabel]="language.t.loading"
+    [dataLabel]="language.t.userInfo"
+    [roleLabel]="language.t.role"
+    [authorLabel]="language.t.roles.AUTHOR"
+    [adminLabel]="language.t.roles.ADMIN"
+    [enabledLabel]="language.t.enabled"
+    [disabledLabel]="language.t.disabled"
+    [enableActionLabel]="language.t.enableAction"
+    [disableActionLabel]="language.t.disableAction"
+    [statusLabel]="language.t.field.status"
+    [toggleLabel]="language.t.toggle"
+    [updateLabel]="language.t.update"
+    [actionsLabel]="language.t.actions"
+    [canEditRow]="canEditRow"
+    (toggleRow)="toggleUserEnabled($event)"
+    (roleChange)="updateUserRole($event)"
+    (enabledChange)="updateUserEnabled($event)"
+  />
+</app-shell>

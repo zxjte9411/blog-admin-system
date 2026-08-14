@@ -21,7 +21,7 @@ import { ManagementRow } from './article-management-list/article-management-list
   standalone: true,
   imports: [CommonModule, RouterLink, AppShell, ArticleManagementList],
   templateUrl: './article-list-page.html',
-  styleUrl: './admin-page.scss',
+  styleUrl: './admin-pages.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ArticleListPage implements OnInit {

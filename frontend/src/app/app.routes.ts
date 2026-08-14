@@ -4,7 +4,10 @@ import { canLeaveArticle } from './pages/article-editor-page';
 
 const publicPage = () => import('./pages/public-page').then((m) => m.PublicPage);
 const accountPage = () => import('./pages/account-page').then((m) => m.AccountPage);
-const adminPage = () => import('./pages/admin-page').then((m) => m.AdminPage);
+const managedUsersPage = () => import('./pages/managed-users-page').then((m) => m.ManagedUsersPage);
+const invitationsPage = () => import('./pages/invitations-page').then((m) => m.InvitationsPage);
+const passwordSettingsPage = () =>
+  import('./pages/password-settings-page').then((m) => m.PasswordSettingsPage);
 const articleListPage = () => import('./pages/article-list-page').then((m) => m.ArticleListPage);
 const articleCreatePage = () =>
   import('./pages/article-create-page').then((m) => m.ArticleCreatePage);
@@ -46,11 +49,13 @@ export const routes: Routes = [
     canDeactivate: [canLeaveArticle],
     loadComponent: articleEditPage,
   },
-  ...['admin/users', 'admin/invitations', 'admin/settings/password'].map((path) => ({
-    path,
+  { path: 'admin/users', canActivate: [adminGuard], loadComponent: managedUsersPage },
+  { path: 'admin/invitations', canActivate: [adminGuard], loadComponent: invitationsPage },
+  {
+    path: 'admin/settings/password',
     canActivate: [adminGuard],
-    loadComponent: adminPage,
-  })),
+    loadComponent: passwordSettingsPage,
+  },
   { path: 'forbidden', loadComponent: publicPage },
   { path: '**', loadComponent: publicPage },
 ];

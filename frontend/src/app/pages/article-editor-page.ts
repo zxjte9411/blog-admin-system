@@ -17,17 +17,19 @@ import {
   UpdateArticleRequest,
 } from '../core/api';
 import { Language } from '../core/language';
+import { Auth } from '../core/auth';
 import { AppShell } from '../layouts/app-shell';
 
 @Component({
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, AppShell],
   templateUrl: './article-editor-page.html',
-  styleUrl: './admin-page.scss',
+  styleUrl: './admin-pages.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ArticleEditorPage implements OnInit {
   protected readonly language = inject(Language);
+  protected readonly auth = inject(Auth);
   protected readonly route = inject(ActivatedRoute);
   protected readonly router = inject(Router);
   protected readonly api = inject(ArticleApi);
@@ -100,6 +102,10 @@ export class ArticleEditorPage implements OnInit {
     this.loading = true;
     this.api.get(this.route.snapshot.paramMap.get('id')!).subscribe({
       next: (a) => {
+        if (this.auth.user && this.auth.user.role !== 'ADMIN' && a.owner !== this.auth.user.id) {
+          this.fail(403);
+          return;
+        }
         this.form.patchValue({
           title: a.title,
           content: a.content,

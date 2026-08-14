@@ -7,6 +7,6 @@ import { AppShell } from '../layouts/app-shell';
   standalone: true,
   imports: [ReactiveFormsModule, AppShell],
   templateUrl: './article-editor-page.html',
-  styleUrl: './admin-page.scss',
+  styleUrl: './admin-pages.scss',
 })
 export class ArticleCreatePage extends ArticleEditorPage {}

@@ -8,6 +8,7 @@ import { ArticleListPage } from './article-list-page';
 import { canLeaveArticle } from './article-editor-page';
 import { DeletedArticlesPage } from './deleted-articles-page';
 import { Language } from '../core/language';
+import { Auth } from '../core/auth';
 import { Article, Page } from '../core/api';
 
 function setup(
@@ -88,6 +89,111 @@ describe('article use-case pages', () => {
     request.flush({});
   });
 
+  it('prefills the article editor and selected tags from an existing article', async () => {
+    await setup(ArticleEditPage, 'articles/:id/edit', 'article-1');
+    const fixture = TestBed.createComponent(ArticleEditPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/public/tags?size=100').flush({
+      content: [
+        { id: 'tag-1', name: 'Angular' },
+        { id: 'tag-2', name: 'Spring' },
+      ],
+    });
+    http.expectOne('/api/v1/articles/article-1').flush({
+      title: 'Existing title',
+      content: 'Existing content',
+      status: 'PUBLISHED',
+      tagIds: ['tag-1', 'tag-2'],
+      tagNames: ['Angular', 'Spring'],
+      version: 3,
+    });
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement.querySelector('#field-title') as HTMLInputElement).value).toBe(
+      'Existing title',
+    );
+    expect((fixture.nativeElement.querySelector('#tag-tag-1') as HTMLInputElement).checked).toBe(
+      true,
+    );
+    expect((fixture.nativeElement.querySelector('#tag-tag-2') as HTMLInputElement).checked).toBe(
+      true,
+    );
+  });
+
+  it('renders article status as two selectable radio options', async () => {
+    await setup(ArticleCreatePage, 'articles/new');
+    const fixture = TestBed.createComponent(ArticleCreatePage);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/public/tags?size=100').flush([]);
+
+    const radios = fixture.nativeElement.querySelectorAll('input[type="radio"]');
+    expect(radios).toHaveLength(2);
+    expect([...radios].map((radio: HTMLInputElement) => radio.value)).toEqual([
+      'DRAFT',
+      'PUBLISHED',
+    ]);
+  });
+
+  it('renders new article controls in the intended order', async () => {
+    await setup(ArticleCreatePage, 'articles/new');
+    const fixture = TestBed.createComponent(ArticleCreatePage);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/public/tags?size=100')
+      .flush({ content: [{ id: 'tag-1', name: 'Tech' }] });
+    fixture.detectChanges();
+
+    const form = fixture.nativeElement.querySelector('.article-form') as HTMLFormElement;
+    const controls = [...form.children]
+      .map((element: Element) => ({
+        name: element.matches('.status-options')
+          ? 'status'
+          : element.matches('.tag-field')
+            ? 'availableTags'
+            : element.querySelector('.control')?.id?.replace('field-', ''),
+        order: Number(getComputedStyle(element).order),
+      }))
+      .sort((left, right) => left.order - right.order)
+      .map(({ name }) => name)
+      .filter(Boolean);
+
+    expect(controls).toEqual(['title', 'content', 'availableTags', 'tagNames', 'status']);
+  });
+
+  it('sends the article update with enum status and remaining tags', async () => {
+    await setup(ArticleEditPage, 'articles/:id/edit', 'article-1');
+    const fixture = TestBed.createComponent(ArticleEditPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/public/tags?size=100').flush({
+      content: [
+        { id: 'tag-1', name: 'Angular' },
+        { id: 'tag-2', name: 'Spring' },
+      ],
+    });
+    http.expectOne('/api/v1/articles/article-1').flush({
+      title: 'Title',
+      content: 'Content',
+      status: 'DRAFT',
+      tagIds: ['tag-1', 'tag-2'],
+      tagNames: [],
+      version: 3,
+    });
+    fixture.detectChanges();
+
+    const tag1 = fixture.nativeElement.querySelector('#tag-tag-1') as HTMLInputElement;
+    tag1.checked = false;
+    tag1.dispatchEvent(new Event('change'));
+    fixture.componentInstance.submit();
+
+    const request = http.expectOne('/api/v1/articles/article-1');
+    expect(request.request.method).toBe('PUT');
+    expect(request.request.body).toEqual(
+      expect.objectContaining({ status: 'DRAFT', tagIds: ['tag-2'], version: 3 }),
+    );
+  });
+
   it('uses nested Page metadata and reports list delete success', async () => {
     await setup(ArticleListPage, 'articles');
     const fixture = TestBed.createComponent(ArticleListPage);
@@ -109,6 +215,67 @@ describe('article use-case pages', () => {
     http.expectOne('/api/v1/articles?page=0').flush({ content: [], page: { totalPages: 0 } });
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[role="status"]')).toBeTruthy();
+  });
+
+  it('searches articles from the first page and requests the next result page', async () => {
+    await setup(ArticleListPage, 'articles');
+    const fixture = TestBed.createComponent(ArticleListPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/articles?page=0').flush({ content: [], totalPages: 2 });
+
+    fixture.componentInstance.search('needle');
+    http.expectOne('/api/v1/articles?page=0&title=needle').flush({ content: [], totalPages: 2 });
+    fixture.componentInstance.nextPage();
+    expect(http.expectOne('/api/v1/articles?page=1&title=needle').request.params.get('page')).toBe(
+      '1',
+    );
+  });
+
+  it('allows authors to manage only their own articles', async () => {
+    await setup(ArticleListPage, 'articles');
+    const page = TestBed.createComponent(ArticleListPage).componentInstance;
+    page.auth.user = {
+      id: 'author-1',
+      displayName: 'Ada',
+      preferredLanguage: 'en',
+      role: 'AUTHOR',
+    };
+
+    expect(page.canManageArticle({ owner: 'author-1' })).toBe(true);
+    expect(page.canManageArticle({ owner: 'author-2' })).toBe(false);
+    page.auth.user = { ...page.auth.user, role: 'ADMIN' };
+    expect(page.canManageArticle({ owner: 'author-2' })).toBe(true);
+  });
+
+  it('renders the article management list for the article route', async () => {
+    await setup(ArticleListPage, 'articles');
+    const fixture = TestBed.createComponent(ArticleListPage);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/articles?page=0')
+      .flush({ content: [], totalPages: 0 });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('app-article-management-list')).toBeTruthy();
+  });
+
+  it("prevents an author from opening another author's article editor", async () => {
+    await setup(ArticleEditPage, 'articles/:id/edit', 'article-1');
+    const fixture = TestBed.createComponent(ArticleEditPage);
+    TestBed.inject(Auth).user = {
+      id: 'author-1',
+      displayName: 'Ada',
+      preferredLanguage: 'en',
+      role: 'AUTHOR',
+    };
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/public/tags?size=100').flush([]);
+    http.expectOne('/api/v1/articles/article-1').flush({ owner: 'author-2' });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
   });
 
   it.each([401, 403, 404, 409])('maps article list status %s', async (status) => {
