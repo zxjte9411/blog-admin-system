@@ -2,14 +2,20 @@ package com.blogadmin.publishing.domain.article;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ArticleRepository extends JpaRepository<Article, UUID> {
+  @Override
+  @EntityGraph(attributePaths = {"tags", "owner"})
+  Optional<Article> findById(UUID id);
+
   Page<Article> findByDeletedAtIsNull(Pageable pageable);
 
   Page<Article> findByDeletedAtIsNullAndStatus(PublicationStatus status, Pageable pageable);

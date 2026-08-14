@@ -100,12 +100,14 @@ public class User {
   }
 
   public void changeEmail(String email) {
-    this.email = email;
-    this.normalizedEmail = email;
+    this.email = email == null ? null : email.trim();
+    this.normalizedEmail = email == null ? null : email.trim().toLowerCase(java.util.Locale.ROOT);
   }
 
   public void verify(Instant at) {
-    verifiedAt = at;
+    if (this.verifiedAt == null) {
+      this.verifiedAt = at;
+    }
   }
 
   public void disable() {

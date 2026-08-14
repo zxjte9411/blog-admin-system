@@ -11,7 +11,6 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -47,6 +46,7 @@ public class ArticleService {
     this.tags = tags;
   }
 
+  @Transactional(readOnly = true)
   public Page<Article> publicArticles(String title, UUID tagId, Pageable page, String ip) {
     checkPublicLimit(ip);
     return articles.searchPublic(title == null ? "" : title, tagId, page);
@@ -64,6 +64,7 @@ public class ArticleService {
       Instant createdAt,
       Instant updatedAt) {}
 
+  @Transactional(readOnly = true)
   public Page<PublicArticle> publicArticleViews(
       String title, UUID tagId, Pageable page, String ip) {
     return publicArticles(title, tagId, page, ip)
@@ -82,6 +83,7 @@ public class ArticleService {
                     a.getUpdatedAt()));
   }
 
+  @Transactional(readOnly = true)
   public PublicArticle publicArticleView(UUID id, String ip) {
     Article a = publicArticle(id, ip);
     return new PublicArticle(
@@ -97,11 +99,13 @@ public class ArticleService {
         a.getUpdatedAt());
   }
 
+  @Transactional(readOnly = true)
   public Page<PublicTag> publicTags(Pageable page, String ip) {
     checkPublicLimit(ip);
     return tags.findPublic(page).map(t -> new PublicTag(t.getId(), t.getName()));
   }
 
+  @Transactional(readOnly = true)
   public Article publicArticle(UUID id, String ip) {
     checkPublicLimit(ip);
     return articles
@@ -141,6 +145,7 @@ public class ArticleService {
     return view(articles.save(a));
   }
 
+  @Transactional(readOnly = true)
   public Page<ArticleView> list(User u, String t, PublicationStatus s, UUID tag, Pageable p) {
     String title = t == null || t.isBlank() ? "" : t;
     return (u.getRole() == UserRole.ADMIN
@@ -149,6 +154,7 @@ public class ArticleService {
         .map(this::view);
   }
 
+  @Transactional(readOnly = true)
   public ArticleView get(User u, UUID id) {
     Article a =
         articles
@@ -178,11 +184,10 @@ public class ArticleService {
     check(u, a);
     if (v != a.getVersion())
       throw new ArticleException(ArticleException.Code.CONFLICT, "Optimistic locking conflict");
-    Set<Tag> old = new HashSet<>(a.getTags());
     a.update(t, c, s);
     replace(a, ids, names);
     Article r = articles.saveAndFlush(a);
-    cleanup(old);
+    tags.deleteOrphanTags();
     return view(r);
   }
 
@@ -195,12 +200,12 @@ public class ArticleService {
     check(u, a);
     if (a.getDeletedAt() != null)
       throw new ArticleException(ArticleException.Code.NOT_FOUND, "Not found");
-    Set<Tag> old = new HashSet<>(a.getTags());
     a.delete();
     articles.saveAndFlush(a);
-    cleanup(old);
+    tags.deleteOrphanTags();
   }
 
+  @Transactional(readOnly = true)
   public Page<ArticleView> deleted(User u, Pageable p) {
     return u.getRole().name().equals("ADMIN")
         ? articles.findByDeletedAtNotNull(p).map(this::view)
@@ -231,10 +236,10 @@ public class ArticleService {
             .orElseThrow(() -> new ArticleException(ArticleException.Code.NOT_FOUND, "Not found"));
     if (a.getDeletedAt() == null)
       throw new ArticleException(ArticleException.Code.NOT_FOUND, "Not found");
-    Set<Tag> old = new HashSet<>(a.getTags());
     a.getTags().clear();
     articles.delete(a);
-    cleanup(old);
+    articles.flush();
+    tags.deleteOrphanTags();
   }
 
   private ArticleView view(Article a) {
@@ -269,24 +274,10 @@ public class ArticleService {
       names.stream()
           .map(String::trim)
           .filter(n -> !n.isBlank())
-          .forEach(
-              n ->
-                  f.add(
-                      tags.findByNormalizedName(n)
-                          .orElseGet(() -> tags.save(new Tag(UUID.randomUUID(), n)))));
+          .sorted(String.CASE_INSENSITIVE_ORDER)
+          .forEach(n -> f.add(tags.getOrCreate(n)));
     a.getTags().clear();
     a.getTags().addAll(f);
-  }
-
-  private void cleanup(Set<Tag> ts) {
-    articles.flush();
-    ts.forEach(
-        t -> {
-          if (articles.countByTagsId(t.getId()) == 0) {
-            tags.delete(t);
-            tags.flush();
-          }
-        });
   }
 
   private void validateContent(String content) {

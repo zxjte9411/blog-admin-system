@@ -64,10 +64,12 @@ public class AccountService {
 
   @Transactional
   public void requestReset(String email) {
-    if (email == null) return;
-    User u = users.findByNormalizedEmail(email.trim().toLowerCase(Locale.ROOT)).orElse(null);
+    if (email == null || email.isBlank()) return;
+    String normalized = email.trim().toLowerCase(Locale.ROOT);
+    users.lockNormalizedEmail(normalized);
+    User u = users.findByNormalizedEmail(normalized).orElse(null);
     if (u == null) return;
-    resets.findByUserIdAndUsedAtIsNull(u.getId()).forEach(t -> t.use(Instant.now()));
+    resets.findLockedByUserIdAndUsedAtIsNull(u.getId()).forEach(t -> t.use(Instant.now()));
     resets.flush();
     OpaqueToken.Issued token = OpaqueToken.generate();
     resets.save(
@@ -79,9 +81,10 @@ public class AccountService {
   @Transactional
   public void reset(String token, String next) {
     if (token == null) throw new ResetTokenNotFound();
-    PasswordResetToken t =
-        resets.findByTokenHash(OpaqueToken.digest(token)).orElseThrow(ResetTokenNotFound::new);
-    User u = users.findById(t.getUserId()).orElseThrow();
+    byte[] hash = OpaqueToken.digest(token);
+    UUID userId = resets.findUserIdByTokenHash(hash).orElseThrow(ResetTokenNotFound::new);
+    User u = users.findLockedById(userId).orElseThrow(ResetTokenNotFound::new);
+    PasswordResetToken t = resets.findLockedByTokenHash(hash).orElseThrow(ResetTokenNotFound::new);
     if (t.getUsedAt() != null || !t.getExpiresAt().isAfter(Instant.now()))
       throw new ResetTokenNotFound();
     if (passwordPolicy.validate(next) != PasswordPolicy.Violation.NONE)
@@ -93,13 +96,13 @@ public class AccountService {
 
   @Transactional
   public void requestEmail(User u, String email) {
-    User managed = users.findLockedById(u.getId()).orElseThrow(InvalidAccountException::new);
     if (email == null || email.isBlank()) throw new InvalidAccountException();
     String n = email.trim().toLowerCase(Locale.ROOT);
     users.lockNormalizedEmail(n);
+    User managed = users.findLockedById(u.getId()).orElseThrow(InvalidAccountException::new);
     if (users.findByNormalizedEmail(n).filter(x -> !x.getId().equals(managed.getId())).isPresent())
       throw new AlreadyUsedEmail();
-    emails.findByUserIdAndUsedAtIsNull(managed.getId()).forEach(t -> t.use(Instant.now()));
+    emails.findLockedByUserIdAndUsedAtIsNull(managed.getId()).forEach(t -> t.use(Instant.now()));
     emails.flush();
     OpaqueToken.Issued token = OpaqueToken.generate();
     emails.save(
@@ -114,8 +117,9 @@ public class AccountService {
 
   @Transactional
   public void confirmEmail(String token) {
-    EmailChangeToken t =
-        emails.findByTokenHash(OpaqueToken.digest(token)).orElseThrow(InvalidAccountException::new);
+    if (token == null) throw new InvalidAccountException();
+    byte[] hash = OpaqueToken.digest(token);
+    EmailChangeToken t = emails.findByTokenHash(hash).orElseThrow(InvalidAccountException::new);
     if (t.getUsedAt() != null || !t.getExpiresAt().isAfter(Instant.now()))
       throw new InvalidAccountException();
     users.lockNormalizedEmail(t.getNewEmail());
@@ -123,7 +127,11 @@ public class AccountService {
         .findByNormalizedEmail(t.getNewEmail())
         .filter(x -> !x.getId().equals(t.getUserId()))
         .isPresent()) throw new AlreadyUsedEmail();
-    User u = users.findLockedById(t.getUserId()).orElseThrow();
+    User u = users.findLockedById(t.getUserId()).orElseThrow(InvalidAccountException::new);
+    EmailChangeToken lockedToken =
+        emails.findLockedByTokenHash(hash).orElseThrow(InvalidAccountException::new);
+    if (lockedToken.getUsedAt() != null || !lockedToken.getExpiresAt().isAfter(Instant.now()))
+      throw new InvalidAccountException();
     String old = u.getEmail();
     u.changeEmail(t.getNewEmail());
     t.use(Instant.now());

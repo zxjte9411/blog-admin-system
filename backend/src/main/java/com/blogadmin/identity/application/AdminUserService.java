@@ -81,16 +81,20 @@ public class AdminUserService {
 
   @Transactional
   public User redeem(String token, String displayName, String password, String language) {
+    if (token == null) throw new InvalidInvitationException();
+    byte[] hash = OpaqueToken.digest(token);
     Invitation invitation =
-        invitations
-            .findByTokenHash(OpaqueToken.digest(token))
-            .orElseThrow(InvalidInvitationException::new);
+        invitations.findByTokenHash(hash).orElseThrow(InvalidInvitationException::new);
     Instant now = Instant.now();
     if (invitation.getUsedAt() != null || !invitation.getExpiresAt().isAfter(now))
       throw new InvalidInvitationException();
     users.lockNormalizedEmail(invitation.getEmail());
     if (users.findByNormalizedEmail(invitation.getEmail()).isPresent())
       throw new AlreadyExistsException();
+    Invitation lockedInvitation =
+        invitations.findLockedByTokenHash(hash).orElseThrow(InvalidInvitationException::new);
+    if (lockedInvitation.getUsedAt() != null || !lockedInvitation.getExpiresAt().isAfter(now))
+      throw new InvalidInvitationException();
     PasswordPolicy.Violation violation = passwordPolicy.validate(password);
     if (violation == PasswordPolicy.Violation.LENGTH) throw new InvalidMinimumException();
     if (violation == PasswordPolicy.Violation.COMMON)
@@ -110,16 +114,16 @@ public class AdminUserService {
             language);
     user.verify(now);
     users.save(user);
-    invitation.use(now);
+    lockedInvitation.use(now);
     return user;
   }
 
   @Transactional
   public User redeemGoogle(String token, String email, String displayName) {
+    if (token == null || email == null) throw new InvalidInvitationException();
+    byte[] hash = OpaqueToken.digest(token);
     Invitation invitation =
-        invitations
-            .findByTokenHash(OpaqueToken.digest(token))
-            .orElseThrow(InvalidInvitationException::new);
+        invitations.findByTokenHash(hash).orElseThrow(InvalidInvitationException::new);
     Instant now = Instant.now();
     String normalized = email.trim().toLowerCase(Locale.ROOT);
     if (invitation.getUsedAt() != null
@@ -127,6 +131,11 @@ public class AdminUserService {
         || !invitation.getEmail().equals(normalized)) throw new InvalidInvitationException();
     users.lockNormalizedEmail(normalized);
     if (users.findByNormalizedEmail(normalized).isPresent()) throw new AlreadyExistsException();
+    Invitation lockedInvitation =
+        invitations.findLockedByTokenHash(hash).orElseThrow(InvalidInvitationException::new);
+    if (lockedInvitation.getUsedAt() != null
+        || !lockedInvitation.getExpiresAt().isAfter(now)
+        || !lockedInvitation.getEmail().equals(normalized)) throw new InvalidInvitationException();
     String name = displayName == null ? "" : displayName.trim();
     if (name.isEmpty() || name.length() > 100) throw new InvalidInvitationException();
     User user =
@@ -139,7 +148,7 @@ public class AdminUserService {
             "zh-TW");
     user.verify(now);
     users.save(user);
-    invitation.use(now);
+    lockedInvitation.use(now);
     return user;
   }
 

@@ -39,7 +39,8 @@ public class Article {
 
   @Version private long version;
 
-  @ManyToMany(fetch = FetchType.EAGER)
+  @ManyToMany(fetch = FetchType.LAZY)
+  @org.hibernate.annotations.BatchSize(size = 50)
   @JoinTable(
       name = "article_tags",
       joinColumns = @JoinColumn(name = "article_id"),

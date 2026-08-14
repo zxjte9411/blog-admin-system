@@ -41,6 +41,8 @@ public class EmailChangeToken {
   }
 
   public void use(Instant at) {
-    usedAt = at;
+    if (this.usedAt == null) {
+      this.usedAt = at;
+    }
   }
 }

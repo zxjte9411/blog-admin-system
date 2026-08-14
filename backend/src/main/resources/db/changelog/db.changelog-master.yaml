@@ -60,3 +60,9 @@ databaseChangeLog:
       changes:
         - sqlFile:
             path: db/changelog/010-google-identities.sql
+  - changeSet:
+      id: "011"
+      author: blog-admin
+      changes:
+        - sqlFile:
+            path: db/changelog/011-article-tags-reverse-index.sql

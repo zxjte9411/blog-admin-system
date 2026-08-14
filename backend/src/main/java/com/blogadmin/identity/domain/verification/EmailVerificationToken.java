@@ -42,10 +42,14 @@ public class EmailVerificationToken {
   }
 
   public void use(Instant at) {
-    usedAt = at;
+    if (this.usedAt == null) {
+      this.usedAt = at;
+    }
   }
 
   public void invalidate(Instant at) {
-    invalidatedAt = at;
+    if (this.invalidatedAt == null) {
+      this.invalidatedAt = at;
+    }
   }
 }
