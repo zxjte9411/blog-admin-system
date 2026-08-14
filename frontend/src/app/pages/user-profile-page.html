@@ -1,0 +1,29 @@
+<app-shell [loading]="loading">
+  <app-account-layout [flat]="true">
+    <header class="page-intro">
+      <p class="eyebrow">{{ language.t.title }}</p>
+      <h1>{{ title }}</h1>
+    </header>
+    @if (loading) {
+      <progress class="loading-bar" [attr.aria-label]="language.t.loading"></progress>
+    }
+    @if (message) {
+      <div class="success" role="status">{{ message }}</div>
+    }
+    @if (error) {
+      <div class="error" role="alert">{{ error }}</div>
+    }
+    @if (language.error()) {
+      <div class="error" role="alert">{{ language.error() }}</div>
+    }
+    <app-account-form
+      [form]="form"
+      [fields]="fields"
+      [loading]="loading"
+      [submitAttempted]="submitAttempted"
+      [displayNameHint]="true"
+      (submitted)="submit()"
+      (languageChanged)="onLanguageChange($event)"
+    />
+  </app-account-layout>
+</app-shell>

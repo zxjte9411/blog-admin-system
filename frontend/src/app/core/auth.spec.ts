@@ -50,6 +50,25 @@ describe('auth seams', () => {
     expect(auth.token).toBe('new');
   });
 
+  it('deduplicates concurrent refresh requests', async () => {
+    TestBed.configureTestingModule({
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    });
+    const auth = TestBed.inject(Auth);
+    const http = TestBed.inject(HttpTestingController);
+
+    const first = firstValueFrom(auth.refresh());
+    const second = firstValueFrom(auth.refresh());
+    const requests = http.match('/api/v1/auth/refresh');
+
+    expect(requests).toHaveLength(1);
+    requests[0].flush({ accessToken: 'new' });
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { accessToken: 'new' },
+      { accessToken: 'new' },
+    ]);
+  });
+
   it('clears and navigates only when refresh fails', async () => {
     TestBed.configureTestingModule({
       providers: [
@@ -102,6 +121,24 @@ describe('auth seams', () => {
     language.set('en');
     expect(localStorage.getItem('blog-admin-language')).toBe('en');
     language.usePreferred('en');
+    expect(localStorage.getItem('blog-admin-language')).toBe('en');
+  });
+
+  it('synchronizes a logged-in user language change with Auth and the API', () => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    const auth = TestBed.inject(Auth);
+    const language = TestBed.inject(Language);
+    const http = TestBed.inject(HttpTestingController);
+    auth.user = { ...user, preferredLanguage: 'zh-TW' };
+
+    language.set('en');
+
+    expect(auth.user.preferredLanguage).toBe('en');
+    const request = http.expectOne('/api/v1/account/profile');
+    expect(request.request.body).toEqual({ displayName: 'Ada', preferredLanguage: 'en' });
+    request.flush({ displayName: 'Ada', preferredLanguage: 'en' });
     expect(localStorage.getItem('blog-admin-language')).toBe('en');
   });
 });

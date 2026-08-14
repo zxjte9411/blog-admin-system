@@ -1,5 +1,5 @@
 <app-shell [loading]="loading">
-  <app-account-layout [flat]="isAccountRoute">
+  <app-account-layout [flat]="true">
     <header class="page-intro">
       <p class="eyebrow">{{ language.t.title }}</p>
       <h1>{{ title }}</h1>
@@ -7,107 +7,7 @@
     @if (loading) {
       <progress class="loading-bar" [attr.aria-label]="language.t.loading"></progress>
     }
-    @if (message) {
-      <div class="success" role="status">{{ message }}</div>
-    }
-    @if (error && routeKey !== 'account/sessions') {
-      <div class="error" role="alert">{{ error }}</div>
-    }
-    @if (language.error()) {
-      <div class="error" role="alert">{{ language.error() }}</div>
-    }
-    @if (missingToken) {
-      <div class="error" role="alert">{{ language.t.invalidToken }}</div>
-    } @else if (fields.length || routeKey === 'confirm-email') {
-      <form [formGroup]="form" (ngSubmit)="submit()">
-        @for (field of fields; track field) {
-          <label class="field" [for]="'field-' + field"
-            >{{ fieldLabel(field) }}
-            @if (field === 'preferredLanguage') {
-              <select
-                class="control"
-                [id]="'field-' + field"
-                [name]="field"
-                autocomplete="language"
-                [formControlName]="field"
-                (change)="onLanguageFieldChange($event)"
-                [attr.aria-invalid]="fieldInvalid(field) ? 'true' : null"
-                [attr.aria-describedby]="fieldErrorId(field)"
-              >
-                <option value="zh-TW">{{ language.t.languages.zhTW }}</option>
-                <option value="en">{{ language.t.languages.en }}</option>
-              </select>
-            } @else {
-              <input
-                class="control"
-                [id]="'field-' + field"
-                [name]="field"
-                [type]="
-                  field.toLowerCase().includes('password')
-                    ? 'password'
-                    : field === 'email'
-                      ? 'email'
-                      : 'text'
-                "
-                [formControlName]="field"
-                [attr.autocomplete]="autocomplete(field)"
-                [attr.aria-invalid]="fieldInvalid(field) ? 'true' : null"
-                [attr.aria-describedby]="
-                  fieldErrorId(field) +
-                  (field === 'newPassword' || (routeKey === 'register' && field === 'password')
-                    ? ' field-' + field + '-hint'
-                    : '') +
-                  (field === 'displayName' ? ' field-' + field + '-hint' : '')
-                "
-              />
-            }
-            @if (field === 'newPassword' || (routeKey === 'register' && field === 'password')) {
-              <span class="field-hint" [id]="'field-' + field + '-hint'">{{
-                language.t.passwordHint
-              }}</span>
-            }
-            @if (field === 'displayName') {
-              <span class="field-hint" [id]="'field-' + field + '-hint'">
-                {{ language.t.displayNameHint }}
-              </span>
-            }
-            <span class="field-error" [id]="fieldErrorId(field)" aria-live="polite">
-              @if (fieldInvalid(field)) {
-                {{ language.t.required }}
-              }
-            </span>
-          </label>
-        }
-        <button class="ui-primary form-submit" type="submit" [disabled]="loading">
-          {{ language.t.submit }}
-        </button>
-      </form>
-    }
-    @if (!routeKey.startsWith('account/')) {
-      <nav class="account-links" aria-label="{{ language.t.accountLinks }}">
-        @if (routeKey === 'login') {
-          <a routerLink="/register">{{ language.t.needAccount }}</a>
-          <a routerLink="/password-reset">{{ language.t.forgotPassword }}</a>
-        } @else if (routeKey === 'register') {
-          <a routerLink="/login">{{ language.t.hasAccount }}</a>
-          <a routerLink="/verify/resend">{{ language.t.authTitles.verifyResend }}</a>
-          <a routerLink="/password-reset">{{ language.t.authTitles.passwordReset }}</a>
-          <a routerLink="/verify-email">{{ language.t.authTitles.verifyEmail }}</a>
-        } @else if (routeKey === 'password-reset' || routeKey === 'reset-password') {
-          <a routerLink="/login">{{ language.t.hasAccount }}</a>
-          <a routerLink="/register">{{ language.t.needAccount }}</a>
-        } @else if (routeKey === 'verify-email') {
-          <a routerLink="/verify/resend">{{ language.t.authTitles.verifyResend }}</a>
-          <a routerLink="/login">{{ language.t.hasAccount }}</a>
-        } @else if (routeKey === 'verify/resend') {
-          <a routerLink="/verify-email">{{ language.t.verifyEmailHelp }}</a>
-          <a routerLink="/login">{{ language.t.hasAccount }}</a>
-        } @else {
-          <a routerLink="/login">{{ language.t.hasAccount }}</a>
-        }
-      </nav>
-    }
-    @if (routeKey === 'account/sessions' && !loading) {
+    @if (!loading) {
       <section class="sessions-section" [attr.aria-label]="title">
         @if (error) {
           <div class="error" role="alert">
@@ -175,7 +75,6 @@
               type="button"
               (click)="goToPage(0)"
               [disabled]="page === 0"
-              title="First page"
               aria-label="First page"
             >
               &laquo;
@@ -185,7 +84,6 @@
               type="button"
               (click)="previousPage()"
               [disabled]="page === 0"
-              title="Previous page"
               aria-label="Previous page"
             >
               &lsaquo;
@@ -212,7 +110,6 @@
               type="button"
               (click)="nextPage()"
               [disabled]="page + 1 >= totalPages"
-              title="Next page"
               aria-label="Next page"
             >
               &rsaquo;
@@ -222,7 +119,6 @@
               type="button"
               (click)="goToPage(totalPages - 1)"
               [disabled]="page + 1 >= totalPages"
-              title="Last page"
               aria-label="Last page"
             >
               &raquo;

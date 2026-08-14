@@ -1,0 +1,29 @@
+<app-shell [loading]="loading">
+  <app-account-layout>
+    <header class="page-intro">
+      <p class="eyebrow">{{ language.t.title }}</p>
+      <h1>{{ title }}</h1>
+    </header>
+    @if (loading) {
+      <progress class="loading-bar" [attr.aria-label]="language.t.loading"></progress>
+    }
+    @if (message) {
+      <div class="success" role="status">{{ message }}</div>
+    }
+    @if (error) {
+      <div class="error" role="alert">{{ error }}</div>
+    }
+    @if (missingToken) {
+      <div class="error" role="alert">{{ language.t.invalidToken }}</div>
+    } @else {
+      <app-account-form
+        [form]="form"
+        [fields]="fields"
+        [loading]="loading"
+        [submitAttempted]="submitAttempted"
+        (submitted)="submit()"
+      />
+    }
+    <app-account-links [links]="links" [ariaLabel]="language.t.accountLinks" />
+  </app-account-layout>
+</app-shell>
