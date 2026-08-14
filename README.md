@@ -2,12 +2,14 @@
 
 一個以 Angular 管理介面、Spring Boot REST API 與 PostgreSQL 組成的部落格管理系統。Liquibase 負責資料庫 schema 與 migration；Compose 不使用資料庫 init script。Mailpit 接收本機開發郵件。
 
+本文件涵蓋專案的技術版本、建置與執行方式、API 文件及登入測試帳號設定；設計取捨與額外功能整理於[繳交補充說明](docs/SUBMISSION.md)。
+
 ## 技術版本
 
-- Angular 21、TypeScript 5.9、Node.js 24 LTS、npm 11
-- Spring Boot 3.5.16、Java 25、Maven Wrapper
+- Angular 21（Angular CLI 21.2.20）、TypeScript 5.9、Node.js 24 LTS、npm 11（package manager 固定為 11.17.0）
+- Spring Boot 3.5.16、Springdoc OpenAPI 2.8.13、Java 25、Maven Wrapper
 - PostgreSQL 18.4、Liquibase
-- Docker Compose、Mailpit
+- Docker Compose、Mailpit v1.21
 
 ## 服務網址
 
@@ -19,9 +21,11 @@
 - OpenAPI JSON：<http://localhost:8080/v3/api-docs>
 - Mailpit：<http://localhost:8025>
 
+Swagger UI 與 OpenAPI JSON 可直接查看後端 REST API 的路徑、請求欄位與回應格式；服務啟動後即可開啟上述連結。
+
 Compose 的對外 port 可用 `.env` 覆寫：`POSTGRES_PORT`、`BACKEND_PORT`、`FRONTEND_PORT`、`MAILPIT_SMTP_PORT`、`MAILPIT_HTTP_PORT`。
 
-## 啟動開發環境
+## 建置與啟動開發環境
 
 先在 VS Code 執行 **Reopen in Container**，或在已安裝 Docker、Node.js 24 與 Java 25 的環境執行：
 
@@ -108,6 +112,12 @@ docker compose config
 
 需要驗證前端格式與型別時，再執行本機完整序列中的 `npm run lint:format` 與 `npm run typecheck`。
 
+## 登入測試帳號
+
+Compose 啟動時會依 `.env` 的 `APP_BOOTSTRAP_ADMIN_EMAIL` 與 `APP_BOOTSTRAP_ADMIN_PASSWORD` 建立 bootstrap Admin。兩者就是本機登入管理後台時使用的 Email 與 Password；Password 請自行設定為至少 8 字元的非共用密碼，README 不提供固定密碼。
+
+只有在該 Email 尚不存在時才會建立 bootstrap Admin；既有 PostgreSQL volume 重啟後不會以環境變數覆寫既有 User 或 Password。若要重新建立測試資料，可使用前述 `docker compose down --volumes`，但這會刪除 PostgreSQL volume 中的資料。
+
 ## 功能
 
 登入後，使用者可管理文章的新增、編輯、刪除、搜尋與分頁，並切換草稿與發布狀態。文章支援標籤；訪客可瀏覽已發布的公開文章與標籤。
@@ -116,9 +126,10 @@ docker compose config
 
 認證流程將 access token 放在瀏覽器 `localStorage`，refresh token 放在 `HttpOnly` cookie。API 使用 Bearer access token；refresh token 由 `/api/v1/auth/refresh` 輪替，登出時撤銷 session。
 
-## 設計補充
+## 設計與額外功能
 
 - Angular 只負責管理介面與 API 呼叫；Spring Boot 集中處理驗證、授權與領域規則。
 - Liquibase 是 schema owner，migration 依序管理資料表變更。
 - 公開 API 位於 `/api/v1/public/**`，並只回傳已發布且未刪除的文章。
-- bootstrap admin 透過環境變數注入，避免把開發密碼寫進原始碼或文件。
+- bootstrap Admin 透過環境變數注入，避免把開發密碼寫進原始碼或文件。
+- 其他設計理念、權限邊界、測試與額外功能請見[繳交補充說明](docs/SUBMISSION.md)。
