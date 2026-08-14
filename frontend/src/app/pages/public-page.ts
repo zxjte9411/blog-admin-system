@@ -10,6 +10,7 @@ import {
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Language } from '../core/language';
 import { AppShell } from '../layouts/app-shell';
+import { getPageNumbers } from '../core/pagination';
 
 type Row = Record<string, unknown>;
 
@@ -114,6 +115,15 @@ export class PublicPage implements OnInit {
       this.page++;
       this.read();
     }
+  }
+  goToPage(targetPage: number) {
+    if (targetPage >= 0 && targetPage < this.totalPages && targetPage !== this.page) {
+      this.page = targetPage;
+      this.read();
+    }
+  }
+  get pageNumbers(): number[] {
+    return getPageNumbers(this.page, this.totalPages);
   }
   tagQuery(row: Row) {
     return { tagId: String(row['id']) };

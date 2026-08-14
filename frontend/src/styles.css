@@ -109,11 +109,71 @@
 }
 .pagination {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.page-btn {
+  display: inline-flex;
+  min-width: 2.25rem;
+  height: 2.25rem;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  margin-top: 1.5rem;
-  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  padding: 0 0.55rem;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  user-select: none;
+}
+.page-btn:hover:not(:disabled) {
+  border-color: var(--amber);
+  background: #fff8e8;
+  color: #8a5207;
+}
+.page-btn.is-active {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: #171614;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(216, 138, 18, 0.3);
+}
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.page-btn.nav-jump {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.page-numbers {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.page-ellipsis {
+  display: inline-flex;
+  min-width: 1.5rem;
+  height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-weight: 700;
+}
+.page-indicator {
+  margin-inline-start: auto;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 :where(a, button, input, textarea, select):focus-visible {
   outline: 3px solid var(--amber);

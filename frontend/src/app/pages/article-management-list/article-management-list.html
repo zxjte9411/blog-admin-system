@@ -86,24 +86,65 @@
     </div>
     <nav class="pagination" [attr.aria-label]="caption">
       <button
-        class="ui-outline"
+        class="page-btn nav-jump"
+        type="button"
+        (click)="selectPage.emit(0)"
+        [disabled]="page === 0"
+        title="First page"
+        aria-label="First page"
+      >
+        &laquo;
+      </button>
+      <button
+        class="page-btn nav-jump"
         type="button"
         (click)="previousPage.emit()"
         [disabled]="page === 0"
+        title="Previous page"
+        aria-label="Previous page"
       >
-        {{ previousLabel }}
+        &lsaquo;
       </button>
-      <span aria-live="polite"
-        >{{ pageLabel }} {{ page + 1 }} {{ ofLabel }} {{ totalPages || 1 }} {{ pageSuffix }}</span
-      >
+      <div class="page-numbers">
+        @for (p of pageNumbers; track $index) {
+          @if (p === -1) {
+            <span class="page-ellipsis">&hellip;</span>
+          } @else {
+            <button
+              type="button"
+              class="page-btn"
+              [class.is-active]="p === page"
+              [attr.aria-current]="p === page ? 'page' : null"
+              (click)="selectPage.emit(p)"
+            >
+              {{ p + 1 }}
+            </button>
+          }
+        }
+      </div>
       <button
-        class="ui-outline"
+        class="page-btn nav-jump"
         type="button"
         (click)="nextPage.emit()"
         [disabled]="page + 1 >= totalPages"
+        title="Next page"
+        aria-label="Next page"
       >
-        {{ nextLabel }}
+        &rsaquo;
       </button>
+      <button
+        class="page-btn nav-jump"
+        type="button"
+        (click)="selectPage.emit(totalPages - 1)"
+        [disabled]="page + 1 >= totalPages"
+        title="Last page"
+        aria-label="Last page"
+      >
+        &raquo;
+      </button>
+      <span class="page-indicator" aria-live="polite"
+        >{{ pageLabel }} {{ page + 1 }} {{ ofLabel }} {{ totalPages || 1 }} {{ pageSuffix }}</span
+      >
     </nav>
   }
 </section>

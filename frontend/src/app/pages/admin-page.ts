@@ -17,6 +17,7 @@ import { Language } from '../core/language';
 import { AppShell } from '../layouts/app-shell';
 import { AdminUserManagement } from './admin-user-management/admin-user-management';
 import { ArticleManagementList } from './article-management-list/article-management-list';
+import { getPageNumbers } from '../core/pagination';
 
 type Row = Record<string, unknown>;
 type Method = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
@@ -250,6 +251,15 @@ export class AdminPage implements OnInit {
       this.page++;
       this.read();
     }
+  }
+  goToPage(targetPage: number) {
+    if (targetPage >= 0 && targetPage < this.totalPages && targetPage !== this.page) {
+      this.page = targetPage;
+      this.read();
+    }
+  }
+  get pageNumbers(): number[] {
+    return getPageNumbers(this.page, this.totalPages);
   }
   deleteArticle(row: Row, trigger?: EventTarget | null) {
     this.openModal(

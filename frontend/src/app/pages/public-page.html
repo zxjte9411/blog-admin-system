@@ -51,21 +51,67 @@
     </ul>
     @if (items.length && totalPages > 0) {
       <nav class="pagination" [attr.aria-label]="language.t.page">
-        <button class="ui-outline" type="button" (click)="previousPage()" [disabled]="page === 0">
-          {{ language.t.previous }}
-        </button>
-        <span
-          >{{ language.t.page }} {{ page + 1 }} {{ language.t.of }} {{ totalPages }}
-          {{ language.t.pageSuffix }}</span
-        >
         <button
-          class="ui-outline"
+          class="page-btn nav-jump"
+          type="button"
+          (click)="goToPage(0)"
+          [disabled]="page === 0"
+          title="First page"
+          aria-label="First page"
+        >
+          &laquo;
+        </button>
+        <button
+          class="page-btn nav-jump"
+          type="button"
+          (click)="previousPage()"
+          [disabled]="page === 0"
+          title="Previous page"
+          aria-label="Previous page"
+        >
+          &lsaquo;
+        </button>
+        <div class="page-numbers">
+          @for (p of pageNumbers; track $index) {
+            @if (p === -1) {
+              <span class="page-ellipsis">&hellip;</span>
+            } @else {
+              <button
+                type="button"
+                class="page-btn"
+                [class.is-active]="p === page"
+                [attr.aria-current]="p === page ? 'page' : null"
+                (click)="goToPage(p)"
+              >
+                {{ p + 1 }}
+              </button>
+            }
+          }
+        </div>
+        <button
+          class="page-btn nav-jump"
           type="button"
           (click)="nextPage()"
           [disabled]="page + 1 >= totalPages"
+          title="Next page"
+          aria-label="Next page"
         >
-          {{ language.t.next }}
+          &rsaquo;
         </button>
+        <button
+          class="page-btn nav-jump"
+          type="button"
+          (click)="goToPage(totalPages - 1)"
+          [disabled]="page + 1 >= totalPages"
+          title="Last page"
+          aria-label="Last page"
+        >
+          &raquo;
+        </button>
+        <span class="page-indicator" aria-live="polite"
+          >{{ language.t.page }} {{ page + 1 }} {{ language.t.of }} {{ totalPages }}
+          {{ language.t.pageSuffix }}</span
+        >
       </nav>
     }
   }

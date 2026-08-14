@@ -213,6 +213,7 @@
       (delete)="deleteArticle($event)"
       (previousPage)="previousPage()"
       (nextPage)="nextPage()"
+      (selectPage)="goToPage($event)"
     />
   } @else if (routeKey === 'admin/users') {
     <app-admin-user-management
@@ -322,6 +323,70 @@
           }
         </table>
       </div>
+      @if (totalPages > 1) {
+        <nav class="pagination" [attr.aria-label]="language.t.data">
+          <button
+            class="page-btn nav-jump"
+            type="button"
+            (click)="goToPage(0)"
+            [disabled]="page === 0"
+            title="First page"
+            aria-label="First page"
+          >
+            &laquo;
+          </button>
+          <button
+            class="page-btn nav-jump"
+            type="button"
+            (click)="previousPage()"
+            [disabled]="page === 0"
+            title="Previous page"
+            aria-label="Previous page"
+          >
+            &lsaquo;
+          </button>
+          <div class="page-numbers">
+            @for (p of pageNumbers; track $index) {
+              @if (p === -1) {
+                <span class="page-ellipsis">&hellip;</span>
+              } @else {
+                <button
+                  type="button"
+                  class="page-btn"
+                  [class.is-active]="p === page"
+                  [attr.aria-current]="p === page ? 'page' : null"
+                  (click)="goToPage(p)"
+                >
+                  {{ p + 1 }}
+                </button>
+              }
+            }
+          </div>
+          <button
+            class="page-btn nav-jump"
+            type="button"
+            (click)="nextPage()"
+            [disabled]="page + 1 >= totalPages"
+            title="Next page"
+            aria-label="Next page"
+          >
+            &rsaquo;
+          </button>
+          <button
+            class="page-btn nav-jump"
+            type="button"
+            (click)="goToPage(totalPages - 1)"
+            [disabled]="page + 1 >= totalPages"
+            title="Last page"
+            aria-label="Last page"
+          >
+            &raquo;
+          </button>
+          <span class="page-indicator" aria-live="polite"
+            >{{ language.t.page }} {{ page + 1 }} {{ language.t.of }} {{ totalPages || 1 }}</span
+          >
+        </nav>
+      }
     }
   } @else if (!loading && routeKey !== 'articles/new' && routeKey !== 'articles/:id/edit') {
     <p class="empty">{{ language.t.empty }}</p>

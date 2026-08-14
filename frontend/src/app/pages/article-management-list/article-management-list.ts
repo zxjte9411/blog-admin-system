@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { getPageNumbers } from '../../core/pagination';
 
 type Row = Record<string, unknown>;
 
@@ -43,8 +44,13 @@ export class ArticleManagementList {
   @Output() delete = new EventEmitter<Row>();
   @Output() previousPage = new EventEmitter<void>();
   @Output() nextPage = new EventEmitter<void>();
+  @Output() selectPage = new EventEmitter<number>();
 
   readonly dateFormat = 'yyyy-MM-dd';
+
+  get pageNumbers(): number[] {
+    return getPageNumbers(this.page, this.totalPages);
+  }
 
   dateValue(row: Row) {
     return row['createdAt'] as string | number | Date | null | undefined;

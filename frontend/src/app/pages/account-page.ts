@@ -14,6 +14,7 @@ import { Auth } from '../core/auth';
 import { Language } from '../core/language';
 import { AccountLayout } from '../layouts/account-layout';
 import { AppShell } from '../layouts/app-shell';
+import { getPageNumbers } from '../core/pagination';
 
 type Row = Record<string, unknown>;
 type Method = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
@@ -216,6 +217,17 @@ export class AccountPage implements OnInit {
       this.page++;
       this.cdr.markForCheck();
     }
+  }
+
+  goToPage(targetPage: number) {
+    if (targetPage >= 0 && targetPage < this.totalPages && targetPage !== this.page) {
+      this.page = targetPage;
+      this.cdr.markForCheck();
+    }
+  }
+
+  get pageNumbers(): number[] {
+    return getPageNumbers(this.page, this.totalPages);
   }
 
   private readSessions() {
