@@ -32,11 +32,13 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.BeforeEach;
@@ -510,63 +512,153 @@ class ConcurrencyAndTransactionIntegrationTest {
     author.verify(Instant.now());
     users.save(author);
 
-    // Pre-create an orphan tag
-    tags.saveAndFlush(new Tag(UUID.randomUUID(), "résumé"));
+    // Pre-create orphan tags in DB that are initially unreferenced by any article
+    Tag tagCafe = tags.saveAndFlush(new Tag(UUID.randomUUID(), "café"));
+    Tag tagResume = tags.saveAndFlush(new Tag(UUID.randomUUID(), "résumé"));
+    Tag tagUber = tags.saveAndFlush(new Tag(UUID.randomUUID(), "Über"));
+    Tag tagNlp = tags.saveAndFlush(new Tag(UUID.randomUUID(), "自然語言處理"));
 
+    // Canonical keys sorted deterministically by Java String natural ordering (UTF-16 lexical
+    // ordering):
+    // "café" -> "résumé" -> "über" -> "自然語言處理"
     Set<String> tagSet1 = Set.of("café", "résumé", "Über", "自然語言處理");
-    Set<String> tagSet2 = Set.of("RÉSUMÉ", "CAFÉ", "über", "架構設計");
+    Set<String> tagSet2 = Set.of("CAFÉ", "RÉSUMÉ", "über", "架構設計");
 
-    ArticleService.ArticleView existing =
-        articleService.create(
-            author, "Article To Update", "Content", PublicationStatus.PUBLISHED, null, tagSet1);
+    CountDownLatch cleanupDiscoveredCandidates = new CountDownLatch(1);
+    CountDownLatch articleStartedLocking = new CountDownLatch(1);
+    CountDownLatch cleanupAttemptedFirstLock = new CountDownLatch(1);
+    AtomicReference<List<String>> discoveredCandidatesRef = new AtomicReference<>();
+
+    ArticleCleanupExecutor targetExecutor = AopTestUtils.getTargetObject(articleCleanupExecutor);
+    TagRepository originalCleanupTags =
+        (TagRepository) ReflectionTestUtils.getField(targetExecutor, "tags");
+
+    ArticleService targetArticleService = AopTestUtils.getTargetObject(articleService);
+    TagRepository originalArticleTags =
+        (TagRepository) ReflectionTestUtils.getField(targetArticleService, "tags");
+
+    TagRepository proxyCleanupTags =
+        (TagRepository)
+            Proxy.newProxyInstance(
+                TagRepository.class.getClassLoader(),
+                new Class<?>[] {TagRepository.class},
+                (proxy, method, args) -> {
+                  if ("findCandidateOrphanTagNames".equals(method.getName())) {
+                    @SuppressWarnings("unchecked")
+                    List<String> result = (List<String>) method.invoke(originalCleanupTags, args);
+                    discoveredCandidatesRef.set(result);
+                    cleanupDiscoveredCandidates.countDown();
+                    // Wait until article thread starts acquiring the first lock
+                    articleStartedLocking.await(5, TimeUnit.SECONDS);
+                    return result;
+                  }
+                  if ("lockNormalizedName".equals(method.getName()) && "café".equals(args[0])) {
+                    cleanupAttemptedFirstLock.countDown();
+                  }
+                  return method.invoke(originalCleanupTags, args);
+                });
+
+    TagRepository proxyArticleTags =
+        (TagRepository)
+            Proxy.newProxyInstance(
+                TagRepository.class.getClassLoader(),
+                new Class<?>[] {TagRepository.class},
+                (proxy, method, args) -> {
+                  if ("lockNormalizedName".equals(method.getName()) && "café".equals(args[0])) {
+                    // Acquire first lock in article transaction
+                    Object result = method.invoke(originalArticleTags, args);
+                    articleStartedLocking.countDown();
+                    // Ensure cleanup thread reaches and attempts the first lock concurrently
+                    cleanupAttemptedFirstLock.await(5, TimeUnit.SECONDS);
+                    return result;
+                  }
+                  return method.invoke(originalArticleTags, args);
+                });
+
+    ReflectionTestUtils.setField(targetExecutor, "tags", proxyCleanupTags);
+    ReflectionTestUtils.setField(targetArticleService, "tags", proxyArticleTags);
 
     ExecutorService executor = Executors.newFixedThreadPool(3);
-    CyclicBarrier barrier = new CyclicBarrier(3);
+    try {
+      // Thread 1: creates article reusing orphan tags (canonical order: café -> résumé -> über ->
+      // 自然語言處理)
+      Callable<ArticleService.ArticleView> t1 =
+          () -> {
+            cleanupDiscoveredCandidates.await(5, TimeUnit.SECONDS);
+            return articleService.create(
+                author,
+                "Article Concurrent 1",
+                "Content 1",
+                PublicationStatus.PUBLISHED,
+                null,
+                tagSet1);
+          };
 
-    // Thread 1: create article 1 with tagSet1
-    Callable<ArticleService.ArticleView> t1 =
-        () -> {
-          barrier.await(5, TimeUnit.SECONDS);
-          return articleService.create(
-              author,
-              "Article Concurrent 1",
-              "Content 1",
-              PublicationStatus.PUBLISHED,
-              null,
-              tagSet1);
-        };
+      // Thread 2: creates article with case variants and an additional tag concurrently
+      Callable<ArticleService.ArticleView> t2 =
+          () -> {
+            cleanupDiscoveredCandidates.await(5, TimeUnit.SECONDS);
+            return articleService.create(
+                author,
+                "Article Concurrent 2",
+                "Content 2",
+                PublicationStatus.PUBLISHED,
+                null,
+                tagSet2);
+          };
 
-    // Thread 2: create article 2 with tagSet2 (interleaved case variants)
-    Callable<ArticleService.ArticleView> t2 =
-        () -> {
-          barrier.await(5, TimeUnit.SECONDS);
-          return articleService.create(
-              author,
-              "Article Concurrent 2",
-              "Content 2",
-              PublicationStatus.PUBLISHED,
-              null,
-              tagSet2);
-        };
+      // Thread 3: maintenance cleanup processes orphan tag candidates
+      Callable<Void> t3 =
+          () -> {
+            articleCleanupExecutor.cleanup();
+            return null;
+          };
 
-    // Thread 3: concurrent maintenance cleanup attempting to process orphan tags
-    Callable<Void> t3 =
-        () -> {
-          barrier.await(5, TimeUnit.SECONDS);
-          articleCleanupExecutor.cleanup();
-          return null;
-        };
+      Future<ArticleService.ArticleView> f1 = executor.submit(t1);
+      Future<ArticleService.ArticleView> f2 = executor.submit(t2);
+      Future<Void> f3 = executor.submit(t3);
 
-    Future<ArticleService.ArticleView> f1 = executor.submit(t1);
-    Future<ArticleService.ArticleView> f2 = executor.submit(t2);
-    Future<Void> f3 = executor.submit(t3);
+      ArticleService.ArticleView r1 = f1.get(10, TimeUnit.SECONDS);
+      ArticleService.ArticleView r2 = f2.get(10, TimeUnit.SECONDS);
+      f3.get(10, TimeUnit.SECONDS);
 
-    ArticleService.ArticleView r1 = f1.get(10, TimeUnit.SECONDS);
-    ArticleService.ArticleView r2 = f2.get(10, TimeUnit.SECONDS);
-    f3.get(10, TimeUnit.SECONDS);
-    executor.shutdown();
+      // 1. Verify cleanup candidate discovery actually saw the orphan tags
+      assertThat(discoveredCandidatesRef.get()).contains("café", "résumé", "Über", "自然語言處理");
 
-    assertThat(r1).isNotNull();
-    assertThat(r2).isNotNull();
+      // 2. Verify articles were created successfully without deadlock
+      assertThat(r1).isNotNull();
+      assertThat(r2).isNotNull();
+      assertThat(r1.tagNames()).containsExactlyInAnyOrder("café", "résumé", "Über", "自然語言處理");
+      assertThat(r2.tagNames()).contains("架構設計");
+
+      // 3. Verify reused tags were not deleted by cleanup
+      Tag persistedCafe = tags.findByNameIgnoreCase("café").orElseThrow();
+      Tag persistedResume = tags.findByNameIgnoreCase("résumé").orElseThrow();
+      Tag persistedUber = tags.findByNameIgnoreCase("über").orElseThrow();
+      Tag persistedNlp = tags.findByNameIgnoreCase("自然語言處理").orElseThrow();
+
+      assertThat(persistedCafe.getId()).isEqualTo(tagCafe.getId());
+      assertThat(persistedResume.getId()).isEqualTo(tagResume.getId());
+      assertThat(persistedUber.getId()).isEqualTo(tagUber.getId());
+      assertThat(persistedNlp.getId()).isEqualTo(tagNlp.getId());
+
+      // 4. Verify no duplicate tag entities created for case-insensitive variants (total distinct
+      // tags = 5)
+      List<Tag> allTags = tags.findAll();
+      assertThat(allTags).hasSize(5);
+
+      // 5. Verify article_tags relationships are accurately linked in DB
+      assertThat(articles.countByTagsId(persistedCafe.getId())).isEqualTo(2);
+      assertThat(articles.countByTagsId(persistedResume.getId())).isEqualTo(2);
+      assertThat(articles.countByTagsId(persistedUber.getId())).isEqualTo(2);
+      assertThat(articles.countByTagsId(persistedNlp.getId())).isEqualTo(1);
+
+      Tag persistedArch = tags.findByNameIgnoreCase("架構設計").orElseThrow();
+      assertThat(articles.countByTagsId(persistedArch.getId())).isEqualTo(1);
+    } finally {
+      executor.shutdown();
+      ReflectionTestUtils.setField(targetExecutor, "tags", originalCleanupTags);
+      ReflectionTestUtils.setField(targetArticleService, "tags", originalArticleTags);
+    }
   }
 }
