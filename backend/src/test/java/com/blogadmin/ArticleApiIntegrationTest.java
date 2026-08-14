@@ -23,6 +23,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -38,23 +39,23 @@ class ArticleApiIntegrationTest {
   static PostgreSQLContainer<?> postgres =
       new PostgreSQLContainer<>("postgres:16-alpine").withDatabaseName("blog_admin");
 
-  @LocalServerPort int port;
-  @Autowired TestRestTemplate rest;
-  @Autowired UserRepository users;
-  @Autowired TagRepository tags;
-  @Autowired PasswordEncoder passwords;
+  @LocalServerPort private int port;
+  @Autowired private TestRestTemplate testRestTemplate;
+  @Autowired private UserRepository userRepository;
+  @Autowired private TagRepository tagRepository;
+  @Autowired private PasswordEncoder passwordEncoder;
 
   @DynamicPropertySource
-  static void database(DynamicPropertyRegistry r) {
-    r.add("spring.datasource.url", postgres::getJdbcUrl);
-    r.add("spring.datasource.username", postgres::getUsername);
-    r.add("spring.datasource.password", postgres::getPassword);
-    r.add("app.security.jwt-secret", () -> "test-secret-that-is-at-least-32-bytes-long");
+  static void database(DynamicPropertyRegistry registry) {
+    registry.add("spring.datasource.url", postgres::getJdbcUrl);
+    registry.add("spring.datasource.username", postgres::getUsername);
+    registry.add("spring.datasource.password", postgres::getPassword);
+    registry.add("app.security.jwt-secret", () -> "test-secret-that-is-at-least-32-bytes-long");
   }
 
   @Test
   void authorCrudKeepsAttributionAndPublishesOnce() {
-    UUID author = user(UserRole.AUTHOR, "author");
+    UUID authorId = createUser(UserRole.AUTHOR, "author");
     String token = login("author");
     Map<String, Object> request = Map.of("title", "Hello", "content", "plain text");
     ResponseEntity<ArticleView> created =
@@ -97,12 +98,12 @@ class ArticleApiIntegrationTest {
                             .toString())
                     .truncatedTo(ChronoUnit.MILLIS))
         .isEqualTo(createdAt);
-    assertThat(author).isNotNull();
+    assertThat(authorId).isNotNull();
   }
 
   @Test
   void publicArticleViewsIncludeArticleIdInListAndDetail() {
-    user(UserRole.AUTHOR, "public-id");
+    createUser(UserRole.AUTHOR, "public-id");
     String token = login("public-id");
     ResponseEntity<Map> created =
         exchange(
@@ -126,15 +127,15 @@ class ArticleApiIntegrationTest {
 
   @Test
   void authorizationFilteringAndOptimisticConflictAreEnforced() {
-    user(UserRole.AUTHOR, "one");
-    user(UserRole.AUTHOR, "two");
-    String one = login("one");
-    String two = login("two");
+    createUser(UserRole.AUTHOR, "one");
+    createUser(UserRole.AUTHOR, "two");
+    String tokenOne = login("one");
+    String tokenTwo = login("two");
     ResponseEntity<Map> article =
         exchange(
             "/api/v1/articles",
             HttpMethod.POST,
-            one,
+            tokenOne,
             Map.of("title", "A", "content", "C"),
             Map.class);
     String id = (String) article.getBody().get("id");
@@ -142,7 +143,7 @@ class ArticleApiIntegrationTest {
             exchange(
                     "/api/v1/articles/" + id,
                     HttpMethod.PUT,
-                    two,
+                    tokenTwo,
                     Map.of("title", "x", "content", "y", "status", "DRAFT", "version", 0),
                     Map.class)
                 .getStatusCode())
@@ -151,20 +152,20 @@ class ArticleApiIntegrationTest {
             exchange(
                     "/api/v1/articles/" + id,
                     HttpMethod.PUT,
-                    one,
+                    tokenOne,
                     Map.of("title", "x", "content", "y", "status", "DRAFT", "version", 99),
                     Map.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.CONFLICT);
     assertThat(
-            exchange("/api/v1/articles?status=DRAFT", HttpMethod.GET, two, null, String.class)
+            exchange("/api/v1/articles?status=DRAFT", HttpMethod.GET, tokenTwo, null, String.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.OK);
   }
 
   @Test
   void publishedAtIsImmutableAndDeleteHidesArticle() {
-    user(UserRole.AUTHOR, "lifecycle");
+    createUser(UserRole.AUTHOR, "lifecycle");
     String token = login("lifecycle");
     ResponseEntity<Map> created =
         exchange(
@@ -216,10 +217,10 @@ class ArticleApiIntegrationTest {
 
   @Test
   void filtersArticlesByOneTagAndPaginatesResults() {
-    user(UserRole.AUTHOR, "tagged");
+    createUser(UserRole.AUTHOR, "tagged");
     String token = login("tagged");
     UUID tagId = UUID.randomUUID();
-    tags.saveAndFlush(new Tag(tagId, "integration"));
+    tagRepository.saveAndFlush(new Tag(tagId, "integration"));
 
     ResponseEntity<Map> first =
         exchange(
@@ -278,8 +279,8 @@ class ArticleApiIntegrationTest {
 
   @Test
   void adminCanUpdateAndDeleteAnotherAuthorsArticle() {
-    user(UserRole.AUTHOR, "owned");
-    user(UserRole.ADMIN, "admin");
+    createUser(UserRole.AUTHOR, "owned");
+    createUser(UserRole.ADMIN, "admin");
     String authorToken = login("owned");
     String adminToken = login("admin");
     ResponseEntity<Map> created =
@@ -315,24 +316,25 @@ class ArticleApiIntegrationTest {
         .isEqualTo(HttpStatus.NOT_FOUND);
   }
 
-  private UUID user(UserRole role, String name) {
+  private UUID createUser(UserRole role, String name) {
     UUID id = UUID.randomUUID();
-    User u =
+    User user =
         new User(
             id,
             name + "@example.com",
             name + "@example.com",
             name,
-            passwords.encode("safe-password"),
+            passwordEncoder.encode("safe-password"),
             "zh-TW");
-    u.verify(Instant.now());
-    u.changeRole(role);
-    users.saveAndFlush(u);
+    user.verify(Instant.now());
+    user.changeRole(role);
+    userRepository.saveAndFlush(user);
     return id;
   }
 
   private String login(String name) {
-    return rest.postForEntity(
+    return testRestTemplate
+        .postForEntity(
             url("/api/v1/auth/login"),
             Map.of("email", name + "@example.com", "password", "safe-password"),
             Map.class)
@@ -342,11 +344,12 @@ class ArticleApiIntegrationTest {
   }
 
   private <T> ResponseEntity<T> exchange(
-      String path, HttpMethod method, String token, Object body, Class<T> type) {
+      String path, HttpMethod method, String token, Object body, Class<T> responseType) {
     HttpHeaders headers = new HttpHeaders();
     headers.setBearerAuth(token);
-    headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
-    return rest.exchange(url(path), method, new HttpEntity<>(body, headers), type);
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    return testRestTemplate.exchange(
+        url(path), method, new HttpEntity<>(body, headers), responseType);
   }
 
   private String url(String path) {

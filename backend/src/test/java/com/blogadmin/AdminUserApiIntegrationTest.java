@@ -1,6 +1,7 @@
 package com.blogadmin;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 
@@ -26,7 +27,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.*;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -44,44 +50,44 @@ class AdminUserApiIntegrationTest {
   @Container
   static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
-  @LocalServerPort int port;
-  @Autowired TestRestTemplate rest;
-  @Autowired UserRepository users;
-  @Autowired PasswordEncoder passwords;
-  @Autowired InvitationRepository invitations;
-  @Autowired PasswordSettingRepository passwordSettings;
-  @Autowired PasswordSettingChangeRepository passwordChanges;
-  @Autowired EmailVerificationTokenRepository emailTokens;
-  @Autowired RefreshSessionRepository sessions;
-  @Autowired RateLimitEventRepository rateLimits;
-  @PersistenceContext EntityManager entityManager;
-  @MockitoBean JavaMailSender mail;
-  @Autowired JdbcTemplate jdbc;
+  @LocalServerPort private int port;
+  @Autowired private TestRestTemplate testRestTemplate;
+  @Autowired private UserRepository userRepository;
+  @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private InvitationRepository invitationRepository;
+  @Autowired private PasswordSettingRepository passwordSettingRepository;
+  @Autowired private PasswordSettingChangeRepository passwordSettingChangeRepository;
+  @Autowired private EmailVerificationTokenRepository emailVerificationTokenRepository;
+  @Autowired private RefreshSessionRepository refreshSessionRepository;
+  @Autowired private RateLimitEventRepository rateLimitEventRepository;
+  @PersistenceContext private EntityManager entityManager;
+  @MockitoBean private JavaMailSender mailSender;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   @DynamicPropertySource
-  static void database(DynamicPropertyRegistry r) {
-    r.add("spring.datasource.url", postgres::getJdbcUrl);
-    r.add("spring.datasource.username", postgres::getUsername);
-    r.add("spring.datasource.password", postgres::getPassword);
-    r.add("app.security.jwt-secret", () -> "test-secret-that-is-at-least-32-bytes-long");
+  static void database(DynamicPropertyRegistry registry) {
+    registry.add("spring.datasource.url", postgres::getJdbcUrl);
+    registry.add("spring.datasource.username", postgres::getUsername);
+    registry.add("spring.datasource.password", postgres::getPassword);
+    registry.add("app.security.jwt-secret", () -> "test-secret-that-is-at-least-32-bytes-long");
   }
 
   @BeforeEach
   void clearDatabase() {
-    sessions.deleteAll();
-    emailTokens.deleteAll();
-    rateLimits.deleteAll();
-    invitations.deleteAll();
-    jdbc.execute("TRUNCATE TABLE password_setting_changes");
-    users.deleteAll();
-    jdbc.update("UPDATE password_settings SET minimum_length = 8 WHERE id = TRUE");
-    reset(mail);
+    refreshSessionRepository.deleteAll();
+    emailVerificationTokenRepository.deleteAll();
+    rateLimitEventRepository.deleteAll();
+    invitationRepository.deleteAll();
+    jdbcTemplate.execute("TRUNCATE TABLE password_setting_changes");
+    userRepository.deleteAll();
+    jdbcTemplate.update("UPDATE password_settings SET minimum_length = 8 WHERE id = TRUE");
+    reset(mailSender);
   }
 
   @Test
   void adminCanListAndUpdateOtherUsersButNotThemselves() {
-    User admin = user(UserRole.ADMIN, true);
-    User target = user(UserRole.AUTHOR, true);
+    User admin = createUser(UserRole.ADMIN, true);
+    User target = createUser(UserRole.AUTHOR, true);
     String token = login(admin);
     ResponseEntity<Object[]> list =
         exchange(
@@ -114,11 +120,11 @@ class AdminUserApiIntegrationTest {
 
   @Test
   void adminUserListSearchesTrimmedCaseInsensitiveTextWithoutChangingOtherFilters() {
-    User admin = user(UserRole.ADMIN, true);
-    user("Alice@example.com", "No query match", UserRole.AUTHOR, true);
-    user("name@example.com", "Alice Display", UserRole.AUTHOR, true);
-    user("alice-admin@example.com", "Alice Admin", UserRole.ADMIN, true);
-    user("alice-disabled@example.com", "Alice Disabled", UserRole.AUTHOR, false);
+    User admin = createUser(UserRole.ADMIN, true);
+    createUser("Alice@example.com", "No query match", UserRole.AUTHOR, true);
+    createUser("name@example.com", "Alice Display", UserRole.AUTHOR, true);
+    createUser("alice-admin@example.com", "Alice Admin", UserRole.ADMIN, true);
+    createUser("alice-disabled@example.com", "Alice Disabled", UserRole.AUTHOR, false);
     String token = login(admin);
 
     for (String query : new String[] {"", "&q=", "&q=++"}) {
@@ -150,7 +156,7 @@ class AdminUserApiIntegrationTest {
 
   @Test
   void cannotRemoveLastEnabledVerifiedAdminAndPasswordSettingIsAudited() {
-    User admin = user(UserRole.ADMIN, true);
+    User admin = createUser(UserRole.ADMIN, true);
     String token = login(admin);
     assertThat(
             exchange(
@@ -183,7 +189,7 @@ class AdminUserApiIntegrationTest {
 
   @Test
   void invitationResendRedeemIsOneTimeAndDoesNotExposeHash() {
-    User admin = user(UserRole.ADMIN, true);
+    User admin = createUser(UserRole.ADMIN, true);
     String token = login(admin);
     String email = "invite@example.com";
 
@@ -196,7 +202,7 @@ class AdminUserApiIntegrationTest {
                     Void.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.ACCEPTED);
-    String first = sentToken();
+    String firstToken = sentToken();
     assertThat(
             exchange(
                     "/api/v1/admin/invitations",
@@ -206,15 +212,15 @@ class AdminUserApiIntegrationTest {
                     Void.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.ACCEPTED);
-    String second = sentToken();
-    assertThat(second).isNotEqualTo(first);
+    String secondToken = sentToken();
+    assertThat(secondToken).isNotEqualTo(firstToken);
 
     ResponseEntity<String> listing =
         exchange("/api/v1/admin/invitations", HttpMethod.GET, token, null, String.class);
     assertThat(listing.getBody())
         .doesNotContain("tokenHash")
-        .doesNotContain(first)
-        .doesNotContain(second);
+        .doesNotContain(firstToken)
+        .doesNotContain(secondToken);
     Map<String, String> redeem =
         Map.of(
             "displayName",
@@ -225,7 +231,7 @@ class AdminUserApiIntegrationTest {
             "en");
     assertThat(
             exchange(
-                    "/api/v1/auth/invitations/" + first + "/redeem",
+                    "/api/v1/auth/invitations/" + firstToken + "/redeem",
                     HttpMethod.POST,
                     null,
                     redeem,
@@ -234,7 +240,7 @@ class AdminUserApiIntegrationTest {
         .isEqualTo(HttpStatus.NOT_FOUND);
     assertThat(
             exchange(
-                    "/api/v1/auth/invitations/" + second + "/redeem",
+                    "/api/v1/auth/invitations/" + secondToken + "/redeem",
                     HttpMethod.POST,
                     null,
                     redeem,
@@ -243,7 +249,7 @@ class AdminUserApiIntegrationTest {
         .isEqualTo(HttpStatus.OK);
     assertThat(
             exchange(
-                    "/api/v1/auth/invitations/" + second + "/redeem",
+                    "/api/v1/auth/invitations/" + secondToken + "/redeem",
                     HttpMethod.POST,
                     null,
                     redeem,
@@ -254,8 +260,8 @@ class AdminUserApiIntegrationTest {
 
   @Test
   void invitationForExistingUserReturnsConflictAndMailIsBilingual() {
-    User admin = user(UserRole.ADMIN, true);
-    User existing = user(UserRole.AUTHOR, true);
+    User admin = createUser(UserRole.ADMIN, true);
+    User existing = createUser(UserRole.AUTHOR, true);
     String token = login(admin);
     ResponseEntity<Void> response =
         exchange(
@@ -275,7 +281,7 @@ class AdminUserApiIntegrationTest {
                 .getStatusCode())
         .isEqualTo(HttpStatus.ACCEPTED);
     ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
-    verify(mail).send(captor.capture());
+    verify(mailSender).send(captor.capture());
     assertThat(captor.getValue().getSubject()).contains("Invitation", "邀請");
     assertThat(captor.getValue().getText())
         .contains("You are invited", "您收到邀請", "24 hours", "24 小時");
@@ -283,7 +289,7 @@ class AdminUserApiIntegrationTest {
 
   @Test
   void passwordMinimumAcceptsBoundsAndPersistsAudit() {
-    User admin = user(UserRole.ADMIN, true);
+    User admin = createUser(UserRole.ADMIN, true);
     String token = login(admin);
     assertThat(
             exchange(
@@ -321,9 +327,10 @@ class AdminUserApiIntegrationTest {
                     Map.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.BAD_REQUEST);
-    assertThat(passwordSettings.findById(true).orElseThrow().getMinimumLength()).isEqualTo(128);
-    assertThat(passwordChanges.findAll()).hasSize(1);
-    var audit = passwordChanges.findAll().get(0);
+    assertThat(passwordSettingRepository.findById(true).orElseThrow().getMinimumLength())
+        .isEqualTo(128);
+    assertThat(passwordSettingChangeRepository.findAll()).hasSize(1);
+    var audit = passwordSettingChangeRepository.findAll().get(0);
     assertThat(audit.getOperatorId()).isEqualTo(admin.getId());
     assertThat(audit.getPreviousValue()).isEqualTo(8);
     assertThat(audit.getNewValue()).isEqualTo(128);
@@ -332,7 +339,7 @@ class AdminUserApiIntegrationTest {
 
   @Test
   void reads_the_current_password_minimum_length() {
-    User admin = user(UserRole.ADMIN, true);
+    User admin = createUser(UserRole.ADMIN, true);
     String token = login(admin);
     ResponseEntity<Map> response =
         exchange(
@@ -347,43 +354,46 @@ class AdminUserApiIntegrationTest {
 
   private String sentToken() {
     ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
-    verify(mail, org.mockito.Mockito.atLeastOnce()).send(captor.capture());
+    verify(mailSender, atLeastOnce()).send(captor.capture());
     String text = captor.getAllValues().get(captor.getAllValues().size() - 1).getText();
     return text.substring(text.indexOf("token=") + 6, text.indexOf(" (valid"));
   }
 
-  private User user(UserRole role, boolean verified) {
+  private User createUser(UserRole role, boolean verified) {
     UUID id = UUID.randomUUID();
     String email = id + "@example.com";
-    return user(email, "User", role, true, verified);
+    return createUser(email, "User", role, true, verified);
   }
 
-  private User user(String email, String displayName, UserRole role, boolean enabled) {
-    return user(email, displayName, role, enabled, true);
+  private User createUser(String email, String displayName, UserRole role, boolean enabled) {
+    return createUser(email, displayName, role, enabled, true);
   }
 
-  private User user(
+  private User createUser(
       String email, String displayName, UserRole role, boolean enabled, boolean verified) {
-    User u =
-        users.save(
+    User user =
+        userRepository.save(
             new User(
                 UUID.randomUUID(),
                 email,
                 email.toLowerCase(Locale.ROOT),
                 displayName,
-                passwords.encode("safe-password"),
+                passwordEncoder.encode("safe-password"),
                 "zh-TW"));
-    u.changeRole(role);
-    u.setEnabled(enabled);
-    if (verified) u.verify(Instant.now());
-    return users.saveAndFlush(u);
+    user.changeRole(role);
+    user.setEnabled(enabled);
+    if (verified) {
+      user.verify(Instant.now());
+    }
+    return userRepository.saveAndFlush(user);
   }
 
-  private String login(User u) {
+  private String login(User user) {
     return ((Map)
-            rest.postForEntity(
+            testRestTemplate
+                .postForEntity(
                     url("/api/v1/auth/login"),
-                    Map.of("email", u.getEmail(), "password", "safe-password"),
+                    Map.of("email", user.getEmail(), "password", "safe-password"),
                     Map.class)
                 .getBody())
         .get("accessToken")
@@ -391,11 +401,12 @@ class AdminUserApiIntegrationTest {
   }
 
   private <T> ResponseEntity<T> exchange(
-      String path, HttpMethod method, String token, Object body, Class<T> type) {
-    HttpHeaders h = new HttpHeaders();
-    h.setBearerAuth(token);
-    h.setContentType(MediaType.APPLICATION_JSON);
-    return rest.exchange(url(path), method, new HttpEntity<>(body, h), type);
+      String path, HttpMethod method, String token, Object body, Class<T> responseType) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setBearerAuth(token);
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    return testRestTemplate.exchange(
+        url(path), method, new HttpEntity<>(body, headers), responseType);
   }
 
   private String url(String path) {

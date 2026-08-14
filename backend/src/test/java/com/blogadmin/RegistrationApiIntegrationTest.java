@@ -53,9 +53,9 @@ class RegistrationApiIntegrationTest {
   @LocalServerPort private int port;
   @Autowired private TestRestTemplate restTemplate;
   @Autowired private ObjectMapper objectMapper;
-  @Autowired private JdbcTemplate jdbc;
-  @Autowired private UserRepository users;
-  @MockitoBean private JavaMailSender mail;
+  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private UserRepository userRepository;
+  @MockitoBean private JavaMailSender mailSender;
 
   @DynamicPropertySource
   static void database(DynamicPropertyRegistry registry) {
@@ -67,7 +67,7 @@ class RegistrationApiIntegrationTest {
 
   @org.junit.jupiter.api.BeforeEach
   void setUp() {
-    jdbc.update("DELETE FROM auth_rate_limit_events");
+    jdbcTemplate.update("DELETE FROM auth_rate_limit_events");
   }
 
   @Test
@@ -104,7 +104,7 @@ class RegistrationApiIntegrationTest {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
     String savedName =
-        jdbc.queryForObject(
+        jdbcTemplate.queryForObject(
             "select display_name from users where normalized_email = ?",
             String.class,
             email.toLowerCase());
@@ -169,7 +169,7 @@ class RegistrationApiIntegrationTest {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
     String savedName =
-        jdbc.queryForObject(
+        jdbcTemplate.queryForObject(
             "select display_name from users where normalized_email = ?",
             String.class,
             email.toLowerCase());
@@ -214,7 +214,7 @@ class RegistrationApiIntegrationTest {
         "/api/v1/auth/registrations",
         Map.of("email", email, "displayName", "Verify", "password", "safe-password"));
     var message = ArgumentCaptor.forClass(SimpleMailMessage.class);
-    verify(mail, timeout(1000)).send(message.capture());
+    verify(mailSender, timeout(1000)).send(message.capture());
     String token = message.getValue().getText().replaceAll(".*token=", "");
     ResponseEntity<Void> first = post("/api/v1/auth/email-verifications", Map.of("token", token));
     ResponseEntity<String> second =
@@ -239,7 +239,7 @@ class RegistrationApiIntegrationTest {
   @Test
   void rateLimitOnlyConsumesAllowedRequestsAndKeepsBucketsIsolatedUnderConcurrency()
       throws Exception {
-    jdbc.update("DELETE FROM auth_rate_limit_events");
+    jdbcTemplate.update("DELETE FROM auth_rate_limit_events");
     ExecutorService executor = Executors.newFixedThreadPool(8);
     try {
       List<Future<ResponseEntity<Void>>> requests = new ArrayList<>();
@@ -277,7 +277,7 @@ class RegistrationApiIntegrationTest {
       assertThat(Long.parseLong(rejected.getHeaders().getFirst("Retry-After")))
           .isBetween(3590L, 3600L);
       assertThat(
-              jdbc.queryForObject(
+              jdbcTemplate.queryForObject(
                   "select count(*) from auth_rate_limit_events "
                       + "where bucket = 'registration' and bucket_key = ?",
                   Integer.class,
@@ -290,7 +290,7 @@ class RegistrationApiIntegrationTest {
           .isEqualTo(HttpStatus.ACCEPTED);
     } finally {
       executor.shutdownNow();
-      jdbc.update("DELETE FROM auth_rate_limit_events");
+      jdbcTemplate.update("DELETE FROM auth_rate_limit_events");
     }
   }
 
@@ -298,14 +298,14 @@ class RegistrationApiIntegrationTest {
   void mailFailureIsLoggedWithoutSecretsAndRegistrationStillCommits() {
     String email = "mail-failure-" + System.nanoTime() + "@example.com";
     String password = "safe-password";
-    users.saveAndFlush(
+    userRepository.saveAndFlush(
         new User(UUID.randomUUID(), email, email, "User", "stored-password", "zh-TW"));
     Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(IdentityEmailEventListener.class);
     ListAppender<ILoggingEvent> appender = new ListAppender<>();
     appender.start();
     logger.addAppender(appender);
     doThrow(new IllegalStateException("mail failed: " + email + " token=secret"))
-        .when(mail)
+        .when(mailSender)
         .send(any(SimpleMailMessage.class));
 
     try {
@@ -317,7 +317,7 @@ class RegistrationApiIntegrationTest {
 
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
       assertThat(
-              jdbc.queryForObject(
+              jdbcTemplate.queryForObject(
                   "select count(*) from email_verification_tokens where user_id = "
                       + "(select id from users where email = ?)",
                   Integer.class,

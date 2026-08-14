@@ -45,52 +45,54 @@ class AccountApiIntegrationTest {
   @Container
   static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
-  @LocalServerPort int port;
-  @Autowired TestRestTemplate rest;
-  @Autowired UserRepository users;
-  @Autowired PasswordEncoder passwords;
-  @Autowired RefreshSessionRepository sessions;
-  @Autowired PasswordResetTokenRepository resetTokens;
-  @Autowired EmailChangeTokenRepository emailTokens;
-  @MockitoBean JavaMailSender mail;
+  @LocalServerPort private int port;
+  @Autowired private TestRestTemplate testRestTemplate;
+  @Autowired private UserRepository userRepository;
+  @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private RefreshSessionRepository refreshSessionRepository;
+  @Autowired private PasswordResetTokenRepository passwordResetTokenRepository;
+  @Autowired private EmailChangeTokenRepository emailChangeTokenRepository;
+  @MockitoBean private JavaMailSender mailSender;
 
   @BeforeEach
   void clear() {
-    sessions.deleteAll();
-    resetTokens.deleteAll();
-    emailTokens.deleteAll();
-    users.deleteAll();
-    reset(mail);
+    refreshSessionRepository.deleteAll();
+    passwordResetTokenRepository.deleteAll();
+    emailChangeTokenRepository.deleteAll();
+    userRepository.deleteAll();
+    reset(mailSender);
   }
 
   @DynamicPropertySource
-  static void database(DynamicPropertyRegistry r) {
-    r.add("spring.datasource.url", postgres::getJdbcUrl);
-    r.add("spring.datasource.username", postgres::getUsername);
-    r.add("spring.datasource.password", postgres::getPassword);
-    r.add("app.security.jwt-secret", () -> "test-secret-that-is-at-least-32-bytes-long");
+  static void database(DynamicPropertyRegistry registry) {
+    registry.add("spring.datasource.url", postgres::getJdbcUrl);
+    registry.add("spring.datasource.username", postgres::getUsername);
+    registry.add("spring.datasource.password", postgres::getPassword);
+    registry.add("app.security.jwt-secret", () -> "test-secret-that-is-at-least-32-bytes-long");
   }
 
   @Test
   void profileAndPasswordChangeAreExposed() {
-    User u = user();
-    String access = login(u);
+    User user = createUser();
+    String accessToken = login(user);
     assertThat(
             exchange(
                     "/api/v1/account/profile",
                     HttpMethod.PATCH,
-                    access,
+                    accessToken,
                     Map.of("displayName", "New", "preferredLanguage", "en"),
                     Map.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.OK);
-    assertThat(users.findById(u.getId()).orElseThrow().getDisplayName()).isEqualTo("New");
-    assertThat(users.findById(u.getId()).orElseThrow().getPreferredLanguage()).isEqualTo("en");
+    assertThat(userRepository.findById(user.getId()).orElseThrow().getDisplayName())
+        .isEqualTo("New");
+    assertThat(userRepository.findById(user.getId()).orElseThrow().getPreferredLanguage())
+        .isEqualTo("en");
     assertThat(
             exchange(
                     "/api/v1/account/password",
                     HttpMethod.PUT,
-                    access,
+                    accessToken,
                     Map.of(
                         "currentPassword",
                         "safe-password",
@@ -102,21 +104,22 @@ class AccountApiIntegrationTest {
                 .getStatusCode())
         .isEqualTo(HttpStatus.NO_CONTENT);
     assertThat(
-            passwords.matches(
-                "new-safe-password", users.findById(u.getId()).orElseThrow().getPasswordHash()))
+            passwordEncoder.matches(
+                "new-safe-password",
+                userRepository.findById(user.getId()).orElseThrow().getPasswordHash()))
         .isTrue();
   }
 
   @Test
   void currentAccountReturnsFrontendIdentityAndRoleWithoutSensitiveFields() {
-    User user = user();
+    User user = createUser();
     user.changeRole(UserRole.ADMIN);
     user.updateProfile("Current User", "en");
-    users.saveAndFlush(user);
-    String access = login(user);
+    userRepository.saveAndFlush(user);
+    String accessToken = login(user);
 
     ResponseEntity<Map> response =
-        exchange("/api/v1/account/me", HttpMethod.GET, access, null, Map.class);
+        exchange("/api/v1/account/me", HttpMethod.GET, accessToken, null, Map.class);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(response.getBody())
@@ -134,85 +137,92 @@ class AccountApiIntegrationTest {
 
   @Test
   void passwordResetResendAndEmailChangeUseOneTimeLocalizedTokens() {
-    User u = user();
-    String access = login(u);
+    User user = createUser();
+    String accessToken = login(user);
     assertThat(
-            rest.postForEntity(
-                    url("/api/v1/auth/password-resets"), Map.of("email", u.getEmail()), Void.class)
+            testRestTemplate
+                .postForEntity(
+                    url("/api/v1/auth/password-resets"),
+                    Map.of("email", user.getEmail()),
+                    Void.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.ACCEPTED);
-    String first = tokenFromLastMail();
-    rest.postForEntity(
-        url("/api/v1/auth/password-resets"), Map.of("email", u.getEmail()), Void.class);
-    String second = tokenFromLastMail();
-    assertThat(second).isNotEqualTo(first);
+    String firstToken = tokenFromLastMail();
+    testRestTemplate.postForEntity(
+        url("/api/v1/auth/password-resets"), Map.of("email", user.getEmail()), Void.class);
+    String secondToken = tokenFromLastMail();
+    assertThat(secondToken).isNotEqualTo(firstToken);
     assertThat(
-            rest.postForEntity(
-                    url("/api/v1/auth/password-resets/" + first),
+            testRestTemplate
+                .postForEntity(
+                    url("/api/v1/auth/password-resets/" + firstToken),
                     Map.of("password", "reset-password"),
                     Void.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.NOT_FOUND);
     assertThat(
-            rest.postForEntity(
-                    url("/api/v1/auth/password-resets/" + first),
+            testRestTemplate
+                .postForEntity(
+                    url("/api/v1/auth/password-resets/" + firstToken),
                     Map.of("password", "reset-password"),
                     Void.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.NOT_FOUND);
     assertThat(
-            rest.postForEntity(
-                    url("/api/v1/auth/password-resets/" + second),
+            testRestTemplate
+                .postForEntity(
+                    url("/api/v1/auth/password-resets/" + secondToken),
                     Map.of("password", "reset-password"),
                     Void.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.NO_CONTENT);
-    access = login(u, "reset-password");
+    accessToken = login(user, "reset-password");
     assertThat(
             exchange(
                     "/api/v1/account/email",
                     HttpMethod.POST,
-                    access,
+                    accessToken,
                     Map.of("email", "new@example.com"),
                     Void.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.ACCEPTED);
     assertThat(tokenFromLastMail()).isNotBlank();
-    ArgumentCaptor<SimpleMailMessage> c = ArgumentCaptor.forClass(SimpleMailMessage.class);
-    verify(mail, atLeastOnce()).send(c.capture());
-    assertThat(c.getAllValues().get(c.getAllValues().size() - 1).getTo())
+    ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+    verify(mailSender, atLeastOnce()).send(captor.capture());
+    assertThat(captor.getAllValues().get(captor.getAllValues().size() - 1).getTo())
         .containsExactly("new@example.com");
   }
 
   @Test
   void emailCollisionReturnsConflict() {
-    User u = user();
-    user();
-    String access = login(u);
+    User user = createUser();
+    createUser();
+    String accessToken = login(user);
     assertThat(
             exchange(
                     "/api/v1/account/email",
                     HttpMethod.POST,
-                    access,
-                    Map.of("email", users.findAll().get(1).getEmail()),
+                    accessToken,
+                    Map.of("email", userRepository.findAll().get(1).getEmail()),
                     Void.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.CONFLICT);
-    assertThat(users.findById(u.getId()).orElseThrow().getEmail()).isEqualTo(u.getEmail());
+    assertThat(userRepository.findById(user.getId()).orElseThrow().getEmail())
+        .isEqualTo(user.getEmail());
   }
 
   @Test
   void emailChangeKeepsOldAccessTokenAndSendsBilingualNotifications() {
-    User u = user();
-    String oldEmail = u.getEmail();
+    User user = createUser();
+    String oldEmail = user.getEmail();
     String newEmail = "new-email@example.com";
-    String access = login(u);
+    String accessToken = login(user);
 
     assertThat(
             exchange(
                     "/api/v1/account/email",
                     HttpMethod.POST,
-                    access,
+                    accessToken,
                     Map.of("email", newEmail),
                     Void.class)
                 .getStatusCode())
@@ -221,58 +231,66 @@ class AccountApiIntegrationTest {
             exchange(
                     "/api/v1/account/profile",
                     HttpMethod.PATCH,
-                    access,
+                    accessToken,
                     Map.of("displayName", "Still signed in", "preferredLanguage", "zh-TW"),
                     Map.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.OK);
 
     ArgumentCaptor<SimpleMailMessage> sent = ArgumentCaptor.forClass(SimpleMailMessage.class);
-    verify(mail, atLeastOnce()).send(sent.capture());
-    SimpleMailMessage request =
+    verify(mailSender, atLeastOnce()).send(sent.capture());
+    SimpleMailMessage requestMessage =
         sent.getAllValues().stream()
-            .filter(m -> newEmail.equals(m.getTo()[0]) && m.getText().contains("confirm-email"))
+            .filter(
+                message ->
+                    newEmail.equals(message.getTo()[0])
+                        && message.getText().contains("confirm-email"))
             .findFirst()
             .orElseThrow();
-    String token = tokenFrom(request);
+    String token = tokenFrom(requestMessage);
 
     assertThat(
-            rest.postForEntity(url("/api/v1/auth/email-changes/" + token), null, Void.class)
+            testRestTemplate
+                .postForEntity(url("/api/v1/auth/email-changes/" + token), null, Void.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.NO_CONTENT);
-    assertThat(users.findById(u.getId()).orElseThrow().getEmail()).isEqualTo(newEmail);
+    assertThat(userRepository.findById(user.getId()).orElseThrow().getEmail()).isEqualTo(newEmail);
 
-    verify(mail, times(3)).send(sent.capture());
+    verify(mailSender, times(3)).send(sent.capture());
     List<SimpleMailMessage> notifications =
         sent.getAllValues().stream()
-            .filter(m -> m.getText().contains("Your email was changed."))
+            .filter(message -> message.getText().contains("Your email was changed."))
             .toList();
     assertThat(notifications).hasSize(2);
     assertThat(notifications)
-        .extracting(m -> m.getTo()[0])
+        .extracting(message -> message.getTo()[0])
         .containsExactlyInAnyOrder(oldEmail, newEmail);
     assertThat(notifications)
         .allSatisfy(
-            m -> assertThat(m.getText()).contains("Your email was changed.", "您的 Email 已變更。"));
+            message ->
+                assertThat(message.getText()).contains("Your email was changed.", "您的 Email 已變更。"));
   }
 
-  private User user() {
+  private User createUser() {
     UUID id = UUID.randomUUID();
-    String e = id + "@example.com";
-    User u = users.save(new User(id, e, e, "User", passwords.encode("safe-password"), "zh-TW"));
-    u.verify(Instant.now());
-    return users.saveAndFlush(u);
+    String email = id + "@example.com";
+    User user =
+        userRepository.save(
+            new User(id, email, email, "User", passwordEncoder.encode("safe-password"), "zh-TW"));
+    user.verify(Instant.now());
+    return userRepository.saveAndFlush(user);
   }
 
-  private String login(User u) {
-    return login(u, "safe-password");
+  private String login(User user) {
+    return login(user, "safe-password");
   }
 
-  private String login(User u, String password) {
+  private String login(User user, String password) {
     return ((Map)
-            rest.postForEntity(
+            testRestTemplate
+                .postForEntity(
                     url("/api/v1/auth/login"),
-                    Map.of("email", u.getEmail(), "password", password),
+                    Map.of("email", user.getEmail(), "password", password),
                     Map.class)
                 .getBody())
         .get("accessToken")
@@ -280,9 +298,9 @@ class AccountApiIntegrationTest {
   }
 
   private String tokenFromLastMail() {
-    ArgumentCaptor<SimpleMailMessage> c = ArgumentCaptor.forClass(SimpleMailMessage.class);
-    verify(mail, atLeastOnce()).send(c.capture());
-    String text = c.getAllValues().get(c.getAllValues().size() - 1).getText();
+    ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+    verify(mailSender, atLeastOnce()).send(captor.capture());
+    String text = captor.getAllValues().get(captor.getAllValues().size() - 1).getText();
     return tokenFrom(text);
   }
 
@@ -295,11 +313,14 @@ class AccountApiIntegrationTest {
   }
 
   private <T> ResponseEntity<T> exchange(
-      String path, HttpMethod method, String access, Object body, Class<T> type) {
-    HttpHeaders h = new HttpHeaders();
-    if (access != null) h.setBearerAuth(access);
-    h.setContentType(MediaType.APPLICATION_JSON);
-    return rest.exchange(url(path), method, new HttpEntity<>(body, h), type);
+      String path, HttpMethod method, String accessToken, Object body, Class<T> responseType) {
+    HttpHeaders headers = new HttpHeaders();
+    if (accessToken != null) {
+      headers.setBearerAuth(accessToken);
+    }
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    return testRestTemplate.exchange(
+        url(path), method, new HttpEntity<>(body, headers), responseType);
   }
 
   private String url(String path) {

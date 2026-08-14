@@ -64,20 +64,20 @@ class ConcurrencyAndTransactionIntegrationTest {
   @Container
   static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
-  @Autowired UserRepository users;
-  @Autowired PasswordEncoder passwords;
-  @Autowired RefreshSessionRepository sessions;
-  @Autowired PasswordResetTokenRepository resetTokens;
-  @Autowired EmailChangeTokenRepository emailTokens;
-  @Autowired InvitationRepository invitations;
-  @Autowired ArticleRepository articles;
-  @Autowired TagRepository tags;
-  @Autowired AccountService accountService;
-  @Autowired AdminUserService adminUserService;
-  @Autowired ArticleService articleService;
-  @Autowired ArticleCleanupExecutor articleCleanupExecutor;
-  @Autowired EntityManagerFactory entityManagerFactory;
-  @MockitoBean JavaMailSender mail;
+  @Autowired private UserRepository userRepository;
+  @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private RefreshSessionRepository refreshSessionRepository;
+  @Autowired private PasswordResetTokenRepository passwordResetTokenRepository;
+  @Autowired private EmailChangeTokenRepository emailChangeTokenRepository;
+  @Autowired private InvitationRepository invitationRepository;
+  @Autowired private ArticleRepository articleRepository;
+  @Autowired private TagRepository tagRepository;
+  @Autowired private AccountService accountService;
+  @Autowired private AdminUserService adminUserService;
+  @Autowired private ArticleService articleService;
+  @Autowired private ArticleCleanupExecutor articleCleanupExecutor;
+  @Autowired private EntityManagerFactory entityManagerFactory;
+  @MockitoBean private JavaMailSender mailSender;
 
   @DynamicPropertySource
   static void database(DynamicPropertyRegistry r) {
@@ -90,14 +90,14 @@ class ConcurrencyAndTransactionIntegrationTest {
 
   @BeforeEach
   void clear() {
-    articles.deleteAll();
-    tags.deleteAll();
-    sessions.deleteAll();
-    resetTokens.deleteAll();
-    emailTokens.deleteAll();
-    invitations.deleteAll();
-    users.deleteAll();
-    reset(mail);
+    articleRepository.deleteAll();
+    tagRepository.deleteAll();
+    refreshSessionRepository.deleteAll();
+    passwordResetTokenRepository.deleteAll();
+    emailChangeTokenRepository.deleteAll();
+    invitationRepository.deleteAll();
+    userRepository.deleteAll();
+    reset(mailSender);
   }
 
   @Test
@@ -109,13 +109,13 @@ class ConcurrencyAndTransactionIntegrationTest {
             "alice@example.com",
             "alice@example.com",
             "Alice",
-            passwords.encode("Password123!"),
+            passwordEncoder.encode("Password123!"),
             "zh-TW");
     user.verify(Instant.now());
-    users.save(user);
+    userRepository.save(user);
 
     OpaqueToken.Issued token = OpaqueToken.generate();
-    emailTokens.save(
+    emailChangeTokenRepository.save(
         new EmailChangeToken(
             UUID.randomUUID(),
             user.getId(),
@@ -152,7 +152,8 @@ class ConcurrencyAndTransactionIntegrationTest {
     executor.shutdown();
 
     // Verify DB invariant: email_change_tokens has at most 1 active token
-    List<EmailChangeToken> active = emailTokens.findByUserIdAndUsedAtIsNull(user.getId());
+    List<EmailChangeToken> active =
+        emailChangeTokenRepository.findByUserIdAndUsedAtIsNull(user.getId());
     assertThat(active.size()).isLessThanOrEqualTo(1);
   }
 
@@ -165,10 +166,10 @@ class ConcurrencyAndTransactionIntegrationTest {
             "bob@example.com",
             "bob@example.com",
             "Bob",
-            passwords.encode("Password123!"),
+            passwordEncoder.encode("Password123!"),
             "zh-TW");
     user.verify(Instant.now());
-    users.save(user);
+    userRepository.save(user);
 
     ExecutorService executor = Executors.newFixedThreadPool(2);
     CyclicBarrier barrier = new CyclicBarrier(2);
@@ -194,7 +195,8 @@ class ConcurrencyAndTransactionIntegrationTest {
     f2.get(10, TimeUnit.SECONDS);
     executor.shutdown();
 
-    List<PasswordResetToken> active = resetTokens.findByUserIdAndUsedAtIsNull(user.getId());
+    List<PasswordResetToken> active =
+        passwordResetTokenRepository.findByUserIdAndUsedAtIsNull(user.getId());
     assertThat(active).hasSize(1);
   }
 
@@ -208,7 +210,7 @@ class ConcurrencyAndTransactionIntegrationTest {
             "invited@example.com",
             token.digest(),
             Instant.now().plusSeconds(3600));
-    invitations.save(invitation);
+    invitationRepository.save(invitation);
 
     ExecutorService executor = Executors.newFixedThreadPool(2);
     CyclicBarrier barrier = new CyclicBarrier(2);
@@ -246,10 +248,10 @@ class ConcurrencyAndTransactionIntegrationTest {
     assertThat(r1 ^ r2).isTrue();
 
     // Exactly one user must be created
-    assertThat(users.findAll()).hasSize(1);
+    assertThat(userRepository.findAll()).hasSize(1);
 
     // Invitation must be marked used
-    Invitation updated = invitations.findById(invitation.getId()).orElseThrow();
+    Invitation updated = invitationRepository.findById(invitation.getId()).orElseThrow();
     assertThat(updated.getUsedAt()).isNotNull();
   }
 
@@ -262,10 +264,10 @@ class ConcurrencyAndTransactionIntegrationTest {
             "author@example.com",
             "author@example.com",
             "Author",
-            passwords.encode("Password123!"),
+            passwordEncoder.encode("Password123!"),
             "zh-TW");
     author.verify(Instant.now());
-    users.save(author);
+    userRepository.save(author);
 
     ExecutorService executor = Executors.newFixedThreadPool(4);
     CyclicBarrier barrier = new CyclicBarrier(4);
@@ -294,7 +296,7 @@ class ConcurrencyAndTransactionIntegrationTest {
     executor.shutdown();
 
     // Verify DB invariant: exactly 2 tags exist
-    List<Tag> allTags = tags.findAll();
+    List<Tag> allTags = tagRepository.findAll();
     assertThat(allTags).hasSize(2);
 
     // Verify all 4 articles are created and linked to the same canonical tags
@@ -314,13 +316,13 @@ class ConcurrencyAndTransactionIntegrationTest {
             "reusetest@example.com",
             "reusetest@example.com",
             "Reuse Author",
-            passwords.encode("Password123!"),
+            passwordEncoder.encode("Password123!"),
             "zh-TW");
     author.verify(Instant.now());
-    users.save(author);
+    userRepository.save(author);
 
     // Create an existing unreferenced (orphan) tag
-    tags.saveAndFlush(new Tag(UUID.randomUUID(), "OrphanReuseTag"));
+    tagRepository.saveAndFlush(new Tag(UUID.randomUUID(), "OrphanReuseTag"));
 
     ExecutorService executor = Executors.newFixedThreadPool(2);
     CyclicBarrier barrier = new CyclicBarrier(2);
@@ -357,8 +359,8 @@ class ConcurrencyAndTransactionIntegrationTest {
     assertThat(created.tagNames()).contains("OrphanReuseTag");
 
     // The tag must still exist and be properly linked
-    Tag existingTag = tags.findByNameIgnoreCase("OrphanReuseTag").orElseThrow();
-    assertThat(articles.countByTagsId(existingTag.getId())).isEqualTo(1);
+    Tag existingTag = tagRepository.findByNameIgnoreCase("OrphanReuseTag").orElseThrow();
+    assertThat(articleRepository.countByTagsId(existingTag.getId())).isEqualTo(1);
   }
 
   @Test
@@ -369,10 +371,10 @@ class ConcurrencyAndTransactionIntegrationTest {
             "batchauthor@example.com",
             "batchauthor@example.com",
             "Batch Author",
-            passwords.encode("Password123!"),
+            passwordEncoder.encode("Password123!"),
             "zh-TW");
     author.verify(Instant.now());
-    users.save(author);
+    userRepository.save(author);
 
     for (int i = 0; i < 20; i++) {
       articleService.create(
@@ -408,10 +410,10 @@ class ConcurrencyAndTransactionIntegrationTest {
             "cleanauthor@example.com",
             "cleanauthor@example.com",
             "Clean Author",
-            passwords.encode("Password123!"),
+            passwordEncoder.encode("Password123!"),
             "zh-TW");
     author.verify(Instant.now());
-    users.save(author);
+    userRepository.save(author);
 
     ArticleService.ArticleView view =
         articleService.create(
@@ -423,18 +425,18 @@ class ConcurrencyAndTransactionIntegrationTest {
             Set.of("OrphanTag1", "OrphanTag2"));
 
     // Set deletedAt to 35 days ago
-    Article article = articles.findById(view.id()).orElseThrow();
+    Article article = articleRepository.findById(view.id()).orElseThrow();
     article.delete();
     // Simulate expired deletedAt
     ReflectionTestUtils.setField(article, "deletedAt", Instant.now().minus(35, ChronoUnit.DAYS));
-    articles.saveAndFlush(article);
+    articleRepository.saveAndFlush(article);
 
     // Run cleanup executor
     articleCleanupExecutor.cleanup();
 
     // Article and orphan tags should be cleaned up
-    assertThat(articles.findById(view.id())).isEmpty();
-    assertThat(tags.findAll()).isEmpty();
+    assertThat(articleRepository.findById(view.id())).isEmpty();
+    assertThat(tagRepository.findAll()).isEmpty();
   }
 
   @Test
@@ -445,10 +447,10 @@ class ConcurrencyAndTransactionIntegrationTest {
             "rollbackauthor@example.com",
             "rollbackauthor@example.com",
             "Rollback Author",
-            passwords.encode("Password123!"),
+            passwordEncoder.encode("Password123!"),
             "zh-TW");
     author.verify(Instant.now());
-    users.save(author);
+    userRepository.save(author);
 
     ArticleService.ArticleView view =
         articleService.create(
@@ -459,10 +461,10 @@ class ConcurrencyAndTransactionIntegrationTest {
             null,
             Set.of("RollbackTag1"));
 
-    Article article = articles.findById(view.id()).orElseThrow();
+    Article article = articleRepository.findById(view.id()).orElseThrow();
     article.delete();
     ReflectionTestUtils.setField(article, "deletedAt", Instant.now().minus(35, ChronoUnit.DAYS));
-    articles.saveAndFlush(article);
+    articleRepository.saveAndFlush(article);
 
     // Inject failure into TagRepository during cleanup via standard dynamic proxy
     TagRepository failingTags =
@@ -474,28 +476,28 @@ class ConcurrencyAndTransactionIntegrationTest {
                   if ("findCandidateOrphanTagNames".equals(method.getName())) {
                     throw new IllegalStateException("Simulated crash mid-cleanup transaction");
                   }
-                  return method.invoke(tags, methodArgs);
+                  return method.invoke(tagRepository, methodArgs);
                 });
 
     // Unwrap CGLIB/JDK proxy to access target object
     ArticleCleanupExecutor targetExecutor = AopTestUtils.getTargetObject(articleCleanupExecutor);
     TagRepository originalTags =
-        (TagRepository) ReflectionTestUtils.getField(targetExecutor, "tags");
-    ReflectionTestUtils.setField(targetExecutor, "tags", failingTags);
+        (TagRepository) ReflectionTestUtils.getField(targetExecutor, "tagRepository");
+    ReflectionTestUtils.setField(targetExecutor, "tagRepository", failingTags);
 
     try {
       assertThatThrownBy(() -> articleCleanupExecutor.cleanup())
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("Simulated crash mid-cleanup transaction");
     } finally {
-      ReflectionTestUtils.setField(targetExecutor, "tags", originalTags);
+      ReflectionTestUtils.setField(targetExecutor, "tagRepository", originalTags);
     }
 
     // Verify atomic ROLLBACK: Article and its tags MUST still exist in PostgreSQL
-    Article rolledBackArticle = articles.findById(view.id()).orElse(null);
+    Article rolledBackArticle = articleRepository.findById(view.id()).orElse(null);
     assertThat(rolledBackArticle).isNotNull();
     assertThat(rolledBackArticle.getDeletedAt()).isNotNull();
-    assertThat(tags.findByNameIgnoreCase("RollbackTag1")).isPresent();
+    assertThat(tagRepository.findByNameIgnoreCase("RollbackTag1")).isPresent();
   }
 
   @Test
@@ -507,16 +509,16 @@ class ConcurrencyAndTransactionIntegrationTest {
             "unicodetest@example.com",
             "unicodetest@example.com",
             "Unicode Author",
-            passwords.encode("Password123!"),
+            passwordEncoder.encode("Password123!"),
             "zh-TW");
     author.verify(Instant.now());
-    users.save(author);
+    userRepository.save(author);
 
     // Pre-create orphan tags in DB that are initially unreferenced by any article
-    Tag tagCafe = tags.saveAndFlush(new Tag(UUID.randomUUID(), "café"));
-    Tag tagResume = tags.saveAndFlush(new Tag(UUID.randomUUID(), "résumé"));
-    Tag tagUber = tags.saveAndFlush(new Tag(UUID.randomUUID(), "Über"));
-    Tag tagNlp = tags.saveAndFlush(new Tag(UUID.randomUUID(), "自然語言處理"));
+    Tag tagCafe = tagRepository.saveAndFlush(new Tag(UUID.randomUUID(), "café"));
+    Tag tagResume = tagRepository.saveAndFlush(new Tag(UUID.randomUUID(), "résumé"));
+    Tag tagUber = tagRepository.saveAndFlush(new Tag(UUID.randomUUID(), "Über"));
+    Tag tagNlp = tagRepository.saveAndFlush(new Tag(UUID.randomUUID(), "自然語言處理"));
 
     // Canonical keys sorted deterministically by Java String natural ordering (UTF-16 lexical
     // ordering):
@@ -531,11 +533,11 @@ class ConcurrencyAndTransactionIntegrationTest {
 
     ArticleCleanupExecutor targetExecutor = AopTestUtils.getTargetObject(articleCleanupExecutor);
     TagRepository originalCleanupTags =
-        (TagRepository) ReflectionTestUtils.getField(targetExecutor, "tags");
+        (TagRepository) ReflectionTestUtils.getField(targetExecutor, "tagRepository");
 
     ArticleService targetArticleService = AopTestUtils.getTargetObject(articleService);
     TagRepository originalArticleTags =
-        (TagRepository) ReflectionTestUtils.getField(targetArticleService, "tags");
+        (TagRepository) ReflectionTestUtils.getField(targetArticleService, "tagRepository");
 
     TagRepository proxyCleanupTags =
         (TagRepository)
@@ -575,8 +577,8 @@ class ConcurrencyAndTransactionIntegrationTest {
                   return method.invoke(originalArticleTags, args);
                 });
 
-    ReflectionTestUtils.setField(targetExecutor, "tags", proxyCleanupTags);
-    ReflectionTestUtils.setField(targetArticleService, "tags", proxyArticleTags);
+    ReflectionTestUtils.setField(targetExecutor, "tagRepository", proxyCleanupTags);
+    ReflectionTestUtils.setField(targetArticleService, "tagRepository", proxyArticleTags);
 
     ExecutorService executor = Executors.newFixedThreadPool(3);
     try {
@@ -632,10 +634,10 @@ class ConcurrencyAndTransactionIntegrationTest {
       assertThat(r2.tagNames()).contains("架構設計");
 
       // 3. Verify reused tags were not deleted by cleanup
-      Tag persistedCafe = tags.findByNameIgnoreCase("café").orElseThrow();
-      Tag persistedResume = tags.findByNameIgnoreCase("résumé").orElseThrow();
-      Tag persistedUber = tags.findByNameIgnoreCase("über").orElseThrow();
-      Tag persistedNlp = tags.findByNameIgnoreCase("自然語言處理").orElseThrow();
+      Tag persistedCafe = tagRepository.findByNameIgnoreCase("café").orElseThrow();
+      Tag persistedResume = tagRepository.findByNameIgnoreCase("résumé").orElseThrow();
+      Tag persistedUber = tagRepository.findByNameIgnoreCase("über").orElseThrow();
+      Tag persistedNlp = tagRepository.findByNameIgnoreCase("自然語言處理").orElseThrow();
 
       assertThat(persistedCafe.getId()).isEqualTo(tagCafe.getId());
       assertThat(persistedResume.getId()).isEqualTo(tagResume.getId());
@@ -644,21 +646,21 @@ class ConcurrencyAndTransactionIntegrationTest {
 
       // 4. Verify no duplicate tag entities created for case-insensitive variants (total distinct
       // tags = 5)
-      List<Tag> allTags = tags.findAll();
+      List<Tag> allTags = tagRepository.findAll();
       assertThat(allTags).hasSize(5);
 
       // 5. Verify article_tags relationships are accurately linked in DB
-      assertThat(articles.countByTagsId(persistedCafe.getId())).isEqualTo(2);
-      assertThat(articles.countByTagsId(persistedResume.getId())).isEqualTo(2);
-      assertThat(articles.countByTagsId(persistedUber.getId())).isEqualTo(2);
-      assertThat(articles.countByTagsId(persistedNlp.getId())).isEqualTo(1);
+      assertThat(articleRepository.countByTagsId(persistedCafe.getId())).isEqualTo(2);
+      assertThat(articleRepository.countByTagsId(persistedResume.getId())).isEqualTo(2);
+      assertThat(articleRepository.countByTagsId(persistedUber.getId())).isEqualTo(2);
+      assertThat(articleRepository.countByTagsId(persistedNlp.getId())).isEqualTo(1);
 
-      Tag persistedArch = tags.findByNameIgnoreCase("架構設計").orElseThrow();
-      assertThat(articles.countByTagsId(persistedArch.getId())).isEqualTo(1);
+      Tag persistedArch = tagRepository.findByNameIgnoreCase("架構設計").orElseThrow();
+      assertThat(articleRepository.countByTagsId(persistedArch.getId())).isEqualTo(1);
     } finally {
       executor.shutdown();
-      ReflectionTestUtils.setField(targetExecutor, "tags", originalCleanupTags);
-      ReflectionTestUtils.setField(targetArticleService, "tags", originalArticleTags);
+      ReflectionTestUtils.setField(targetExecutor, "tagRepository", originalCleanupTags);
+      ReflectionTestUtils.setField(targetArticleService, "tagRepository", originalArticleTags);
     }
   }
 }

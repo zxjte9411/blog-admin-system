@@ -91,17 +91,17 @@ class AuthenticationApiIntegrationTest {
 
   @LocalServerPort private int port;
   @Autowired private TestRestTemplate restTemplate;
-  @Autowired private PasswordEncoder passwords;
-  @Autowired private AdminUserService adminUsers;
-  @Autowired private InvitationRepository invitations;
-  @Autowired private UserRepository users;
-  @Autowired private UserIdentityRepository identities;
-  @Autowired private PasswordResetTokenRepository resetTokens;
-  @Autowired private RefreshSessionRepository sessions;
-  @Autowired private EmailVerificationTokenRepository tokens;
-  @Autowired private RateLimitEventRepository limits;
-  @Autowired private JdbcTemplate jdbc;
-  @MockitoBean private JavaMailSender mail;
+  @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private AdminUserService adminUserService;
+  @Autowired private InvitationRepository invitationRepository;
+  @Autowired private UserRepository userRepository;
+  @Autowired private UserIdentityRepository userIdentityRepository;
+  @Autowired private PasswordResetTokenRepository passwordResetTokenRepository;
+  @Autowired private RefreshSessionRepository refreshSessionRepository;
+  @Autowired private EmailVerificationTokenRepository emailVerificationTokenRepository;
+  @Autowired private RateLimitEventRepository rateLimitEventRepository;
+  @Autowired private JdbcTemplate jdbcTemplate;
+  @MockitoBean private JavaMailSender mailSender;
   @PersistenceContext private EntityManager entityManager;
 
   @DynamicPropertySource
@@ -148,12 +148,12 @@ class AuthenticationApiIntegrationTest {
         .isEqualTo(HttpStatus.OK);
 
     User named =
-        users.findAll().stream()
+        userRepository.findAll().stream()
             .filter(user -> user.getEmail().equals(namedEmail))
             .findFirst()
             .orElseThrow();
     User blankName =
-        users.findAll().stream()
+        userRepository.findAll().stream()
             .filter(user -> user.getEmail().equals(blankNameEmail))
             .findFirst()
             .orElseThrow();
@@ -167,10 +167,10 @@ class AuthenticationApiIntegrationTest {
               assertThat(user.getVerifiedAt()).isNotNull();
               assertThat(user.getPreferredLanguage()).isEqualTo("zh-TW");
               assertThat(user.getPasswordHash()).isNotBlank();
-              assertThat(passwords.matches(PASSWORD, user.getPasswordHash())).isFalse();
+              assertThat(passwordEncoder.matches(PASSWORD, user.getPasswordHash())).isFalse();
             });
     assertThat(named.getPasswordHash()).isNotEqualTo(blankName.getPasswordHash());
-    assertThat(tokens.count()).isZero();
+    assertThat(emailVerificationTokenRepository.count()).isZero();
   }
 
   @Test
@@ -180,9 +180,9 @@ class AuthenticationApiIntegrationTest {
     UUID userId = createUser(true, true);
     assertThat(email(userId)).isNotEqualTo(originalEmail);
 
-    User existing = users.findById(userId).orElseThrow();
+    User existing = userRepository.findById(userId).orElseThrow();
     existing.changeEmail(originalEmail);
-    users.saveAndFlush(existing);
+    userRepository.saveAndFlush(existing);
 
     assertThat(
             post(
@@ -199,8 +199,8 @@ class AuthenticationApiIntegrationTest {
                 .getStatusCode())
         .isEqualTo(HttpStatus.OK);
 
-    assertThat(users.findAll()).hasSize(1);
-    assertThat(users.findById(userId).orElseThrow().getEmail()).isEqualTo(originalEmail);
+    assertThat(userRepository.findAll()).hasSize(1);
+    assertThat(userRepository.findById(userId).orElseThrow().getEmail()).isEqualTo(originalEmail);
   }
 
   @Test
@@ -292,7 +292,7 @@ class AuthenticationApiIntegrationTest {
     assertGoogleUnauthorized(supabaseToken(UUID.randomUUID().toString(), email(unverified)));
     UUID disabled = createUser(true, false);
     assertGoogleUnauthorized(supabaseToken(UUID.randomUUID().toString(), email(disabled)));
-    assertThat(identities.count()).isZero();
+    assertThat(userIdentityRepository.count()).isZero();
   }
 
   @Test
@@ -310,13 +310,13 @@ class AuthenticationApiIntegrationTest {
     assertThat(post("/api/v1/auth/google", request, Map.class).getStatusCode())
         .isEqualTo(HttpStatus.OK);
     User user =
-        users.findAll().stream()
+        userRepository.findAll().stream()
             .filter(candidate -> candidate.getNormalizedEmail().equals(email))
             .findFirst()
             .orElseThrow();
     assertThat(user.getVerifiedAt()).isNotNull();
     assertThat(user.isEnabled()).isTrue();
-    assertThat(invitations.findById(link.invitation().getId()).orElseThrow().getUsedAt())
+    assertThat(invitationRepository.findById(link.invitation().getId()).orElseThrow().getUsedAt())
         .isNotNull();
     assertThat(post("/api/v1/auth/google", request, Map.class).getStatusCode())
         .isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -328,9 +328,10 @@ class AuthenticationApiIntegrationTest {
 
     assertGoogleUnauthorized(
         supabaseToken(UUID.randomUUID().toString(), "different@example.com"), link.token());
-    assertThat(invitations.findById(link.invitation().getId()).orElseThrow().getUsedAt()).isNull();
+    assertThat(invitationRepository.findById(link.invitation().getId()).orElseThrow().getUsedAt())
+        .isNull();
     assertThat(
-            users.findAll().stream()
+            userRepository.findAll().stream()
                 .filter(user -> user.getNormalizedEmail().equals("different@example.com")))
         .isEmpty();
   }
@@ -342,13 +343,18 @@ class AuthenticationApiIntegrationTest {
         supabaseToken(
             UUID.randomUUID().toString(), "unverified-google@example.com", "Google User", false),
         unverified.token());
-    assertThat(invitations.findById(unverified.invitation().getId()).orElseThrow().getUsedAt())
+    assertThat(
+            invitationRepository
+                .findById(unverified.invitation().getId())
+                .orElseThrow()
+                .getUsedAt())
         .isNull();
 
     InvitationLink invalid = invitation("not-an-email");
     assertGoogleUnauthorized(
         supabaseToken(UUID.randomUUID().toString(), "not-an-email"), invalid.token());
-    assertThat(invitations.findById(invalid.invitation().getId()).orElseThrow().getUsedAt())
+    assertThat(
+            invitationRepository.findById(invalid.invitation().getId()).orElseThrow().getUsedAt())
         .isNull();
   }
 
@@ -356,7 +362,7 @@ class AuthenticationApiIntegrationTest {
   void googleLoginRejectsExpiredInvitation() {
     String token = "expired-google-invitation";
     Invitation invitation =
-        invitations.saveAndFlush(
+        invitationRepository.saveAndFlush(
             new Invitation(
                 UUID.randomUUID(),
                 "expired-google@example.com",
@@ -365,7 +371,8 @@ class AuthenticationApiIntegrationTest {
 
     assertGoogleUnauthorized(
         supabaseToken(UUID.randomUUID().toString(), invitation.getEmail()), token);
-    assertThat(invitations.findById(invitation.getId()).orElseThrow().getUsedAt()).isNull();
+    assertThat(invitationRepository.findById(invitation.getId()).orElseThrow().getUsedAt())
+        .isNull();
   }
 
   @Test
@@ -374,7 +381,8 @@ class AuthenticationApiIntegrationTest {
     assertGoogleUnauthorized(
         supabaseToken(UUID.randomUUID().toString(), blankName.invitation().getEmail(), "  ", true),
         blankName.token());
-    assertThat(invitations.findById(blankName.invitation().getId()).orElseThrow().getUsedAt())
+    assertThat(
+            invitationRepository.findById(blankName.invitation().getId()).orElseThrow().getUsedAt())
         .isNull();
 
     InvitationLink longName = invitation("long-google-name@example.com");
@@ -382,7 +390,8 @@ class AuthenticationApiIntegrationTest {
         supabaseToken(
             UUID.randomUUID().toString(), longName.invitation().getEmail(), "x".repeat(101), true),
         longName.token());
-    assertThat(invitations.findById(longName.invitation().getId()).orElseThrow().getUsedAt())
+    assertThat(
+            invitationRepository.findById(longName.invitation().getId()).orElseThrow().getUsedAt())
         .isNull();
   }
 
@@ -402,7 +411,7 @@ class AuthenticationApiIntegrationTest {
                 .getStatusCode())
         .isEqualTo(HttpStatus.ACCEPTED);
     ArgumentCaptor<SimpleMailMessage> mailCaptor = ArgumentCaptor.forClass(SimpleMailMessage.class);
-    verify(mail, atLeastOnce()).send(mailCaptor.capture());
+    verify(mailSender, atLeastOnce()).send(mailCaptor.capture());
     SimpleMailMessage resetMail = mailCaptor.getValue();
     assertThat(resetMail.getTo()).containsExactly(email);
     String resetToken = resetToken(resetMail.getText());
@@ -439,9 +448,9 @@ class AuthenticationApiIntegrationTest {
   @Test
   void passwordMinimumChangeAppliesToAllFourPasswordEntrances() {
     UUID admin = createUser(true, true);
-    User adminUser = users.findById(admin).orElseThrow();
+    User adminUser = userRepository.findById(admin).orElseThrow();
     adminUser.changeRole(UserRole.ADMIN);
-    users.saveAndFlush(adminUser);
+    userRepository.saveAndFlush(adminUser);
     String adminToken =
         (String)
             post("/api/v1/auth/login", loginRequest(admin), Map.class).getBody().get("accessToken");
@@ -462,16 +471,16 @@ class AuthenticationApiIntegrationTest {
 
   @BeforeEach
   void clearDatabase() {
-    sessions.deleteAll();
-    resetTokens.deleteAll();
-    tokens.deleteAll();
-    limits.deleteAll();
-    identities.deleteAll();
-    invitations.deleteAll();
-    jdbc.execute("TRUNCATE TABLE password_setting_changes");
-    users.deleteAll();
-    jdbc.update("UPDATE password_settings SET minimum_length = 8 WHERE id = TRUE");
-    reset(mail);
+    refreshSessionRepository.deleteAll();
+    passwordResetTokenRepository.deleteAll();
+    emailVerificationTokenRepository.deleteAll();
+    rateLimitEventRepository.deleteAll();
+    userIdentityRepository.deleteAll();
+    invitationRepository.deleteAll();
+    jdbcTemplate.execute("TRUNCATE TABLE password_setting_changes");
+    userRepository.deleteAll();
+    jdbcTemplate.update("UPDATE password_settings SET minimum_length = 8 WHERE id = TRUE");
+    reset(mailSender);
   }
 
   @Test
@@ -547,9 +556,9 @@ class AuthenticationApiIntegrationTest {
     UUID user = createUser(true, true);
     ResponseEntity<Map> login = post("/api/v1/auth/login", loginRequest(user), Map.class);
     String refreshCookie = cookie(login);
-    var before = sessions.findAll().get(0);
+    var before = refreshSessionRepository.findAll().get(0);
     postWithCookie("/api/v1/auth/refresh", refreshCookie, Map.class);
-    var after = sessions.findById(before.getId()).orElseThrow();
+    var after = refreshSessionRepository.findById(before.getId()).orElseThrow();
     assertThat(after.getId()).isEqualTo(before.getId());
     assertThat(after.getCreatedAt()).isEqualTo(before.getCreatedAt());
     assertThat(after.getLastUsedAt()).isAfterOrEqualTo(before.getLastUsedAt());
@@ -570,9 +579,9 @@ class AuthenticationApiIntegrationTest {
                     String.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.FORBIDDEN);
-    User admin = users.findById(user).orElseThrow();
+    User admin = userRepository.findById(user).orElseThrow();
     admin.changeRole(UserRole.ADMIN);
-    users.saveAndFlush(admin);
+    userRepository.saveAndFlush(admin);
     entityManager.clear();
     ResponseEntity<Map> adminLogin = post("/api/v1/auth/login", loginRequest(user), Map.class);
     assertThat(adminLogin.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -584,7 +593,7 @@ class AuthenticationApiIntegrationTest {
                 .getStatusCode())
         .isEqualTo(HttpStatus.NOT_FOUND);
     admin.changeRole(UserRole.AUTHOR);
-    users.saveAndFlush(admin);
+    userRepository.saveAndFlush(admin);
     assertThat(postWithCookie("/api/v1/auth/refresh", adminCookie, Map.class).getStatusCode())
         .isEqualTo(HttpStatus.UNAUTHORIZED);
     assertThat(
@@ -697,9 +706,9 @@ class AuthenticationApiIntegrationTest {
     String accessToken =
         (String)
             post("/api/v1/auth/login", loginRequest(user), Map.class).getBody().get("accessToken");
-    User disabled = users.findById(user).orElseThrow();
+    User disabled = userRepository.findById(user).orElseThrow();
     disabled.disable();
-    users.saveAndFlush(disabled);
+    userRepository.saveAndFlush(disabled);
     entityManager.clear();
     assertThat(
             exchange(
@@ -768,10 +777,12 @@ class AuthenticationApiIntegrationTest {
   private UUID createUser(boolean verified, boolean enabled) {
     UUID id = UUID.randomUUID();
     String email = "user-" + id + "@example.com";
-    User user = users.save(new User(id, email, email, "User", passwords.encode(PASSWORD), "zh-TW"));
+    User user =
+        userRepository.save(
+            new User(id, email, email, "User", passwordEncoder.encode(PASSWORD), "zh-TW"));
     if (verified) user.verify(Instant.now());
     if (!enabled) user.disable();
-    users.saveAndFlush(user);
+    userRepository.saveAndFlush(user);
     return id;
   }
 
@@ -808,7 +819,7 @@ class AuthenticationApiIntegrationTest {
                 .getStatusCode())
         .isEqualTo(HttpStatus.ACCEPTED);
     ArgumentCaptor<SimpleMailMessage> resetMail = ArgumentCaptor.forClass(SimpleMailMessage.class);
-    verify(mail, atLeastOnce()).send(resetMail.capture());
+    verify(mailSender, atLeastOnce()).send(resetMail.capture());
     String resetToken = resetToken(resetMail.getValue().getText());
     assertThat(
             post(
@@ -871,7 +882,7 @@ class AuthenticationApiIntegrationTest {
                 .getStatusCode())
         .isEqualTo(HttpStatus.ACCEPTED);
     ArgumentCaptor<SimpleMailMessage> resetMail = ArgumentCaptor.forClass(SimpleMailMessage.class);
-    verify(mail, atLeastOnce()).send(resetMail.capture());
+    verify(mailSender, atLeastOnce()).send(resetMail.capture());
     String resetToken = resetToken(resetMail.getValue().getText());
     assertThat(
             post(
@@ -910,7 +921,7 @@ class AuthenticationApiIntegrationTest {
   }
 
   private String email(UUID user) {
-    return users.findById(user).orElseThrow().getEmail();
+    return userRepository.findById(user).orElseThrow().getEmail();
   }
 
   private String resetToken(String text) {
@@ -1240,9 +1251,9 @@ class AuthenticationApiIntegrationTest {
   }
 
   private InvitationLink invitation(String email) {
-    Invitation invitation = adminUsers.invite(email);
+    Invitation invitation = adminUserService.invite(email);
     ArgumentCaptor<SimpleMailMessage> mailCaptor = ArgumentCaptor.forClass(SimpleMailMessage.class);
-    verify(mail, atLeastOnce()).send(mailCaptor.capture());
+    verify(mailSender, atLeastOnce()).send(mailCaptor.capture());
     return new InvitationLink(invitation, resetToken(mailCaptor.getValue().getText()));
   }
 

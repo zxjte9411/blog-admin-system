@@ -34,30 +34,31 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
     })
 class BlogAdminApplicationTests {
 
-  @MockitoBean private UserRepository users;
-  @MockitoBean private UserIdentityRepository identities;
-  @MockitoBean private EmailVerificationTokenRepository tokens;
-  @MockitoBean private EmailChangeTokenRepository emailChangeTokens;
-  @MockitoBean private RateLimitEventRepository limits;
-  @MockitoBean private RefreshSessionRepository sessions;
-  @MockitoBean private InvitationRepository invitations;
-  @MockitoBean private PasswordSettingChangeRepository passwordSettingChanges;
-  @MockitoBean private PasswordSettingRepository passwordSettings;
-  @MockitoBean private PasswordResetTokenRepository passwordResetTokens;
-  @MockitoBean private ArticleRepository articles;
-  @MockitoBean private TagRepository tags;
-  @MockitoBean private JavaMailSender mail;
+  @MockitoBean private UserRepository userRepository;
+  @MockitoBean private UserIdentityRepository userIdentityRepository;
+  @MockitoBean private EmailVerificationTokenRepository emailVerificationTokenRepository;
+  @MockitoBean private EmailChangeTokenRepository emailChangeTokenRepository;
+  @MockitoBean private RateLimitEventRepository rateLimitEventRepository;
+  @MockitoBean private RefreshSessionRepository refreshSessionRepository;
+  @MockitoBean private InvitationRepository invitationRepository;
+  @MockitoBean private PasswordSettingChangeRepository passwordSettingChangeRepository;
+  @MockitoBean private PasswordSettingRepository passwordSettingRepository;
+  @MockitoBean private PasswordResetTokenRepository passwordResetTokenRepository;
+  @MockitoBean private ArticleRepository articleRepository;
+  @MockitoBean private TagRepository tagRepository;
+  @MockitoBean private JavaMailSender mailSender;
 
   @LocalServerPort private int port;
 
-  @Autowired private TestRestTemplate restTemplate;
+  @Autowired private TestRestTemplate testRestTemplate;
 
   @Autowired private Environment environment;
 
   @Test
   void contextAndHealthEndpointStart() {
     var response =
-        restTemplate.getForEntity("http://localhost:" + port + "/actuator/health", String.class);
+        testRestTemplate.getForEntity(
+            "http://localhost:" + port + "/actuator/health", String.class);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(response.getBody()).contains("\"status\":\"UP\"");
@@ -66,10 +67,12 @@ class BlogAdminApplicationTests {
   @Test
   void swaggerIsPubliclyAccessible() {
     assertThat(
-            restTemplate.getForEntity(
+            testRestTemplate.getForEntity(
                 "http://localhost:" + port + "/swagger-ui/index.html", String.class))
         .hasFieldOrPropertyWithValue("statusCode", HttpStatus.OK);
-    assertThat(restTemplate.getForEntity("http://localhost:" + port + "/v3/api-docs", String.class))
+    assertThat(
+            testRestTemplate.getForEntity(
+                "http://localhost:" + port + "/v3/api-docs", String.class))
         .hasFieldOrPropertyWithValue("statusCode", HttpStatus.OK);
   }
 

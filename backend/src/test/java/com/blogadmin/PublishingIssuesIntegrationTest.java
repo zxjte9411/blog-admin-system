@@ -51,22 +51,22 @@ class PublishingIssuesIntegrationTest {
   static PostgreSQLContainer<?> postgres =
       new PostgreSQLContainer<>("postgres:16-alpine").withDatabaseName("blog_admin");
 
-  @LocalServerPort int port;
-  @Autowired TestRestTemplate rest;
-  @Autowired UserRepository users;
-  @Autowired TagRepository tags;
-  @Autowired ArticleRepository articles;
-  @Autowired PasswordEncoder passwords;
-  @Autowired ArticleCleanupService cleanup;
-  @Autowired JdbcTemplate jdbc;
-  @Autowired ApplicationRunner startupCleanup;
+  @LocalServerPort private int port;
+  @Autowired private TestRestTemplate testRestTemplate;
+  @Autowired private UserRepository userRepository;
+  @Autowired private TagRepository tagRepository;
+  @Autowired private ArticleRepository articleRepository;
+  @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private ArticleCleanupService articleCleanupService;
+  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private ApplicationRunner startupCleanup;
 
   @BeforeEach
   void clearPublishingData() {
-    jdbc.update("DELETE FROM article_tags");
-    jdbc.update("DELETE FROM articles");
-    jdbc.update("DELETE FROM tags");
-    jdbc.update("DELETE FROM auth_rate_limit_events");
+    jdbcTemplate.update("DELETE FROM article_tags");
+    jdbcTemplate.update("DELETE FROM articles");
+    jdbcTemplate.update("DELETE FROM tags");
+    jdbcTemplate.update("DELETE FROM auth_rate_limit_events");
   }
 
   @DynamicPropertySource
@@ -107,14 +107,17 @@ class PublishingIssuesIntegrationTest {
     user(UserRole.AUTHOR, "b");
     user(UserRole.ADMIN, "adm");
     UUID tagId = UUID.randomUUID();
-    tags.saveAndFlush(new Tag(tagId, "restore-tag"));
+    tagRepository.saveAndFlush(new Tag(tagId, "restore-tag"));
     String a = login("a"), b = login("b"), admin = login("adm");
     Map<String, Object> one =
         create(
             a,
             Map.of("title", "one", "content", "c", "status", "PUBLISHED", "tagIds", Set.of(tagId)));
     Instant createdAt =
-        articles.findById(UUID.fromString((String) one.get("id"))).orElseThrow().getCreatedAt();
+        articleRepository
+            .findById(UUID.fromString((String) one.get("id")))
+            .orElseThrow()
+            .getCreatedAt();
     Instant publishedAt =
         Instant.parse(one.get("publishedAt").toString())
             .truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
@@ -138,7 +141,7 @@ class PublishingIssuesIntegrationTest {
     assertThat(restored.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(restored.getBody()).containsEntry("status", "PUBLISHED");
     Article restoredArticle =
-        articles.findById(UUID.fromString((String) one.get("id"))).orElseThrow();
+        articleRepository.findById(UUID.fromString((String) one.get("id"))).orElseThrow();
     assertThat(restoredArticle.getCreatedAt()).isEqualTo(createdAt);
     assertThat(restoredArticle.getPublishedAt().truncatedTo(java.time.temporal.ChronoUnit.MILLIS))
         .isEqualTo(publishedAt);
@@ -152,14 +155,15 @@ class PublishingIssuesIntegrationTest {
                     Map.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.FORBIDDEN);
-    Article expired = articles.findById(UUID.fromString((String) two.get("id"))).orElseThrow();
-    jdbc.update(
+    Article expired =
+        articleRepository.findById(UUID.fromString((String) two.get("id"))).orElseThrow();
+    jdbcTemplate.update(
         "UPDATE articles SET deleted_at = ? WHERE id = ?",
         Timestamp.from(Instant.now().minus(31, java.time.temporal.ChronoUnit.DAYS)),
         expired.getId());
-    cleanup.cleanup();
-    assertThat(articles.findById(expired.getId())).isEmpty();
-    assertThat(tags.findById(tagId)).isPresent();
+    articleCleanupService.cleanup();
+    assertThat(articleRepository.findById(expired.getId())).isEmpty();
+    assertThat(tagRepository.findById(tagId)).isPresent();
     Map<String, Object> adminArticle = create(a, Map.of("title", "admin", "content", "c"));
     delete(a, adminArticle);
     assertThat(
@@ -181,7 +185,7 @@ class PublishingIssuesIntegrationTest {
         create(token, Map.of("title", "first", "content", "x", "tagNames", Set.of("  Mixed  ")));
     Map<String, Object> second =
         create(token, Map.of("title", "second", "content", "x", "tagNames", Set.of("mixed")));
-    assertThat(tags.findAll())
+    assertThat(tagRepository.findAll())
         .singleElement()
         .satisfies(tag -> assertThat(tag.getName()).isEqualTo("Mixed"));
     long version =
@@ -233,14 +237,14 @@ class PublishingIssuesIntegrationTest {
         .isEqualTo(HttpStatus.OK);
     delete(token, second);
     delete(token, first);
-    tags.flush();
-    jdbc.update(
+    tagRepository.flush();
+    jdbcTemplate.update(
         "UPDATE articles SET deleted_at = ? WHERE id IN (?, ?)",
         Timestamp.from(Instant.now().minus(31, java.time.temporal.ChronoUnit.DAYS)),
         UUID.fromString((String) first.get("id")),
         UUID.fromString((String) second.get("id")));
-    cleanup.cleanup();
-    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM tags", Integer.class)).isZero();
+    articleCleanupService.cleanup();
+    assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM tags", Integer.class)).isZero();
   }
 
   @Test
@@ -252,7 +256,7 @@ class PublishingIssuesIntegrationTest {
         create(token, Map.of("title", "old", "content", "plain", "status", "PUBLISHED"));
     Map<String, Object> newer =
         create(token, Map.of("title", "new", "content", "plain", "status", "PUBLISHED"));
-    jdbc.update("DELETE FROM auth_rate_limit_events");
+    jdbcTemplate.update("DELETE FROM auth_rate_limit_events");
     ResponseEntity<Map> page =
         exchange("/api/v1/public/articles?page=0&size=1", HttpMethod.GET, null, null, Map.class);
     assertThat(page.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -298,7 +302,7 @@ class PublishingIssuesIntegrationTest {
     HttpHeaders cors = new HttpHeaders();
     cors.setOrigin("https://example.test");
     ResponseEntity<Void> protectedOptions =
-        rest.exchange(
+        testRestTemplate.exchange(
             url("/api/v1/articles"), HttpMethod.OPTIONS, new HttpEntity<>(cors), Void.class);
     assertThat(protectedOptions.getHeaders().getAccessControlAllowOrigin()).isNull();
     assertThat(startupCleanup).isNotNull();
@@ -316,7 +320,7 @@ class PublishingIssuesIntegrationTest {
     user(UserRole.AUTHOR, "pub");
     String token = login("pub");
     UUID tagId = UUID.randomUUID();
-    tags.saveAndFlush(new Tag(tagId, "public-tag"));
+    tagRepository.saveAndFlush(new Tag(tagId, "public-tag"));
     Map<String, Object> published =
         create(
             token,
@@ -400,7 +404,7 @@ class PublishingIssuesIntegrationTest {
     HttpHeaders cors = new HttpHeaders();
     cors.setOrigin("https://example.test");
     ResponseEntity<Void> options =
-        rest.exchange(
+        testRestTemplate.exchange(
             url("/api/v1/public/articles"), HttpMethod.OPTIONS, new HttpEntity<>(cors), Void.class);
     assertThat(options.getHeaders().getAccessControlAllowOrigin()).isEqualTo("*");
     assertThat(options.getHeaders().getAccessControlAllowCredentials()).isNotEqualTo(Boolean.TRUE);
@@ -438,7 +442,7 @@ class PublishingIssuesIntegrationTest {
     String admin = login("admin-purge");
 
     UUID tagId = UUID.randomUUID();
-    tags.saveAndFlush(new Tag(tagId, "purge-tag"));
+    tagRepository.saveAndFlush(new Tag(tagId, "purge-tag"));
 
     Map<String, Object> article =
         create(
@@ -458,8 +462,8 @@ class PublishingIssuesIntegrationTest {
 
     // Soft delete the article
     delete(author, article);
-    assertThat(articles.findById(id)).isPresent();
-    assertThat(articles.findById(id).get().getDeletedAt()).isNotNull();
+    assertThat(articleRepository.findById(id)).isPresent();
+    assertThat(articleRepository.findById(id).get().getDeletedAt()).isNotNull();
 
     // Author attempts permanent delete -> 403 Forbidden
     assertThat(
@@ -474,17 +478,17 @@ class PublishingIssuesIntegrationTest {
         .isEqualTo(HttpStatus.NO_CONTENT);
 
     // Article is purged
-    assertThat(articles.findById(id)).isEmpty();
+    assertThat(articleRepository.findById(id)).isEmpty();
     // Run maintenance cleanup
-    cleanup.cleanup();
+    articleCleanupService.cleanup();
     // Unused tag is cleaned up
-    assertThat(tags.findById(tagId)).isEmpty();
+    assertThat(tagRepository.findById(tagId)).isEmpty();
   }
 
   @Test
   void publicLimiterRemovesExpiredIdleIpKeys() throws Exception {
     com.blogadmin.publishing.application.ArticleService service =
-        new com.blogadmin.publishing.application.ArticleService(articles, tags);
+        new com.blogadmin.publishing.application.ArticleService(articleRepository, tagRepository);
     Field field = service.getClass().getDeclaredField("publicLimits");
     field.setAccessible(true);
     @SuppressWarnings("unchecked")
@@ -511,15 +515,16 @@ class PublishingIssuesIntegrationTest {
             n + "@example.com",
             n + "@example.com",
             n,
-            passwords.encode("safe-password"),
+            passwordEncoder.encode("safe-password"),
             "zh-TW");
     u.verify(Instant.now());
     u.changeRole(role);
-    users.saveAndFlush(u);
+    userRepository.saveAndFlush(u);
   }
 
   private String login(String n) {
-    return rest.postForEntity(
+    return testRestTemplate
+        .postForEntity(
             url("/api/v1/auth/login"),
             Map.of("email", n + "@example.com", "password", "safe-password"),
             Map.class)
@@ -536,7 +541,7 @@ class PublishingIssuesIntegrationTest {
     HttpHeaders h = new HttpHeaders();
     if (t != null) h.setBearerAuth(t);
     h.setContentType(MediaType.APPLICATION_JSON);
-    return rest.exchange(url(p), m, new HttpEntity<>(b, h), c);
+    return testRestTemplate.exchange(url(p), m, new HttpEntity<>(b, h), c);
   }
 
   private String url(String p) {

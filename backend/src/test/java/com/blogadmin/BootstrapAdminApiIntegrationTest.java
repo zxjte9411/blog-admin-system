@@ -1,6 +1,7 @@
 package com.blogadmin;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.blogadmin.identity.application.BootstrapAdminRunner;
 import com.blogadmin.identity.application.PasswordPolicy;
@@ -15,6 +16,7 @@ import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,10 +32,10 @@ class BootstrapAdminApiIntegrationTest {
       new PostgreSQLContainer<>("postgres:16-alpine").withDatabaseName("blog_admin");
 
   @LocalServerPort private int port;
-  @Autowired private TestRestTemplate rest;
-  @Autowired private UserRepository users;
-  @Autowired private org.springframework.security.crypto.password.PasswordEncoder passwords;
-  @Autowired private PasswordSettingRepository passwordSettings;
+  @Autowired private TestRestTemplate testRestTemplate;
+  @Autowired private UserRepository userRepository;
+  @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private PasswordSettingRepository passwordSettingRepository;
 
   @DynamicPropertySource
   static void properties(DynamicPropertyRegistry registry) {
@@ -48,7 +50,7 @@ class BootstrapAdminApiIntegrationTest {
   @Test
   void configuredBootstrapAdminCanLogIn() {
     ResponseEntity<Map> response =
-        rest.postForEntity(
+        testRestTemplate.postForEntity(
             "http://localhost:" + port + "/api/v1/auth/login",
             Map.of("email", "bootstrap@example.com", "password", "bootstrap-password"),
             Map.class);
@@ -60,18 +62,17 @@ class BootstrapAdminApiIntegrationTest {
   @Test
   @Transactional
   void nonCompliantBootstrapPasswordFailsWithoutCreatingUser() {
-    long before = users.count();
+    long beforeCount = userRepository.count();
     BootstrapAdminRunner runner =
         new BootstrapAdminRunner(
-            users,
-            passwords,
-            new PasswordPolicy(passwordSettings),
+            userRepository,
+            passwordEncoder,
+            new PasswordPolicy(passwordSettingRepository),
             "invalid@example.com",
             "password");
 
-    org.assertj.core.api.Assertions.assertThatThrownBy(
-            () -> runner.run(new DefaultApplicationArguments()))
+    assertThatThrownBy(() -> runner.run(new DefaultApplicationArguments()))
         .isInstanceOf(IllegalStateException.class);
-    assertThat(users.count()).isEqualTo(before);
+    assertThat(userRepository.count()).isEqualTo(beforeCount);
   }
 }

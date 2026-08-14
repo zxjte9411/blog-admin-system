@@ -73,14 +73,14 @@ class AccessTokenCryptoAndSecurityIntegrationTest {
   @Autowired private JwtEncoder accessTokenEncoder;
   @Autowired private JwtDecoder accessTokenDecoder;
   @Autowired private JwtToken jwtToken;
-  @Autowired private UserRepository users;
-  @Autowired private RefreshSessionRepository sessions;
-  @Autowired private PasswordEncoder passwords;
+  @Autowired private UserRepository userRepository;
+  @Autowired private RefreshSessionRepository refreshSessionRepository;
+  @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private RegistrationService registrationService;
   @Autowired private AccountService accountService;
-  @Autowired private JdbcTemplate jdbc;
+  @Autowired private JdbcTemplate jdbcTemplate;
   @Autowired private TransactionTemplate transactionTemplate;
-  @MockitoBean private JavaMailSender mail;
+  @MockitoBean private JavaMailSender mailSender;
 
   @DynamicPropertySource
   static void database(DynamicPropertyRegistry registry) {
@@ -92,8 +92,8 @@ class AccessTokenCryptoAndSecurityIntegrationTest {
 
   @BeforeEach
   void setUp() {
-    reset(mail);
-    jdbc.update("DELETE FROM auth_rate_limit_events");
+    reset(mailSender);
+    jdbcTemplate.update("DELETE FROM auth_rate_limit_events");
   }
 
   @Test
@@ -139,8 +139,8 @@ class AccessTokenCryptoAndSecurityIntegrationTest {
     SignedJWT signedJWT = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), claimsSet);
     try {
       signedJWT.sign(new MACSigner(SECRET.getBytes(StandardCharsets.UTF_8)));
-    } catch (Exception e) {
-      throw new RuntimeException(e);
+    } catch (Exception exception) {
+      throw new RuntimeException(exception);
     }
     String expiredJwt = signedJWT.serialize();
 
@@ -183,8 +183,8 @@ class AccessTokenCryptoAndSecurityIntegrationTest {
       signedJWT.sign(
           new MACSigner(
               "different-secret-that-is-at-least-32-bytes-long".getBytes(StandardCharsets.UTF_8)));
-    } catch (Exception e) {
-      throw new RuntimeException(e);
+    } catch (Exception exception) {
+      throw new RuntimeException(exception);
     }
     String wrongKeyJwt = signedJWT.serialize();
 
@@ -234,7 +234,7 @@ class AccessTokenCryptoAndSecurityIntegrationTest {
     } catch (RuntimeException ignored) {
     }
 
-    verify(mail, never()).send(any(SimpleMailMessage.class));
+    verify(mailSender, never()).send(any(SimpleMailMessage.class));
   }
 
   @Test
@@ -242,7 +242,7 @@ class AccessTokenCryptoAndSecurityIntegrationTest {
     String email = "commit-" + System.nanoTime() + "@example.com";
     registrationService.register(email, "CommitUser", "safe-password", "zh-TW", "127.0.0.1");
 
-    verify(mail, timeout(2000)).send(any(SimpleMailMessage.class));
+    verify(mailSender, timeout(2000)).send(any(SimpleMailMessage.class));
   }
 
   @Test
@@ -339,19 +339,19 @@ class AccessTokenCryptoAndSecurityIntegrationTest {
   void adminEndpointRejectsNonAdminWith403AndAllowsAdminWith200() {
     UUID authorId = UUID.randomUUID();
     User author =
-        users.saveAndFlush(
+        userRepository.saveAndFlush(
             new User(
                 authorId,
                 "author-" + authorId + "@example.com",
                 "author-" + authorId + "@example.com",
                 "Author",
-                passwords.encode("safe-password"),
+                passwordEncoder.encode("safe-password"),
                 "zh-TW"));
     author.verify(Instant.now());
-    users.saveAndFlush(author);
+    userRepository.saveAndFlush(author);
 
     UUID authorSessionId = UUID.randomUUID();
-    sessions.saveAndFlush(
+    refreshSessionRepository.saveAndFlush(
         new RefreshSession(
             authorSessionId,
             authorId,
@@ -377,14 +377,14 @@ class AccessTokenCryptoAndSecurityIntegrationTest {
             "admin-" + adminId + "@example.com",
             "admin-" + adminId + "@example.com",
             "Admin",
-            passwords.encode("safe-password"),
+            passwordEncoder.encode("safe-password"),
             "zh-TW");
     admin.changeRole(UserRole.ADMIN);
     admin.verify(Instant.now());
-    users.saveAndFlush(admin);
+    userRepository.saveAndFlush(admin);
 
     UUID adminSessionId = UUID.randomUUID();
-    sessions.saveAndFlush(
+    refreshSessionRepository.saveAndFlush(
         new RefreshSession(
             adminSessionId,
             adminId,
