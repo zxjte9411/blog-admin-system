@@ -23,6 +23,7 @@ describe('App', () => {
       providers: [provideRouter(routes), provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
 
+    TestBed.inject(Auth).clear();
     await TestBed.inject(Router).navigateByUrl('/account/profile');
 
     expect(TestBed.inject(Location).path()).toBe('/login');
