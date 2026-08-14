@@ -32,6 +32,22 @@ _Avoid_: Audit Log、Configuration History
 代表單一裝置或瀏覽器登入狀態的可撤銷憑證；User 可查看並撤銷自己的 Refresh Session，清單只顯示是否為目前工作階段、建立時間與最後使用時間。
 _Avoid_: Login Token、Device
 
+**Access Token（存取權杖）**:
+代表一位已驗證且 enabled 的 User 在單一 Refresh Session 中存取管理後台 API 的短期憑證；其有效期為 15 分鐘，且 Refresh Session 或 User 的存取權杖版本不符時不可使用。
+_Avoid_: Login Token、Session Token
+
+**Refresh Session Access Token Version（更新工作階段存取權杖版本）**:
+屬於 Refresh Session 的失效版本值，對應 Access Token claim `ver`；版本不符表示該工作階段簽發的舊 Access Token 不可使用。
+_Avoid_: Token Version、User Access Token Version
+
+**User Access Token Version（使用者存取權杖版本）**:
+屬於 User 的全域失效版本值，對應 Access Token claim `uver`；版本不符表示該 User 的舊 Access Token 不可使用。
+_Avoid_: Token Version、Refresh Session Access Token Version
+
+**Opaque Token（不透明權杖）**:
+系統產生的高熵隨機 secret，其 raw value 只交付給用戶端，持久層只保存其 digest；用於 Refresh Session 與一次性 Email 流程的憑證。
+_Avoid_: Password、JWT
+
 **Google Login（Google 登入）**:
 User 以 Google 已驗證 Email 登入管理後台的方式；相同 Email 的既有 User 會連結此登入方式，否則建立一位已驗證且 enabled 的 Author，不再要求 Email 驗證連結。連結後的 Google 身分不因其 Email 變更而改寫 User Email。
 _Avoid_: Social Login、OAuth Login
