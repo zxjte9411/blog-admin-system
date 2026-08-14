@@ -2,6 +2,7 @@ package com.blogadmin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 
 import com.blogadmin.identity.application.AccountService;
@@ -23,6 +24,7 @@ import com.blogadmin.publishing.domain.article.ArticleRepository;
 import com.blogadmin.publishing.domain.article.PublicationStatus;
 import com.blogadmin.publishing.domain.tag.Tag;
 import com.blogadmin.publishing.domain.tag.TagRepository;
+import com.blogadmin.test.AbstractPostgresIntegrationTest;
 import jakarta.persistence.EntityManagerFactory;
 import java.lang.reflect.Proxy;
 import java.time.Instant;
@@ -45,24 +47,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.AopTestUtils;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-@Testcontainers
-@SpringBootTest
-class ConcurrencyAndTransactionIntegrationTest {
-  @Container
-  static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+class ConcurrencyAndTransactionIntegrationTest extends AbstractPostgresIntegrationTest {
 
   @Autowired private UserRepository userRepository;
   @Autowired private PasswordEncoder passwordEncoder;
@@ -71,38 +65,25 @@ class ConcurrencyAndTransactionIntegrationTest {
   @Autowired private EmailChangeTokenRepository emailChangeTokenRepository;
   @Autowired private InvitationRepository invitationRepository;
   @Autowired private ArticleRepository articleRepository;
-  @Autowired private TagRepository tagRepository;
+  @MockitoSpyBean private TagRepository tagRepository;
   @Autowired private AccountService accountService;
   @Autowired private AdminUserService adminUserService;
   @Autowired private ArticleService articleService;
   @Autowired private ArticleCleanupExecutor articleCleanupExecutor;
   @Autowired private EntityManagerFactory entityManagerFactory;
+  @Autowired private JdbcTemplate jdbcTemplate;
   @MockitoBean private JavaMailSender mailSender;
-
-  @DynamicPropertySource
-  static void database(DynamicPropertyRegistry r) {
-    r.add("spring.datasource.url", postgres::getJdbcUrl);
-    r.add("spring.datasource.username", postgres::getUsername);
-    r.add("spring.datasource.password", postgres::getPassword);
-    r.add("spring.jpa.properties.hibernate.generate_statistics", () -> "true");
-    r.add("app.security.jwt-secret", () -> "test-secret-that-is-at-least-32-bytes-long");
-  }
 
   @BeforeEach
   void clear() {
-    articleRepository.deleteAll();
-    tagRepository.deleteAll();
-    refreshSessionRepository.deleteAll();
-    passwordResetTokenRepository.deleteAll();
-    emailChangeTokenRepository.deleteAll();
-    invitationRepository.deleteAll();
-    userRepository.deleteAll();
+    resetDatabase(jdbcTemplate);
     reset(mailSender);
+    reset(tagRepository);
   }
 
   @Test
   @Timeout(15)
-  void testConcurrentEmailChangeRequestAndConfirmNoDeadlock() throws Exception {
+  void concurrentEmailChangeRequestAndConfirmDoesNotDeadlock() throws Exception {
     User user =
         new User(
             UUID.randomUUID(),
@@ -123,8 +104,8 @@ class ConcurrencyAndTransactionIntegrationTest {
             token.digest(),
             Instant.now().plusSeconds(3600)));
 
-    ExecutorService executor = Executors.newFixedThreadPool(2);
     CyclicBarrier barrier = new CyclicBarrier(2);
+    AtomicReference<Throwable> unexpectedErrorRef = new AtomicReference<>();
 
     Callable<Void> requestTask =
         () -> {
@@ -138,18 +119,24 @@ class ConcurrencyAndTransactionIntegrationTest {
           barrier.await(5, TimeUnit.SECONDS);
           try {
             accountService.confirmEmail(token.value());
-          } catch (Exception ignored) {
-            // confirm may fail if request invalidates the token first, but must not deadlock
+          } catch (AccountService.InvalidAccountException expectedIfTokenInvalidated) {
+            // Expected race outcome if request task invalidates token first
+          } catch (Throwable unexpected) {
+            unexpectedErrorRef.set(unexpected);
+            throw unexpected;
           }
           return null;
         };
 
-    Future<Void> f1 = executor.submit(requestTask);
-    Future<Void> f2 = executor.submit(confirmTask);
+    try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+      Future<Void> f1 = executor.submit(requestTask);
+      Future<Void> f2 = executor.submit(confirmTask);
 
-    f1.get(10, TimeUnit.SECONDS);
-    f2.get(10, TimeUnit.SECONDS);
-    executor.shutdown();
+      f1.get(10, TimeUnit.SECONDS);
+      f2.get(10, TimeUnit.SECONDS);
+    }
+
+    assertThat(unexpectedErrorRef.get()).isNull();
 
     // Verify DB invariant: email_change_tokens has at most 1 active token
     List<EmailChangeToken> active =
@@ -159,7 +146,7 @@ class ConcurrencyAndTransactionIntegrationTest {
 
   @Test
   @Timeout(15)
-  void testConcurrentPasswordResetIssuance() throws Exception {
+  void concurrentPasswordResetIssuancePreservesSingleActiveToken() throws Exception {
     User user =
         new User(
             UUID.randomUUID(),
@@ -171,7 +158,6 @@ class ConcurrencyAndTransactionIntegrationTest {
     user.verify(Instant.now());
     userRepository.save(user);
 
-    ExecutorService executor = Executors.newFixedThreadPool(2);
     CyclicBarrier barrier = new CyclicBarrier(2);
 
     Callable<Void> task1 =
@@ -188,21 +174,30 @@ class ConcurrencyAndTransactionIntegrationTest {
           return null;
         };
 
-    Future<Void> f1 = executor.submit(task1);
-    Future<Void> f2 = executor.submit(task2);
+    try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+      Future<Void> f1 = executor.submit(task1);
+      Future<Void> f2 = executor.submit(task2);
 
-    f1.get(10, TimeUnit.SECONDS);
-    f2.get(10, TimeUnit.SECONDS);
-    executor.shutdown();
+      f1.get(10, TimeUnit.SECONDS);
+      f2.get(10, TimeUnit.SECONDS);
+    }
 
     List<PasswordResetToken> active =
         passwordResetTokenRepository.findByUserIdAndUsedAtIsNull(user.getId());
     assertThat(active).hasSize(1);
   }
 
+  private enum RedeemStatus {
+    SUCCESS,
+    EXPECTED_FAILURE_TOKEN_USED_OR_EXISTS,
+    UNEXPECTED_FAILURE
+  }
+
+  private record RedeemOutcome(RedeemStatus status, Throwable exception) {}
+
   @Test
   @Timeout(15)
-  void testConcurrentInvitationRedeemSingleUse() throws Exception {
+  void concurrentInvitationRedeemAllowsExactlyOneSuccess() throws Exception {
     OpaqueToken.Issued token = OpaqueToken.generate();
     Invitation invitation =
         new Invitation(
@@ -212,40 +207,57 @@ class ConcurrencyAndTransactionIntegrationTest {
             Instant.now().plusSeconds(3600));
     invitationRepository.save(invitation);
 
-    ExecutorService executor = Executors.newFixedThreadPool(2);
     CyclicBarrier barrier = new CyclicBarrier(2);
 
-    Callable<Boolean> redeemTask1 =
+    Callable<RedeemOutcome> redeemTask1 =
         () -> {
           barrier.await(5, TimeUnit.SECONDS);
           try {
             adminUserService.redeem(token.value(), "Invited User 1", "Password123!", "zh-TW");
-            return true;
-          } catch (Exception e) {
-            return false;
+            return new RedeemOutcome(RedeemStatus.SUCCESS, null);
+          } catch (AdminUserService.InvalidInvitationException
+              | AdminUserService.AlreadyExistsException e) {
+            return new RedeemOutcome(RedeemStatus.EXPECTED_FAILURE_TOKEN_USED_OR_EXISTS, e);
+          } catch (Throwable t) {
+            return new RedeemOutcome(RedeemStatus.UNEXPECTED_FAILURE, t);
           }
         };
 
-    Callable<Boolean> redeemTask2 =
+    Callable<RedeemOutcome> redeemTask2 =
         () -> {
           barrier.await(5, TimeUnit.SECONDS);
           try {
             adminUserService.redeem(token.value(), "Invited User 2", "Password123!", "zh-TW");
-            return true;
-          } catch (Exception e) {
-            return false;
+            return new RedeemOutcome(RedeemStatus.SUCCESS, null);
+          } catch (AdminUserService.InvalidInvitationException
+              | AdminUserService.AlreadyExistsException e) {
+            return new RedeemOutcome(RedeemStatus.EXPECTED_FAILURE_TOKEN_USED_OR_EXISTS, e);
+          } catch (Throwable t) {
+            return new RedeemOutcome(RedeemStatus.UNEXPECTED_FAILURE, t);
           }
         };
 
-    Future<Boolean> f1 = executor.submit(redeemTask1);
-    Future<Boolean> f2 = executor.submit(redeemTask2);
+    RedeemOutcome r1;
+    RedeemOutcome r2;
+    try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+      Future<RedeemOutcome> f1 = executor.submit(redeemTask1);
+      Future<RedeemOutcome> f2 = executor.submit(redeemTask2);
 
-    boolean r1 = f1.get(10, TimeUnit.SECONDS);
-    boolean r2 = f2.get(10, TimeUnit.SECONDS);
-    executor.shutdown();
+      r1 = f1.get(10, TimeUnit.SECONDS);
+      r2 = f2.get(10, TimeUnit.SECONDS);
+    }
 
-    // Exactly one redeem must succeed
-    assertThat(r1 ^ r2).isTrue();
+    // Neither task should have failed with an unexpected error
+    assertThat(r1.status()).isNotEqualTo(RedeemStatus.UNEXPECTED_FAILURE);
+    assertThat(r2.status()).isNotEqualTo(RedeemStatus.UNEXPECTED_FAILURE);
+
+    // Exactly one redeem must succeed, the other must be expected rejection
+    boolean oneSucceeded =
+        (r1.status() == RedeemStatus.SUCCESS
+                && r2.status() == RedeemStatus.EXPECTED_FAILURE_TOKEN_USED_OR_EXISTS)
+            || (r2.status() == RedeemStatus.SUCCESS
+                && r1.status() == RedeemStatus.EXPECTED_FAILURE_TOKEN_USED_OR_EXISTS);
+    assertThat(oneSucceeded).isTrue();
 
     // Exactly one user must be created
     assertThat(userRepository.findAll()).hasSize(1);
@@ -257,7 +269,7 @@ class ConcurrencyAndTransactionIntegrationTest {
 
   @Test
   @Timeout(15)
-  void testConcurrentTagGetOrCreateNoDuplicateAndNoException() throws Exception {
+  void concurrentTagGetOrCreatePreventsDuplicateTagEntities() throws Exception {
     User author =
         new User(
             UUID.randomUUID(),
@@ -269,9 +281,7 @@ class ConcurrencyAndTransactionIntegrationTest {
     author.verify(Instant.now());
     userRepository.save(author);
 
-    ExecutorService executor = Executors.newFixedThreadPool(4);
     CyclicBarrier barrier = new CyclicBarrier(4);
-
     List<Callable<ArticleService.ArticleView>> tasks = new ArrayList<>();
     for (int i = 0; i < 4; i++) {
       final int idx = i;
@@ -288,18 +298,19 @@ class ConcurrencyAndTransactionIntegrationTest {
           });
     }
 
-    List<Future<ArticleService.ArticleView>> futures = executor.invokeAll(tasks);
-    for (Future<ArticleService.ArticleView> f : futures) {
-      ArticleService.ArticleView view = f.get(10, TimeUnit.SECONDS);
-      assertThat(view).isNotNull();
+    try (ExecutorService executor = Executors.newFixedThreadPool(4)) {
+      List<Future<ArticleService.ArticleView>> futures = executor.invokeAll(tasks);
+      for (Future<ArticleService.ArticleView> f : futures) {
+        ArticleService.ArticleView view = f.get(10, TimeUnit.SECONDS);
+        assertThat(view).isNotNull();
+      }
     }
-    executor.shutdown();
 
-    // Verify DB invariant: exactly 2 tags exist
+    // Verify DB invariant: exactly 2 distinct tags exist
     List<Tag> allTags = tagRepository.findAll();
     assertThat(allTags).hasSize(2);
 
-    // Verify all 4 articles are created and linked to the same canonical tags
+    // Verify all 4 articles are created and linked to the canonical tags
     var articlePage = articleService.list(author, "", null, null, PageRequest.of(0, 10));
     assertThat(articlePage.getContent()).hasSize(4);
     for (ArticleService.ArticleView a : articlePage.getContent()) {
@@ -309,7 +320,7 @@ class ConcurrencyAndTransactionIntegrationTest {
 
   @Test
   @Timeout(15)
-  void testConcurrentOrphanTagReuseVsCleanup() throws Exception {
+  void concurrentOrphanTagReuseVsCleanupMaintainsTagIntegrity() throws Exception {
     User author =
         new User(
             UUID.randomUUID(),
@@ -324,7 +335,6 @@ class ConcurrencyAndTransactionIntegrationTest {
     // Create an existing unreferenced (orphan) tag
     tagRepository.saveAndFlush(new Tag(UUID.randomUUID(), "OrphanReuseTag"));
 
-    ExecutorService executor = Executors.newFixedThreadPool(2);
     CyclicBarrier barrier = new CyclicBarrier(2);
 
     // Thread A: create article reusing the orphan tag
@@ -348,12 +358,14 @@ class ConcurrencyAndTransactionIntegrationTest {
           return null;
         };
 
-    Future<ArticleService.ArticleView> f1 = executor.submit(createTask);
-    Future<Void> f2 = executor.submit(cleanupTask);
+    ArticleService.ArticleView created;
+    try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+      Future<ArticleService.ArticleView> f1 = executor.submit(createTask);
+      Future<Void> f2 = executor.submit(cleanupTask);
 
-    ArticleService.ArticleView created = f1.get(10, TimeUnit.SECONDS);
-    f2.get(10, TimeUnit.SECONDS);
-    executor.shutdown();
+      created = f1.get(10, TimeUnit.SECONDS);
+      f2.get(10, TimeUnit.SECONDS);
+    }
 
     assertThat(created).isNotNull();
     assertThat(created.tagNames()).contains("OrphanReuseTag");
@@ -364,7 +376,7 @@ class ConcurrencyAndTransactionIntegrationTest {
   }
 
   @Test
-  void testArticleQueryBatchFetchingNoNPlusOne() {
+  void articleQueryBatchFetchingPreventsNPlusOneQueries() {
     User author =
         new User(
             UUID.randomUUID(),
@@ -395,15 +407,14 @@ class ConcurrencyAndTransactionIntegrationTest {
     var page = articleService.list(author, "", null, null, PageRequest.of(0, 20));
     assertThat(page.getContent()).hasSize(20);
 
-    // Total query count must be constant (1 article query + 1 count query + 1 tag batch query = 3
+    // Total query count must be constant (article query + count query + tag batch query = 3
     // queries)
-    // NOT 1 + 20 queries!
     long queryCount = statistics.getPrepareStatementCount();
     assertThat(queryCount).isLessThanOrEqualTo(4);
   }
 
   @Test
-  void testStartupCleanupTransactionBoundary() {
+  void startupCleanupTransactionBoundaryCleansExpiredArticlesAndOrphanTags() {
     User author =
         new User(
             UUID.randomUUID(),
@@ -424,10 +435,9 @@ class ConcurrencyAndTransactionIntegrationTest {
             null,
             Set.of("OrphanTag1", "OrphanTag2"));
 
-    // Set deletedAt to 35 days ago
+    // Set deletedAt to 35 days ago to simulate expired deleted article
     Article article = articleRepository.findById(view.id()).orElseThrow();
     article.delete();
-    // Simulate expired deletedAt
     ReflectionTestUtils.setField(article, "deletedAt", Instant.now().minus(35, ChronoUnit.DAYS));
     articleRepository.saveAndFlush(article);
 
@@ -440,7 +450,7 @@ class ConcurrencyAndTransactionIntegrationTest {
   }
 
   @Test
-  void testStartupCleanupRollbackOnFailure() {
+  void startupCleanupRollsBackEntireTransactionOnFailureWithoutModifyingState() {
     User author =
         new User(
             UUID.randomUUID(),
@@ -466,31 +476,17 @@ class ConcurrencyAndTransactionIntegrationTest {
     ReflectionTestUtils.setField(article, "deletedAt", Instant.now().minus(35, ChronoUnit.DAYS));
     articleRepository.saveAndFlush(article);
 
-    // Inject failure into TagRepository during cleanup via standard dynamic proxy
-    TagRepository failingTags =
-        (TagRepository)
-            Proxy.newProxyInstance(
-                TagRepository.class.getClassLoader(),
-                new Class<?>[] {TagRepository.class},
-                (proxy, method, methodArgs) -> {
-                  if ("findCandidateOrphanTagNames".equals(method.getName())) {
-                    throw new IllegalStateException("Simulated crash mid-cleanup transaction");
-                  }
-                  return method.invoke(tagRepository, methodArgs);
-                });
-
-    // Unwrap CGLIB/JDK proxy to access target object
-    ArticleCleanupExecutor targetExecutor = AopTestUtils.getTargetObject(articleCleanupExecutor);
-    TagRepository originalTags =
-        (TagRepository) ReflectionTestUtils.getField(targetExecutor, "tagRepository");
-    ReflectionTestUtils.setField(targetExecutor, "tagRepository", failingTags);
+    // Configure spy to fail during cleanup transaction
+    doThrow(new IllegalStateException("Simulated crash mid-cleanup transaction"))
+        .when(tagRepository)
+        .findCandidateOrphanTagNames();
 
     try {
       assertThatThrownBy(() -> articleCleanupExecutor.cleanup())
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("Simulated crash mid-cleanup transaction");
     } finally {
-      ReflectionTestUtils.setField(targetExecutor, "tagRepository", originalTags);
+      reset(tagRepository);
     }
 
     // Verify atomic ROLLBACK: Article and its tags MUST still exist in PostgreSQL
@@ -502,7 +498,7 @@ class ConcurrencyAndTransactionIntegrationTest {
 
   @Test
   @Timeout(15)
-  void testMultiTagDeadlockFreeUnderCollationAndUnicode() throws Exception {
+  void multiTagDeadlockFreeUnderCollationAndUnicode() throws Exception {
     User author =
         new User(
             UUID.randomUUID(),
@@ -520,9 +516,6 @@ class ConcurrencyAndTransactionIntegrationTest {
     Tag tagUber = tagRepository.saveAndFlush(new Tag(UUID.randomUUID(), "Über"));
     Tag tagNlp = tagRepository.saveAndFlush(new Tag(UUID.randomUUID(), "自然語言處理"));
 
-    // Canonical keys sorted deterministically by Java String natural ordering (UTF-16 lexical
-    // ordering):
-    // "café" -> "résumé" -> "über" -> "自然語言處理"
     Set<String> tagSet1 = Set.of("café", "résumé", "Über", "自然語言處理");
     Set<String> tagSet2 = Set.of("CAFÉ", "RÉSUMÉ", "über", "架構設計");
 
@@ -580,10 +573,7 @@ class ConcurrencyAndTransactionIntegrationTest {
     ReflectionTestUtils.setField(targetExecutor, "tagRepository", proxyCleanupTags);
     ReflectionTestUtils.setField(targetArticleService, "tagRepository", proxyArticleTags);
 
-    ExecutorService executor = Executors.newFixedThreadPool(3);
-    try {
-      // Thread 1: creates article reusing orphan tags (canonical order: café -> résumé -> über ->
-      // 自然語言處理)
+    try (ExecutorService executor = Executors.newFixedThreadPool(3)) {
       Callable<ArticleService.ArticleView> t1 =
           () -> {
             cleanupDiscoveredCandidates.await(5, TimeUnit.SECONDS);
@@ -596,7 +586,6 @@ class ConcurrencyAndTransactionIntegrationTest {
                 tagSet1);
           };
 
-      // Thread 2: creates article with case variants and an additional tag concurrently
       Callable<ArticleService.ArticleView> t2 =
           () -> {
             cleanupDiscoveredCandidates.await(5, TimeUnit.SECONDS);
@@ -609,7 +598,6 @@ class ConcurrencyAndTransactionIntegrationTest {
                 tagSet2);
           };
 
-      // Thread 3: maintenance cleanup processes orphan tag candidates
       Callable<Void> t3 =
           () -> {
             articleCleanupExecutor.cleanup();
@@ -644,8 +632,7 @@ class ConcurrencyAndTransactionIntegrationTest {
       assertThat(persistedUber.getId()).isEqualTo(tagUber.getId());
       assertThat(persistedNlp.getId()).isEqualTo(tagNlp.getId());
 
-      // 4. Verify no duplicate tag entities created for case-insensitive variants (total distinct
-      // tags = 5)
+      // 4. Verify no duplicate tag entities created for case-insensitive variants
       List<Tag> allTags = tagRepository.findAll();
       assertThat(allTags).hasSize(5);
 
@@ -658,7 +645,6 @@ class ConcurrencyAndTransactionIntegrationTest {
       Tag persistedArch = tagRepository.findByNameIgnoreCase("架構設計").orElseThrow();
       assertThat(articleRepository.countByTagsId(persistedArch.getId())).isEqualTo(1);
     } finally {
-      executor.shutdown();
       ReflectionTestUtils.setField(targetExecutor, "tagRepository", originalCleanupTags);
       ReflectionTestUtils.setField(targetArticleService, "tagRepository", originalArticleTags);
     }
