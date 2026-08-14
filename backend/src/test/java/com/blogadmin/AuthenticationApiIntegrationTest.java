@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 
+import com.blogadmin.identity.application.AdminUserService;
+import com.blogadmin.identity.domain.invitation.Invitation;
+import com.blogadmin.identity.domain.invitation.InvitationRepository;
 import com.blogadmin.identity.domain.password.PasswordResetTokenRepository;
 import com.blogadmin.identity.domain.ratelimit.RateLimitEventRepository;
 import com.blogadmin.identity.domain.session.RefreshSessionRepository;
@@ -20,8 +23,10 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.MessageDigest;
 import java.security.Signature;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +69,8 @@ class AuthenticationApiIntegrationTest {
   @LocalServerPort private int port;
   @Autowired private TestRestTemplate restTemplate;
   @Autowired private PasswordEncoder passwords;
+  @Autowired private AdminUserService adminUsers;
+  @Autowired private InvitationRepository invitations;
   @Autowired private UserRepository users;
   @Autowired private UserIdentityRepository identities;
   @Autowired private PasswordResetTokenRepository resetTokens;
@@ -178,7 +185,7 @@ class AuthenticationApiIntegrationTest {
     String valid = supabaseToken(subject, "claims@example.com");
     int signatureStart = valid.lastIndexOf('.') + 1;
     assertGoogleUnauthorized(
-        valid.substring(0, signatureStart) + "A" + valid.substring(signatureStart + 1));
+        valid.substring(0, signatureStart) + "!" + valid.substring(signatureStart + 1));
     assertGoogleUnauthorized(
         supabaseToken(
             subject,
@@ -239,6 +246,7 @@ class AuthenticationApiIntegrationTest {
             -1,
             "google",
             true));
+    assertGoogleUnauthorized(supabaseToken(subject, "not-an-email"));
   }
 
   @Test
@@ -248,6 +256,79 @@ class AuthenticationApiIntegrationTest {
     UUID disabled = createUser(true, false);
     assertGoogleUnauthorized(supabaseToken(UUID.randomUUID().toString(), email(disabled)));
     assertThat(identities.count()).isZero();
+  }
+
+  @Test
+  void googleLoginRedeemsMatchingInvitationWithoutPasswordAndInvitationIsOneTime() {
+    String email = "google-invited@example.com";
+    InvitationLink link = invitation(email);
+    assertThat(link.invitation().getExpiresAt())
+        .isBetween(
+            Instant.now().plus(23, ChronoUnit.HOURS), Instant.now().plus(25, ChronoUnit.HOURS));
+    Map<String, String> request =
+        Map.of(
+            "accessToken", supabaseToken(UUID.randomUUID().toString(), email),
+            "invitationToken", link.token());
+
+    assertThat(post("/api/v1/auth/google", request, Map.class).getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    User user =
+        users.findAll().stream()
+            .filter(candidate -> candidate.getNormalizedEmail().equals(email))
+            .findFirst()
+            .orElseThrow();
+    assertThat(user.getVerifiedAt()).isNotNull();
+    assertThat(user.isEnabled()).isTrue();
+    assertThat(invitations.findById(link.invitation().getId()).orElseThrow().getUsedAt())
+        .isNotNull();
+    assertThat(post("/api/v1/auth/google", request, Map.class).getStatusCode())
+        .isEqualTo(HttpStatus.UNAUTHORIZED);
+  }
+
+  @Test
+  void googleLoginRejectsInvitationWhenEmailDoesNotMatch() {
+    InvitationLink link = invitation("invited@example.com");
+
+    assertGoogleUnauthorized(
+        supabaseToken(UUID.randomUUID().toString(), "different@example.com"), link.token());
+    assertThat(invitations.findById(link.invitation().getId()).orElseThrow().getUsedAt()).isNull();
+    assertThat(
+            users.findAll().stream()
+                .filter(user -> user.getNormalizedEmail().equals("different@example.com")))
+        .isEmpty();
+  }
+
+  @Test
+  void googleLoginRejectsUnverifiedOrInvalidEmailForInvitation() {
+    InvitationLink unverified = invitation("unverified-google@example.com");
+    assertGoogleUnauthorized(
+        supabaseToken(
+            UUID.randomUUID().toString(), "unverified-google@example.com", "Google User", false),
+        unverified.token());
+    assertThat(invitations.findById(unverified.invitation().getId()).orElseThrow().getUsedAt())
+        .isNull();
+
+    InvitationLink invalid = invitation("not-an-email");
+    assertGoogleUnauthorized(
+        supabaseToken(UUID.randomUUID().toString(), "not-an-email"), invalid.token());
+    assertThat(invitations.findById(invalid.invitation().getId()).orElseThrow().getUsedAt())
+        .isNull();
+  }
+
+  @Test
+  void googleLoginRejectsExpiredInvitation() {
+    String token = "expired-google-invitation";
+    Invitation invitation =
+        invitations.saveAndFlush(
+            new Invitation(
+                UUID.randomUUID(),
+                "expired-google@example.com",
+                sha256(token),
+                Instant.now().minusSeconds(1)));
+
+    assertGoogleUnauthorized(
+        supabaseToken(UUID.randomUUID().toString(), invitation.getEmail()), token);
+    assertThat(invitations.findById(invitation.getId()).orElseThrow().getUsedAt()).isNull();
   }
 
   @Test
@@ -301,6 +382,7 @@ class AuthenticationApiIntegrationTest {
     tokens.deleteAll();
     limits.deleteAll();
     identities.deleteAll();
+    invitations.deleteAll();
     users.deleteAll();
   }
 
@@ -757,4 +839,30 @@ class AuthenticationApiIntegrationTest {
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     assertThat(response.getBody()).doesNotContain("signature", "issuer", "audience", "provider");
   }
+
+  private void assertGoogleUnauthorized(String accessToken, String invitationToken) {
+    ResponseEntity<String> response =
+        post(
+            "/api/v1/auth/google",
+            Map.of("accessToken", accessToken, "invitationToken", invitationToken),
+            String.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+  }
+
+  private InvitationLink invitation(String email) {
+    Invitation invitation = adminUsers.invite(email);
+    ArgumentCaptor<SimpleMailMessage> mailCaptor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+    verify(mail, atLeastOnce()).send(mailCaptor.capture());
+    return new InvitationLink(invitation, resetToken(mailCaptor.getValue().getText()));
+  }
+
+  private static byte[] sha256(String value) {
+    try {
+      return MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
+  }
+
+  private record InvitationLink(Invitation invitation, String token) {}
 }

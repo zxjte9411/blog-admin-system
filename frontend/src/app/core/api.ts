@@ -231,8 +231,11 @@ export class AuthenticationApi {
   login(request: LoginRequest): Observable<LoginResponse> {
     return this.http.post<LoginResponse>('/api/v1/auth/login', request);
   }
-  googleLogin(accessToken: string): Observable<LoginResponse> {
-    return this.http.post<LoginResponse>('/api/v1/auth/google', { accessToken });
+  googleLogin(accessToken: string, invitationToken?: string): Observable<LoginResponse> {
+    return this.http.post<LoginResponse>('/api/v1/auth/google', {
+      accessToken,
+      ...(invitationToken ? { invitationToken } : {}),
+    });
   }
   refresh(): Observable<LoginResponse> {
     return this.http.post<LoginResponse>('/api/v1/auth/refresh', {});

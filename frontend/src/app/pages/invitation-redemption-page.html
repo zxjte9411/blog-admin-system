@@ -26,6 +26,19 @@
         (submitted)="submit()"
       />
     }
+    @if (!missingToken && googleLoginAvailable) {
+      <div class="oauth-divider" aria-hidden="true">
+        <span>{{ language.t.or }}</span>
+      </div>
+      <button
+        class="ui-ghost google-login"
+        type="button"
+        [disabled]="loading"
+        (click)="googleLogin()"
+      >
+        {{ language.t.googleLogin }}
+      </button>
+    }
     <app-account-links [links]="links" [ariaLabel]="language.t.accountLinks" />
   </app-account-layout>
 </app-shell>

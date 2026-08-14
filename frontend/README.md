@@ -4,10 +4,14 @@ This project was generated using [Angular CLI](https://github.com/angular/angula
 
 ## Google Login local setup
 
-Copy `public/config.example.js` to `public/config.js`, then set the Supabase
-project URL and publishable key. In Supabase Authentication URL Configuration,
-add `http://localhost:4200/login` to the redirect allow list. `config.js` is
-ignored by Git and must not contain a service role key or any other secret.
+Set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` in the root `.env`. `npm start`
+generates `public/config.js` before starting `ng serve`; Compose passes the same
+values to the frontend container and generates the browser config at container
+startup. `config.js` is ignored by Git and contains only public values.
+
+In Supabase Authentication URL Configuration, add
+`http://localhost:4200/login` to the redirect allow list. Never use a service role
+key or any other secret as the publishable key.
 
 The backend also requires the Supabase JWT issuer and JWKS URL. For a project
 URL such as `https://<project-ref>.supabase.co`, set these non-secret values in
@@ -18,16 +22,17 @@ SUPABASE_JWT_ISSUER=https://<project-ref>.supabase.co/auth/v1
 SUPABASE_JWKS_URL=https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json
 ```
 
-Do not put secrets in these URLs or in `config.js`. If either frontend public
-setting (project URL or publishable key) is missing, Google Login is hidden;
-Email/Password login remains available.
+If either frontend public setting (project URL or publishable key) is missing,
+Google Login is hidden; Email/Password login remains available. If the root
+`.env` and both environment variables are absent, `npm start` fails without
+generating a config file.
 
 ## Development server
 
 To start a local development server, run:
 
 ```bash
-ng serve
+npm start
 ```
 
 Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.

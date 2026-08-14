@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve",
+    "start": "sh scripts/generate-config.sh && ng serve",
     "build": "ng build",
     "typecheck": "ng build --configuration development",
     "lint": "eslint .",

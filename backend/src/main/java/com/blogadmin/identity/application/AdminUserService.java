@@ -147,6 +147,33 @@ public class AdminUserService {
     return user;
   }
 
+  @Transactional
+  public User redeemGoogle(String token, String email, String displayName) {
+    Invitation invitation =
+        invitations.findByTokenHash(hash(token)).orElseThrow(InvalidInvitationException::new);
+    Instant now = Instant.now();
+    String normalized = email.trim().toLowerCase(Locale.ROOT);
+    if (invitation.getUsedAt() != null
+        || !invitation.getExpiresAt().isAfter(now)
+        || !invitation.getEmail().equals(normalized)) throw new InvalidInvitationException();
+    users.lockNormalizedEmail(normalized);
+    if (users.findByNormalizedEmail(normalized).isPresent()) throw new AlreadyExistsException();
+    String name = displayName == null ? "" : displayName.trim();
+    if (name.length() > 100) name = "";
+    User user =
+        new User(
+            UUID.randomUUID(),
+            invitation.getEmail(),
+            normalized,
+            name,
+            passwords.encode(randomPassword()),
+            "zh-TW");
+    user.verify(now);
+    users.save(user);
+    invitation.use(now);
+    return user;
+  }
+
   public int getMinimum() {
     return passwordSettings.findById(true).orElseThrow().getMinimumLength();
   }
@@ -178,6 +205,12 @@ public class AdminUserService {
     } catch (Exception e) {
       throw new IllegalStateException(e);
     }
+  }
+
+  private static String randomPassword() {
+    byte[] raw = new byte[32];
+    RANDOM.nextBytes(raw);
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
   }
 
   private void sendAfterCommit(SimpleMailMessage message) {

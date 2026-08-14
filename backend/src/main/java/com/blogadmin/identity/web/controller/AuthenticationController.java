@@ -36,7 +36,7 @@ public class AuthenticationController {
   @PostMapping("/google")
   public LoginResponse google(
       @Valid @RequestBody GoogleLoginRequest request, HttpServletResponse response) {
-    var result = service.googleLogin(request.accessToken());
+    var result = service.googleLogin(request.accessToken(), request.invitationToken());
     cookie(response, result.refreshToken());
     var accessToken = jwt.create(result.user(), result.sessionId(), result.accessTokenVersion());
     return new LoginResponse(accessToken.value(), accessToken.expiresAt());

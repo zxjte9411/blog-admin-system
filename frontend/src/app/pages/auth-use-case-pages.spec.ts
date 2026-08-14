@@ -1,12 +1,14 @@
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, provideRouter } from '@angular/router';
+import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
 import { AuthenticationApi, InvitationUser, UserApi } from '../core/api';
+import { SUPABASE_AUTH } from '../core/supabase';
 import { EmailConfirmationPage } from './email-confirmation-page';
 import { EmailVerificationPage } from './email-verification-page';
 import { InvitationRedemptionPage } from './invitation-redemption-page';
+import { LoginPage } from './login-page';
 import { PasswordResetPage } from './password-reset-page';
 import { RegistrationPage } from './registration-page';
 import { ResendVerificationPage } from './resend-verification-page';
@@ -19,8 +21,20 @@ const routeWithToken = (token: string) => ({
 describe('authentication use-case pages', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+      imports: [LoginPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: SUPABASE_AUTH, useFactory: fakeSupabase },
+      ],
     });
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    delete (globalThis as typeof globalThis & { __BLOG_ADMIN_CONFIG__?: object })
+      .__BLOG_ADMIN_CONFIG__;
   });
 
   it('registers through the registration use case', () => {
@@ -102,4 +116,109 @@ describe('authentication use-case pages', () => {
       preferredLanguage: 'en',
     });
   });
+
+  it('completes the Google callback through the backend Google Login use case', async () => {
+    (globalThis as typeof globalThis & { __BLOG_ADMIN_CONFIG__?: object }).__BLOG_ADMIN_CONFIG__ = {
+      supabaseUrl: 'https://project.supabase.co',
+      supabasePublishableKey: 'sb_publishable_test',
+    };
+    const supabase = TestBed.inject(SUPABASE_AUTH) as ReturnType<typeof fakeSupabase>;
+    supabase.getSession.mockResolvedValue({
+      data: { session: { access_token: 'supabase-token' } },
+      error: null,
+    });
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'url', 'get').mockReturnValue('/login?code=oauth-code');
+    vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+
+    const fixture = TestBed.createComponent(LoginPage);
+    fixture.componentInstance.ngOnInit();
+    await Promise.resolve();
+
+    const http = TestBed.inject(HttpTestingController);
+    const request = http.expectOne('/api/v1/auth/google');
+    expect(request.request.body).toEqual({ accessToken: 'supabase-token' });
+    request.flush({ accessToken: 'local-token' });
+    http.expectOne('/api/v1/account/me').flush({
+      id: 'user-1',
+      displayName: 'Ada',
+      preferredLanguage: 'en',
+      role: 'AUTHOR',
+    });
+
+    expect(fixture.componentInstance.auth.token).toBe('local-token');
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/articles');
+  });
+
+  it('shows the backend rejection when Google callback exchange is refused', async () => {
+    (globalThis as typeof globalThis & { __BLOG_ADMIN_CONFIG__?: object }).__BLOG_ADMIN_CONFIG__ = {
+      supabaseUrl: 'https://project.supabase.co',
+      supabasePublishableKey: 'sb_publishable_test',
+    };
+    const supabase = TestBed.inject(SUPABASE_AUTH) as ReturnType<typeof fakeSupabase>;
+    supabase.getSession.mockResolvedValue({
+      data: { session: { access_token: 'rejected-supabase-token' } },
+      error: null,
+    });
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'url', 'get').mockReturnValue('/login?code=oauth-code');
+    vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+
+    const fixture = TestBed.createComponent(LoginPage);
+    fixture.componentInstance.ngOnInit();
+    await Promise.resolve();
+
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/auth/google')
+      .flush({}, { status: 401, statusText: 'Unauthorized' });
+
+    expect(fixture.componentInstance.loading).toBe(false);
+    expect(fixture.componentInstance.error).toBe(fixture.componentInstance.language.t.unauthorized);
+    expect(fixture.componentInstance.auth.token).toBeNull();
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('exchanges an invitation Google callback with its invitation token', async () => {
+    TestBed.overrideProvider(ActivatedRoute, { useValue: routeWithToken('invite-token') });
+    (globalThis as typeof globalThis & { __BLOG_ADMIN_CONFIG__?: object }).__BLOG_ADMIN_CONFIG__ = {
+      supabaseUrl: 'https://project.supabase.co',
+      supabasePublishableKey: 'sb_publishable_test',
+    };
+    const supabase = TestBed.inject(SUPABASE_AUTH) as ReturnType<typeof fakeSupabase>;
+    supabase.getSession.mockResolvedValue({
+      data: { session: { access_token: 'supabase-token' } },
+      error: null,
+    });
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'url', 'get').mockReturnValue('/invite?code=oauth-code&token=invite-token');
+    vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+
+    const fixture = TestBed.createComponent(InvitationRedemptionPage);
+    fixture.componentInstance.ngOnInit();
+    await Promise.resolve();
+
+    const request = TestBed.inject(HttpTestingController).expectOne('/api/v1/auth/google');
+    expect(request.request.body).toEqual({
+      accessToken: 'supabase-token',
+      invitationToken: 'invite-token',
+    });
+    request.flush({ accessToken: 'local-token' });
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/account/me').flush({
+      id: 'user-1',
+      displayName: 'Ada',
+      preferredLanguage: 'en',
+      role: 'AUTHOR',
+    });
+
+    expect(fixture.componentInstance.auth.token).toBe('local-token');
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/articles');
+  });
 });
+
+function fakeSupabase() {
+  return {
+    signInWithOAuth: vi.fn().mockResolvedValue({ error: null }),
+    getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+    signOut: vi.fn().mockResolvedValue({ error: null }),
+  };
+}

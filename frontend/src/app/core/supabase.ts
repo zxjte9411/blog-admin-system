@@ -13,18 +13,31 @@ export interface SupabaseAuthClient {
   signOut(options: { scope: 'local' }): Promise<{ error: unknown | null }>;
 }
 
-interface RuntimeConfig {
+export interface RuntimeConfig {
   supabaseUrl?: string;
   supabasePublishableKey?: string;
+}
+
+interface LoadedRuntimeConfig {
+  supabaseUrl: string;
+  supabasePublishableKey: string;
 }
 
 const runtimeConfig = () =>
   (globalThis as typeof globalThis & { __BLOG_ADMIN_CONFIG__?: RuntimeConfig })
     .__BLOG_ADMIN_CONFIG__;
 
-export const isSupabaseConfigured = () => {
+export const loadRuntimeConfig = (): LoadedRuntimeConfig | undefined => {
   const config = runtimeConfig();
-  return Boolean(config?.supabaseUrl?.trim() && config.supabasePublishableKey?.trim());
+  const supabaseUrl = config?.supabaseUrl?.trim();
+  const supabasePublishableKey = config?.supabasePublishableKey?.trim();
+  return supabaseUrl && supabasePublishableKey
+    ? { supabaseUrl, supabasePublishableKey }
+    : undefined;
+};
+
+export const isSupabaseConfigured = () => {
+  return Boolean(loadRuntimeConfig());
 };
 
 export const SUPABASE_AUTH = new InjectionToken<SupabaseAuthClient>('SUPABASE_AUTH', {
@@ -33,8 +46,8 @@ export const SUPABASE_AUTH = new InjectionToken<SupabaseAuthClient>('SUPABASE_AU
     let auth: ReturnType<typeof createClient>['auth'];
     const client = () => {
       if (auth) return auth;
-      const config = runtimeConfig();
-      if (!config?.supabaseUrl || !config.supabasePublishableKey) {
+      const config = loadRuntimeConfig();
+      if (!config) {
         throw new Error('Supabase runtime configuration is missing');
       }
       auth = createClient(config.supabaseUrl, config.supabasePublishableKey).auth;

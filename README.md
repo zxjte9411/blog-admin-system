@@ -44,6 +44,10 @@ docker compose ps
 - `APP_BOOTSTRAP_ADMIN_EMAIL`
 - `APP_BOOTSTRAP_ADMIN_PASSWORD`：本機自行設定，至少 8 字元，請勿提交 `.env`
 
+前端的 `SUPABASE_URL` 與 `SUPABASE_PUBLISHABLE_KEY` 是瀏覽器可見的公開設定，Compose
+會從根目錄 `.env` 傳入前端，容器啟動時才產生 `config.js`。兩者任一未設定時，Google
+登入會隱藏，Email/Password 登入仍可使用；不要填入 service role key 或其他秘密。
+
 應用程式首次啟動時，只有在 `APP_BOOTSTRAP_ADMIN_EMAIL` 對應的帳號不存在時，才會建立 bootstrap admin。之後重啟不會覆寫既有帳號或密碼。登入測試帳號使用 `.env` 內的 `APP_BOOTSTRAP_ADMIN_EMAIL` 與 `APP_BOOTSTRAP_ADMIN_PASSWORD`，README 不提供固定密碼。
 
 停止服務並保留資料：

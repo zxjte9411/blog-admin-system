@@ -4,3 +4,4 @@ dist
 coverage
 test-results
 *.log
+public/config.js

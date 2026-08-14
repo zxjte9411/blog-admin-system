@@ -27,18 +27,21 @@ public class AuthenticationService {
   private final PasswordEncoder passwords;
   private final UserIdentityRepository identities;
   private final SupabaseJwtVerifier supabase;
+  private final AdminUserService adminUsers;
 
   public AuthenticationService(
       UserRepository users,
       RefreshSessionRepository sessions,
       PasswordEncoder passwords,
       UserIdentityRepository identities,
-      SupabaseJwtVerifier supabase) {
+      SupabaseJwtVerifier supabase,
+      AdminUserService adminUsers) {
     this.users = users;
     this.sessions = sessions;
     this.passwords = passwords;
     this.identities = identities;
     this.supabase = supabase;
+    this.adminUsers = adminUsers;
   }
 
   @Transactional
@@ -54,11 +57,31 @@ public class AuthenticationService {
 
   @Transactional
   public Result googleLogin(String accessToken) {
+    return googleLogin(accessToken, null);
+  }
+
+  @Transactional
+  public Result googleLogin(String accessToken, String invitationToken) {
     SupabaseJwtVerifier.Claims claims;
     try {
       claims = supabase.verify(accessToken);
     } catch (SupabaseJwtVerifier.InvalidTokenException exception) {
       throw new BadCredentialsException();
+    }
+
+    if (invitationToken != null && !invitationToken.isBlank()) {
+      User user;
+      try {
+        user = adminUsers.redeemGoogle(invitationToken, claims.email(), claims.displayName());
+      } catch (AdminUserService.InvalidInvitationException
+          | AdminUserService.AlreadyExistsException exception) {
+        throw new BadCredentialsException();
+      }
+      if (identities.findByUserIdAndProvider(user.getId(), "google").isPresent())
+        throw new BadCredentialsException();
+      identities.save(
+          new UserIdentity(UUID.randomUUID(), user.getId(), "google", claims.subject()));
+      return issue(user);
     }
 
     User user =
