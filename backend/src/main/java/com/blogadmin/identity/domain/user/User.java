@@ -6,11 +6,17 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "users")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User {
   @Id private UUID id;
   private String email;
@@ -25,8 +31,6 @@ public class User {
   private boolean enabled;
   private Instant verifiedAt;
   private int accessTokenVersion;
-
-  protected User() {}
 
   public User(
       UUID id,
@@ -45,46 +49,6 @@ public class User {
     this.enabled = true;
   }
 
-  public UUID getId() {
-    return id;
-  }
-
-  public String getEmail() {
-    return email;
-  }
-
-  public String getNormalizedEmail() {
-    return normalizedEmail;
-  }
-
-  public String getDisplayName() {
-    return displayName;
-  }
-
-  public String getPreferredLanguage() {
-    return preferredLanguage;
-  }
-
-  public Instant getVerifiedAt() {
-    return verifiedAt;
-  }
-
-  public String getPasswordHash() {
-    return passwordHash;
-  }
-
-  public UserRole getRole() {
-    return role;
-  }
-
-  public boolean isEnabled() {
-    return enabled;
-  }
-
-  public int getAccessTokenVersion() {
-    return accessTokenVersion;
-  }
-
   public void updateProfile(String name, String language) {
     displayName = name == null ? null : name.trim();
     preferredLanguage = language;
@@ -101,7 +65,7 @@ public class User {
 
   public void changeEmail(String email) {
     this.email = email == null ? null : email.trim();
-    this.normalizedEmail = email == null ? null : email.trim().toLowerCase(java.util.Locale.ROOT);
+    this.normalizedEmail = email == null ? null : email.trim().toLowerCase(Locale.ROOT);
   }
 
   public void verify(Instant at) {

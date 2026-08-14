@@ -5,44 +5,20 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "password_setting_changes")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
 public class PasswordSettingChange {
   @Id private UUID id;
   private UUID operatorId;
   private int previousValue;
   private int newValue;
   private Instant changedAt;
-
-  protected PasswordSettingChange() {}
-
-  public PasswordSettingChange(
-      UUID id, UUID operatorId, int previousValue, int newValue, Instant changedAt) {
-    this.id = id;
-    this.operatorId = operatorId;
-    this.previousValue = previousValue;
-    this.newValue = newValue;
-    this.changedAt = changedAt;
-  }
-
-  public UUID getId() {
-    return id;
-  }
-
-  public UUID getOperatorId() {
-    return operatorId;
-  }
-
-  public int getPreviousValue() {
-    return previousValue;
-  }
-
-  public int getNewValue() {
-    return newValue;
-  }
-
-  public Instant getChangedAt() {
-    return changedAt;
-  }
 }

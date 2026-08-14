@@ -5,9 +5,14 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "email_change_tokens")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class EmailChangeToken {
   @Id private UUID id;
   private UUID userId;
@@ -16,30 +21,13 @@ public class EmailChangeToken {
   private Instant expiresAt;
   private Instant usedAt;
 
-  protected EmailChangeToken() {}
-
-  public EmailChangeToken(UUID id, UUID userId, String email, byte[] hash, Instant expiry) {
+  public EmailChangeToken(
+      UUID id, UUID userId, String newEmail, byte[] tokenHash, Instant expiresAt) {
     this.id = id;
     this.userId = userId;
-    newEmail = email;
-    tokenHash = hash;
-    expiresAt = expiry;
-  }
-
-  public UUID getUserId() {
-    return userId;
-  }
-
-  public String getNewEmail() {
-    return newEmail;
-  }
-
-  public Instant getExpiresAt() {
-    return expiresAt;
-  }
-
-  public Instant getUsedAt() {
-    return usedAt;
+    this.newEmail = newEmail;
+    this.tokenHash = tokenHash;
+    this.expiresAt = expiresAt;
   }
 
   public void use(Instant at) {

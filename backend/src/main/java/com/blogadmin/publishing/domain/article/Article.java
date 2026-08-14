@@ -18,10 +18,15 @@ import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.BatchSize;
 
 @Entity
 @Table(name = "articles")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Article {
   @Id private UUID id;
 
@@ -61,8 +66,6 @@ public class Article {
       inverseJoinColumns = @JoinColumn(name = "tag_id"))
   private Set<Tag> tags = new LinkedHashSet<>();
 
-  protected Article() {}
-
   public Article(UUID id, User owner, String title, String content) {
     this.id = id;
     this.owner = owner;
@@ -74,56 +77,10 @@ public class Article {
     this.updatedAt = this.createdAt;
   }
 
-  public UUID getId() {
-    return id;
-  }
-
-  public User getOwner() {
-    return owner;
-  }
-
-  public String getAuthorAttribution() {
-    return authorAttribution;
-  }
-
-  public String getTitle() {
-    return title;
-  }
-
-  public String getContent() {
-    return content;
-  }
-
-  public PublicationStatus getStatus() {
-    return status;
-  }
-
-  public Instant getPublishedAt() {
-    return publishedAt;
-  }
-
-  public Instant getDeletedAt() {
-    return deletedAt;
-  }
-
-  public Instant getCreatedAt() {
-    return createdAt;
-  }
-
-  public Instant getUpdatedAt() {
-    return updatedAt;
-  }
-
-  public long getVersion() {
-    return version;
-  }
-
-  public Set<Tag> getTags() {
-    return tags;
-  }
-
   public void update(String title, String content, PublicationStatus status) {
-    if (publishedAt == null && status == PublicationStatus.PUBLISHED) publishedAt = Instant.now();
+    if (publishedAt == null && status == PublicationStatus.PUBLISHED) {
+      publishedAt = Instant.now();
+    }
     this.title = title;
     this.content = content;
     this.status = status;
