@@ -178,6 +178,44 @@ describe('authentication use-case pages', () => {
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 
+  it('completes an implicit-flow Google callback from the URL hash', async () => {
+    const previousHash = window.location.hash;
+    window.location.hash = '#access_token=callback-token';
+    try {
+      (globalThis as typeof globalThis & { __BLOG_ADMIN_CONFIG__?: object }).__BLOG_ADMIN_CONFIG__ =
+        {
+          supabaseUrl: 'https://project.supabase.co',
+          supabasePublishableKey: 'sb_publishable_test',
+        };
+      const supabase = TestBed.inject(SUPABASE_AUTH) as ReturnType<typeof fakeSupabase>;
+      supabase.getSession.mockResolvedValue({
+        data: { session: { access_token: 'session-access-token' } },
+        error: null,
+      });
+      const router = TestBed.inject(Router);
+      vi.spyOn(router, 'url', 'get').mockReturnValue('/login');
+      vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+
+      const fixture = TestBed.createComponent(LoginPage);
+      fixture.componentInstance.ngOnInit();
+      await Promise.resolve();
+
+      const request = TestBed.inject(HttpTestingController).expectOne('/api/v1/auth/google');
+      expect(request.request.body).toEqual({ accessToken: 'session-access-token' });
+      request.flush({ accessToken: 'local-token' });
+      TestBed.inject(HttpTestingController).expectOne('/api/v1/account/me').flush({
+        id: 'user-1',
+        displayName: 'Ada',
+        preferredLanguage: 'en',
+        role: 'AUTHOR',
+      });
+
+      expect(router.navigateByUrl).toHaveBeenCalledWith('/articles');
+    } finally {
+      window.location.hash = previousHash;
+    }
+  });
+
   it('exchanges an invitation Google callback with its invitation token', async () => {
     TestBed.overrideProvider(ActivatedRoute, { useValue: routeWithToken('invite-token') });
     (globalThis as typeof globalThis & { __BLOG_ADMIN_CONFIG__?: object }).__BLOG_ADMIN_CONFIG__ = {

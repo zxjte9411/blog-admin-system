@@ -42,7 +42,9 @@ export class LoginPage extends FormUseCase implements OnInit {
   }
 
   ngOnInit() {
-    if (this.router.parseUrl(this.router.url).queryParams['code']) {
+    const hasCodeCallback = this.router.parseUrl(this.router.url).queryParams['code'];
+    const hasImplicitCallback = window.location.hash.includes('access_token=');
+    if (hasCodeCallback || hasImplicitCallback) {
       void this.restoreSupabaseSession();
     }
   }
