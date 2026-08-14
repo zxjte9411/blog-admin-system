@@ -3,25 +3,26 @@ package com.blogadmin.identity.application;
 import com.blogadmin.identity.domain.password.PasswordSettingRepository;
 import java.util.Locale;
 import java.util.Set;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class PasswordPolicy {
   private static final int MAXIMUM_LENGTH = 128;
-  private static final Set<String> COMMON =
+  private static final Set<String> COMMON_PASSWORDS =
       Set.of("password", "password123", "12345678", "qwerty123");
 
-  private final PasswordSettingRepository settings;
-
-  public PasswordPolicy(PasswordSettingRepository settings) {
-    this.settings = settings;
-  }
+  private final PasswordSettingRepository passwordSettingRepository;
 
   public Violation validate(String password) {
-    int minimum = settings.findById(true).orElseThrow().getMinimumLength();
-    if (password == null || password.length() < minimum || password.length() > MAXIMUM_LENGTH)
+    int minimum = passwordSettingRepository.findById(true).orElseThrow().getMinimumLength();
+    if (password == null || password.length() < minimum || password.length() > MAXIMUM_LENGTH) {
       return Violation.LENGTH;
-    if (COMMON.contains(password.toLowerCase(Locale.ROOT))) return Violation.COMMON;
+    }
+    if (COMMON_PASSWORDS.contains(password.toLowerCase(Locale.ROOT))) {
+      return Violation.COMMON;
+    }
     return Violation.NONE;
   }
 

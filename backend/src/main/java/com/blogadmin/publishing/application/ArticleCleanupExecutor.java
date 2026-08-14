@@ -7,40 +7,38 @@ import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class ArticleCleanupExecutor {
-  private final ArticleRepository articles;
-  private final TagRepository tags;
-
-  public ArticleCleanupExecutor(ArticleRepository articles, TagRepository tags) {
-    this.articles = articles;
-    this.tags = tags;
-  }
+  private final ArticleRepository articleRepository;
+  private final TagRepository tagRepository;
 
   @Transactional
   public void cleanup() {
-    var expired = articles.findByDeletedAtBefore(Instant.now().minus(30, ChronoUnit.DAYS));
-    expired.forEach(
+    var expiredArticles =
+        articleRepository.findByDeletedAtBefore(Instant.now().minus(30, ChronoUnit.DAYS));
+    expiredArticles.forEach(
         article -> {
           article.getTags().clear();
-          articles.delete(article);
+          articleRepository.delete(article);
         });
-    articles.flush();
-    List<String> candidateNames = tags.findCandidateOrphanTagNames();
+    articleRepository.flush();
+    List<String> candidateNames = tagRepository.findCandidateOrphanTagNames();
     List<String> sortedNormalizedNames =
         candidateNames.stream()
             .map(String::trim)
-            .filter(n -> !n.isBlank())
-            .map(n -> n.toLowerCase(Locale.ROOT))
+            .filter(name -> !name.isBlank())
+            .map(name -> name.toLowerCase(Locale.ROOT))
             .distinct()
             .sorted(Comparator.naturalOrder())
             .toList();
     for (String normalized : sortedNormalizedNames) {
-      tags.lockNormalizedName(normalized);
-      tags.deleteIfOrphan(normalized);
+      tagRepository.lockNormalizedName(normalized);
+      tagRepository.deleteIfOrphan(normalized);
     }
   }
 }

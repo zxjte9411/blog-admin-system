@@ -8,71 +8,64 @@ import com.blogadmin.identity.domain.verification.EmailVerificationTokenReposito
 import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class RegistrationService {
-  private final UserRepository users;
-  private final EmailVerificationTokenRepository tokens;
-  private final RateLimitService rateLimits;
-  private final ApplicationEventPublisher events;
+  private final UserRepository userRepository;
+  private final EmailVerificationTokenRepository emailVerificationTokenRepository;
+  private final RateLimitService rateLimitService;
+  private final ApplicationEventPublisher eventPublisher;
   private final PasswordEncoder passwordEncoder;
   private final PasswordPolicy passwordPolicy;
-
-  public RegistrationService(
-      UserRepository users,
-      EmailVerificationTokenRepository tokens,
-      RateLimitService rateLimits,
-      ApplicationEventPublisher events,
-      PasswordEncoder passwordEncoder,
-      PasswordPolicy passwordPolicy) {
-    this.users = users;
-    this.tokens = tokens;
-    this.rateLimits = rateLimits;
-    this.events = events;
-    this.passwordEncoder = passwordEncoder;
-    this.passwordPolicy = passwordPolicy;
-  }
 
   @Transactional
   public void register(
       String email, String displayName, String password, String language, String ip) {
-    String normalized = normalize(email);
-    checkRate("registration", ip, normalized);
-    users.lockNormalizedEmail(normalized);
-    if (passwordPolicy.validate(password) != PasswordPolicy.Violation.NONE)
+    String normalizedEmail = normalize(email);
+    checkRate("registration", ip, normalizedEmail);
+    userRepository.lockNormalizedEmail(normalizedEmail);
+    if (passwordPolicy.validate(password) != PasswordPolicy.Violation.NONE) {
       throw new InvalidRegistrationException();
+    }
     String trimmedDisplayName = displayName == null ? null : displayName.trim();
     if (trimmedDisplayName == null
         || trimmedDisplayName.isEmpty()
-        || trimmedDisplayName.length() > 100) throw new InvalidRegistrationException("displayName");
+        || trimmedDisplayName.length() > 100) {
+      throw new InvalidRegistrationException("displayName");
+    }
     User user =
-        users
-            .findByNormalizedEmail(normalized)
+        userRepository
+            .findByNormalizedEmail(normalizedEmail)
             .orElseGet(
                 () ->
-                    users.save(
+                    userRepository.save(
                         new User(
                             UUID.randomUUID(),
                             email.trim(),
-                            normalized,
+                            normalizedEmail,
                             trimmedDisplayName,
                             passwordEncoder.encode(password),
                             language)));
-    if (user.getVerifiedAt() == null) issue(user);
+    if (user.getVerifiedAt() == null) {
+      issue(user);
+    }
   }
 
   @Transactional
   public void resend(String email, String ip) {
-    String normalized = normalize(email);
-    checkRate("resend", ip, normalized);
-    users.lockNormalizedEmail(normalized);
-    users
-        .findByNormalizedEmail(normalized)
-        .filter(a -> a.getVerifiedAt() == null)
+    String normalizedEmail = normalize(email);
+    checkRate("resend", ip, normalizedEmail);
+    userRepository.lockNormalizedEmail(normalizedEmail);
+    userRepository
+        .findByNormalizedEmail(normalizedEmail)
+        .filter(user -> user.getVerifiedAt() == null)
         .ifPresent(this::issue);
   }
 
@@ -80,38 +73,47 @@ public class RegistrationService {
   public boolean verify(String token) {
     Instant now = Instant.now();
     byte[] tokenHash = OpaqueToken.digest(token);
-    UUID userId = tokens.findUserIdByTokenHash(tokenHash).orElse(null);
-    if (userId == null) return false;
-    User user = users.findLockedById(userId).orElse(null);
-    if (user == null) return false;
-    var row = tokens.findByTokenHash(tokenHash).orElse(null);
-    if (row == null
-        || !user.getId().equals(row.getUserId())
-        || row.getUsedAt() != null
-        || row.getInvalidatedAt() != null
-        || !row.getExpiresAt().isAfter(now)) return false;
-    row.use(now);
+    UUID userId = emailVerificationTokenRepository.findUserIdByTokenHash(tokenHash).orElse(null);
+    if (userId == null) {
+      return false;
+    }
+    User user = userRepository.findLockedById(userId).orElse(null);
+    if (user == null) {
+      return false;
+    }
+    EmailVerificationToken verificationToken =
+        emailVerificationTokenRepository.findByTokenHash(tokenHash).orElse(null);
+    if (verificationToken == null
+        || !user.getId().equals(verificationToken.getUserId())
+        || verificationToken.getUsedAt() != null
+        || verificationToken.getInvalidatedAt() != null
+        || !verificationToken.getExpiresAt().isAfter(now)) {
+      return false;
+    }
+    verificationToken.use(now);
     user.verify(now);
     return true;
   }
 
   private void issue(User user) {
     OpaqueToken.Issued token = OpaqueToken.generate();
-    tokens
+    emailVerificationTokenRepository
         .findByUserIdAndUsedAtIsNullAndInvalidatedAtIsNull(user.getId())
-        .forEach(t -> t.invalidate(Instant.now()));
-    tokens.save(
+        .forEach(existingToken -> existingToken.invalidate(Instant.now()));
+    emailVerificationTokenRepository.save(
         new EmailVerificationToken(
             UUID.randomUUID(), user.getId(), token.digest(), Instant.now().plusSeconds(86400)));
-    tokens.flush();
-    events.publishEvent(
+    emailVerificationTokenRepository.flush();
+    eventPublisher.publishEvent(
         new IdentityEmailEvent.Verification(
             user.getEmail(), user.getDisplayName(), token.value(), user.getPreferredLanguage()));
   }
 
   private void checkRate(String bucket, String ip, String email) {
-    var decision = rateLimits.consume(bucket, ip, email);
-    if (!decision.allowed()) throw new RateLimitedException(decision.retryAfterSeconds());
+    var decision = rateLimitService.consume(bucket, ip, email);
+    if (!decision.allowed()) {
+      throw new RateLimitedException(decision.retryAfterSeconds());
+    }
   }
 
   private static String normalize(String email) {
@@ -126,6 +128,7 @@ public class RegistrationService {
     }
   }
 
+  @Getter
   public static class RateLimitedException extends RuntimeException {
     private final long retryAfterSeconds;
 

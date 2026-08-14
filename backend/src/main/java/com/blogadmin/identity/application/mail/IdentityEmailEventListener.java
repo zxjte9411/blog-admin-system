@@ -1,7 +1,6 @@
 package com.blogadmin.identity.application.mail;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -9,18 +8,18 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+@Slf4j
 @Component
 public class IdentityEmailEventListener {
-  private static final Logger LOGGER = LoggerFactory.getLogger(IdentityEmailEventListener.class);
-  private final JavaMailSender mail;
+  private final JavaMailSender mailSender;
   private final String from;
   private final String frontend;
 
   public IdentityEmailEventListener(
-      JavaMailSender mail,
+      JavaMailSender mailSender,
       @Value("${app.mail.from:dev@example.com}") String from,
       @Value("${app.frontend-base-url:http://localhost:4200}") String frontend) {
-    this.mail = mail;
+    this.mailSender = mailSender;
     this.from = from;
     this.frontend = frontend;
   }
@@ -29,9 +28,9 @@ public class IdentityEmailEventListener {
   public void handle(IdentityEmailEvent event) {
     try {
       SimpleMailMessage message = compose(event);
-      mail.send(message);
+      mailSender.send(message);
     } catch (RuntimeException exception) {
-      LOGGER.warn(
+      log.warn(
           "Identity email delivery failed for mailType={}, recipient={}",
           event.getClass().getSimpleName(),
           maskEmail(recipientOf(event)),
@@ -93,11 +92,11 @@ public class IdentityEmailEventListener {
 
   private static String recipientOf(IdentityEmailEvent event) {
     return switch (event) {
-      case IdentityEmailEvent.Verification v -> v.to();
-      case IdentityEmailEvent.PasswordReset p -> p.to();
-      case IdentityEmailEvent.Invitation i -> i.to();
-      case IdentityEmailEvent.EmailChangeConfirmation e -> e.to();
-      case IdentityEmailEvent.EmailChangedNotification n -> n.to();
+      case IdentityEmailEvent.Verification verification -> verification.to();
+      case IdentityEmailEvent.PasswordReset passwordReset -> passwordReset.to();
+      case IdentityEmailEvent.Invitation invitation -> invitation.to();
+      case IdentityEmailEvent.EmailChangeConfirmation emailChange -> emailChange.to();
+      case IdentityEmailEvent.EmailChangedNotification notification -> notification.to();
     };
   }
 

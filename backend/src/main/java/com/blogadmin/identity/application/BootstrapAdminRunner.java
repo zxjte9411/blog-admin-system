@@ -15,20 +15,20 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class BootstrapAdminRunner implements ApplicationRunner {
-  private final UserRepository users;
-  private final PasswordEncoder passwords;
+  private final UserRepository userRepository;
+  private final PasswordEncoder passwordEncoder;
   private final PasswordPolicy passwordPolicy;
   private final String email;
   private final String password;
 
   public BootstrapAdminRunner(
-      UserRepository users,
-      PasswordEncoder passwords,
+      UserRepository userRepository,
+      PasswordEncoder passwordEncoder,
       PasswordPolicy passwordPolicy,
       @Value("${app.bootstrap.admin.email:}") String email,
       @Value("${app.bootstrap.admin.password:}") String password) {
-    this.users = users;
-    this.passwords = passwords;
+    this.userRepository = userRepository;
+    this.passwordEncoder = passwordEncoder;
     this.passwordPolicy = passwordPolicy;
     this.email = email;
     this.password = password;
@@ -37,22 +37,27 @@ public class BootstrapAdminRunner implements ApplicationRunner {
   @Override
   @Transactional
   public void run(ApplicationArguments args) {
-    if (email == null || email.trim().isEmpty() || password == null || password.isEmpty()) return;
-    String normalized = email.trim().toLowerCase(Locale.ROOT);
-    if (users.findByNormalizedEmail(normalized).isPresent()) return;
-    if (!passwordPolicy.isValid(password))
+    if (email == null || email.trim().isEmpty() || password == null || password.isEmpty()) {
+      return;
+    }
+    String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+    if (userRepository.findByNormalizedEmail(normalizedEmail).isPresent()) {
+      return;
+    }
+    if (!passwordPolicy.isValid(password)) {
       throw new IllegalStateException("Invalid bootstrap admin password");
+    }
 
     User admin =
         new User(
             UUID.randomUUID(),
             email.trim(),
-            normalized,
+            normalizedEmail,
             "Admin",
-            passwords.encode(password),
+            passwordEncoder.encode(password),
             "zh-TW");
     admin.changeRole(UserRole.ADMIN);
     admin.verify(Instant.now());
-    users.save(admin);
+    userRepository.save(admin);
   }
 }

@@ -13,43 +13,31 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class AuthenticationService {
   private static final SecureRandom RANDOM = new SecureRandom();
-  private final UserRepository users;
-  private final RefreshSessionRepository sessions;
-  private final PasswordEncoder passwords;
-  private final UserIdentityRepository identities;
-  private final SupabaseJwtVerifier supabase;
-  private final AdminUserService adminUsers;
-
-  public AuthenticationService(
-      UserRepository users,
-      RefreshSessionRepository sessions,
-      PasswordEncoder passwords,
-      UserIdentityRepository identities,
-      SupabaseJwtVerifier supabase,
-      AdminUserService adminUsers) {
-    this.users = users;
-    this.sessions = sessions;
-    this.passwords = passwords;
-    this.identities = identities;
-    this.supabase = supabase;
-    this.adminUsers = adminUsers;
-  }
+  private final UserRepository userRepository;
+  private final RefreshSessionRepository refreshSessionRepository;
+  private final PasswordEncoder passwordEncoder;
+  private final UserIdentityRepository userIdentityRepository;
+  private final SupabaseJwtVerifier supabaseJwtVerifier;
+  private final AdminUserService adminUserService;
 
   @Transactional
   public Result login(String email, String password) {
-    User user = users.findByNormalizedEmail(normalize(email)).orElse(null);
+    User user = userRepository.findByNormalizedEmail(normalize(email)).orElse(null);
     if (user == null
         || user.getVerifiedAt() == null
         || !user.isEnabled()
-        || !passwords.matches(password, user.getPasswordHash()))
+        || !passwordEncoder.matches(password, user.getPasswordHash())) {
       throw new BadCredentialsException();
+    }
     return issue(user);
   }
 
@@ -62,7 +50,7 @@ public class AuthenticationService {
   public Result googleLogin(String accessToken, String invitationToken) {
     SupabaseJwtVerifier.Claims claims;
     try {
-      claims = supabase.verify(accessToken);
+      claims = supabaseJwtVerifier.verify(accessToken);
     } catch (SupabaseJwtVerifier.InvalidTokenException exception) {
       throw new BadCredentialsException();
     }
@@ -70,99 +58,118 @@ public class AuthenticationService {
     if (invitationToken != null && !invitationToken.isBlank()) {
       User user;
       try {
-        user = adminUsers.redeemGoogle(invitationToken, claims.email(), claims.displayName());
+        user = adminUserService.redeemGoogle(invitationToken, claims.email(), claims.displayName());
       } catch (AdminUserService.InvalidInvitationException
           | AdminUserService.AlreadyExistsException exception) {
         throw new BadCredentialsException();
       }
-      if (identities.findByUserIdAndProvider(user.getId(), "google").isPresent())
+      if (userIdentityRepository.findByUserIdAndProvider(user.getId(), "google").isPresent()) {
         throw new BadCredentialsException();
-      identities.save(
+      }
+      userIdentityRepository.save(
           new UserIdentity(UUID.randomUUID(), user.getId(), "google", claims.subject()));
       return issue(user);
     }
 
     User user =
-        identities
+        userIdentityRepository
             .findByProviderAndSubject("google", claims.subject())
-            .map(identity -> users.findById(identity.getUserId()).orElse(null))
+            .map(identity -> userRepository.findById(identity.getUserId()).orElse(null))
             .orElse(null);
     if (user == null) {
       String email = normalize(claims.email());
-      users.lockNormalizedEmail(email);
-      user = users.findByNormalizedEmail(email).orElse(null);
+      userRepository.lockNormalizedEmail(email);
+      user = userRepository.findByNormalizedEmail(email).orElse(null);
       if (user == null) {
         String displayName = claims.displayName() == null ? "" : claims.displayName().trim();
-        if (displayName.length() > 100) displayName = "";
+        if (displayName.length() > 100) {
+          displayName = "";
+        }
         user =
-            users.save(
+            userRepository.save(
                 new User(
                     UUID.randomUUID(),
                     claims.email().trim(),
                     email,
                     displayName,
-                    passwords.encode(randomPassword()),
+                    passwordEncoder.encode(randomPassword()),
                     "zh-TW"));
         user.verify(Instant.now());
       } else if (user.getVerifiedAt() == null || !user.isEnabled()) {
         throw new BadCredentialsException();
       }
-      if (identities.findByUserIdAndProvider(user.getId(), "google").isPresent())
+      if (userIdentityRepository.findByUserIdAndProvider(user.getId(), "google").isPresent()) {
         throw new BadCredentialsException();
-      identities.save(
+      }
+      userIdentityRepository.save(
           new UserIdentity(UUID.randomUUID(), user.getId(), "google", claims.subject()));
     }
-    if (!user.isEnabled() || user.getVerifiedAt() == null) throw new BadCredentialsException();
+    if (!user.isEnabled() || user.getVerifiedAt() == null) {
+      throw new BadCredentialsException();
+    }
     return issue(user);
   }
 
   @Transactional
   public Result refresh(String token) {
-    var session = sessions.findByTokenHash(OpaqueToken.digest(token)).orElse(null);
-    if (session == null || !session.active()) throw new BadCredentialsException();
-    var user = users.findById(session.getUserId()).orElse(null);
-    if (user == null || !user.isEnabled() || user.getVerifiedAt() == null)
+    RefreshSession session =
+        refreshSessionRepository.findByTokenHash(OpaqueToken.digest(token)).orElse(null);
+    if (session == null || !session.active()) {
       throw new BadCredentialsException();
+    }
+    User user = userRepository.findById(session.getUserId()).orElse(null);
+    if (user == null || !user.isEnabled() || user.getVerifiedAt() == null) {
+      throw new BadCredentialsException();
+    }
     if (session.getUserAccessTokenVersion() != user.getAccessTokenVersion()) {
       session.revoke(Instant.now());
       throw new BadCredentialsException();
     }
-    OpaqueToken.Issued next = OpaqueToken.generate();
-    session.rotate(next.digest(), Instant.now());
-    sessions.save(session);
-    return new Result(user, next.value(), session.getId(), session.getAccessTokenVersion());
+    OpaqueToken.Issued nextToken = OpaqueToken.generate();
+    session.rotate(nextToken.digest(), Instant.now());
+    refreshSessionRepository.save(session);
+    return new Result(user, nextToken.value(), session.getId(), session.getAccessTokenVersion());
   }
 
   @Transactional
   public void logout(String token) {
-    sessions.findByTokenHash(OpaqueToken.digest(token)).ifPresent(s -> s.revoke(Instant.now()));
+    refreshSessionRepository
+        .findByTokenHash(OpaqueToken.digest(token))
+        .ifPresent(session -> session.revoke(Instant.now()));
   }
 
   @Transactional
   public List<RefreshSession> sessions(User user) {
-    return sessions
+    return refreshSessionRepository
         .findByUserIdAndRevokedAtIsNullAndExpiresAtAfterAndUserAccessTokenVersionEqualsOrderByCreatedAtDesc(
             user.getId(), Instant.now(), user.getAccessTokenVersion());
   }
 
   @Transactional
-  public void revokeOther(User user, UUID id, UUID currentSessionId) {
-    if (id.equals(currentSessionId)) throw new SessionNotFoundException();
-    var target = sessions.findById(id).orElseThrow(() -> new SessionNotFoundException());
-    if (!target.getUserId().equals(user.getId())) throw new SessionNotFoundException();
-    if (target.active()) target.revoke(Instant.now());
+  public void revokeOther(User user, UUID sessionId, UUID currentSessionId) {
+    if (sessionId.equals(currentSessionId)) {
+      throw new SessionNotFoundException();
+    }
+    RefreshSession targetSession =
+        refreshSessionRepository.findById(sessionId).orElseThrow(SessionNotFoundException::new);
+    if (!targetSession.getUserId().equals(user.getId())) {
+      throw new SessionNotFoundException();
+    }
+    if (targetSession.active()) {
+      targetSession.revoke(Instant.now());
+    }
   }
 
   private Result issue(User user) {
     OpaqueToken.Issued token = OpaqueToken.generate();
-    var session =
+    RefreshSession session =
         new RefreshSession(
             UUID.randomUUID(),
             user.getId(),
             token.digest(),
             Instant.now(),
             user.getAccessTokenVersion());
-    sessions.save(session);
+    refreshSessionRepository.save(session);
     return new Result(user, token.value(), session.getId(), session.getAccessTokenVersion());
   }
 
