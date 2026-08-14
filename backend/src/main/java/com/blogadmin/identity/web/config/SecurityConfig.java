@@ -19,7 +19,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
@@ -86,26 +86,26 @@ public class SecurityConfig {
   }
 
   private static RequestMatcher publicRoutes() {
+    var matchers = PathPatternRequestMatcher.withDefaults();
     return new OrRequestMatcher(
         request -> request.getDispatcherType() == DispatcherType.ERROR,
-        new AntPathRequestMatcher("/actuator/health", HttpMethod.GET.name()),
-        new AntPathRequestMatcher("/api/v1/public/**", HttpMethod.GET.name()),
-        new AntPathRequestMatcher("/swagger-ui/**"),
-        new AntPathRequestMatcher("/swagger-ui.html"),
-        new AntPathRequestMatcher("/v3/api-docs/**"),
-        new AntPathRequestMatcher("/**", HttpMethod.OPTIONS.name()),
-        new AntPathRequestMatcher("/api/v1/auth/login", HttpMethod.POST.name()),
-        new AntPathRequestMatcher("/api/v1/auth/google", HttpMethod.POST.name()),
-        new AntPathRequestMatcher("/api/v1/auth/refresh", HttpMethod.POST.name()),
-        new AntPathRequestMatcher("/api/v1/auth/logout", HttpMethod.POST.name()),
-        new AntPathRequestMatcher("/api/v1/auth/registrations", HttpMethod.POST.name()),
-        new AntPathRequestMatcher("/api/v1/auth/email-verifications", HttpMethod.POST.name()),
-        new AntPathRequestMatcher(
-            "/api/v1/auth/email-verifications/resend", HttpMethod.POST.name()),
-        new AntPathRequestMatcher("/api/v1/auth/password-resets", HttpMethod.POST.name()),
-        new AntPathRequestMatcher("/api/v1/auth/password-resets/*", HttpMethod.POST.name()),
-        new AntPathRequestMatcher("/api/v1/auth/invitations/*/redeem", HttpMethod.POST.name()),
-        new AntPathRequestMatcher("/api/v1/auth/email-changes/*", HttpMethod.POST.name()));
+        matchers.matcher(HttpMethod.GET, "/actuator/health"),
+        matchers.matcher(HttpMethod.GET, "/api/v1/public/**"),
+        matchers.matcher("/swagger-ui/**"),
+        matchers.matcher("/swagger-ui.html"),
+        matchers.matcher("/v3/api-docs/**"),
+        matchers.matcher(HttpMethod.OPTIONS, "/**"),
+        matchers.matcher(HttpMethod.POST, "/api/v1/auth/login"),
+        matchers.matcher(HttpMethod.POST, "/api/v1/auth/google"),
+        matchers.matcher(HttpMethod.POST, "/api/v1/auth/refresh"),
+        matchers.matcher(HttpMethod.POST, "/api/v1/auth/logout"),
+        matchers.matcher(HttpMethod.POST, "/api/v1/auth/registrations"),
+        matchers.matcher(HttpMethod.POST, "/api/v1/auth/email-verifications"),
+        matchers.matcher(HttpMethod.POST, "/api/v1/auth/email-verifications/resend"),
+        matchers.matcher(HttpMethod.POST, "/api/v1/auth/password-resets"),
+        matchers.matcher(HttpMethod.POST, "/api/v1/auth/password-resets/{token}"),
+        matchers.matcher(HttpMethod.POST, "/api/v1/auth/invitations/{token}/redeem"),
+        matchers.matcher(HttpMethod.POST, "/api/v1/auth/email-changes/{token}"));
   }
 
   @Bean

@@ -11,8 +11,11 @@ import static org.mockito.Mockito.verify;
 import com.blogadmin.identity.application.AccountService;
 import com.blogadmin.identity.application.RegistrationService;
 import com.blogadmin.identity.application.mail.IdentityEmailEventListener;
+import com.blogadmin.identity.domain.session.RefreshSession;
+import com.blogadmin.identity.domain.session.RefreshSessionRepository;
 import com.blogadmin.identity.domain.user.User;
 import com.blogadmin.identity.domain.user.UserRepository;
+import com.blogadmin.identity.domain.user.UserRole;
 import com.blogadmin.identity.web.security.AccessTokenSecurityConfig;
 import com.blogadmin.identity.web.security.JwtToken;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -44,6 +47,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
@@ -70,6 +74,8 @@ class AccessTokenCryptoAndSecurityIntegrationTest {
   @Autowired private JwtDecoder accessTokenDecoder;
   @Autowired private JwtToken jwtToken;
   @Autowired private UserRepository users;
+  @Autowired private RefreshSessionRepository sessions;
+  @Autowired private PasswordEncoder passwords;
   @Autowired private RegistrationService registrationService;
   @Autowired private AccountService accountService;
   @Autowired private JdbcTemplate jdbc;
@@ -260,6 +266,44 @@ class AccessTokenCryptoAndSecurityIntegrationTest {
   }
 
   @Test
+  void descendantPublicRouteAllowsUnauthenticatedAccess() {
+    ResponseEntity<String> response =
+        restTemplate.getForEntity(url("/api/v1/public/articles"), String.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+  }
+
+  @Test
+  void httpMethodDifferentiationEnforcesAuthenticationOnNonGetPublicPaths() {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+
+    ResponseEntity<String> response =
+        restTemplate.exchange(
+            url("/api/v1/public/articles"),
+            HttpMethod.POST,
+            new HttpEntity<>(Map.of("title", "Forbidden"), headers),
+            String.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+  }
+
+  @Test
+  void optionsPreflightRequestIsAllowedPublicly() {
+    HttpHeaders headers = new HttpHeaders();
+    headers.add("Origin", "http://localhost:4200");
+    headers.add("Access-Control-Request-Method", "GET");
+
+    ResponseEntity<Void> response =
+        restTemplate.exchange(
+            url("/api/v1/public/articles"),
+            HttpMethod.OPTIONS,
+            new HttpEntity<>(null, headers),
+            Void.class);
+
+    assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+  }
+
+  @Test
   void protectedSessionRouteRejectsInvalidBearerTokenWith401() {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
@@ -288,6 +332,83 @@ class AccessTokenCryptoAndSecurityIntegrationTest {
             new HttpEntity<>(null, headers),
             String.class);
 
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+  }
+
+  @Test
+  void adminEndpointRejectsNonAdminWith403AndAllowsAdminWith200() {
+    UUID authorId = UUID.randomUUID();
+    User author =
+        users.saveAndFlush(
+            new User(
+                authorId,
+                "author-" + authorId + "@example.com",
+                "author-" + authorId + "@example.com",
+                "Author",
+                passwords.encode("safe-password"),
+                "zh-TW"));
+    author.verify(Instant.now());
+    users.saveAndFlush(author);
+
+    UUID authorSessionId = UUID.randomUUID();
+    sessions.saveAndFlush(
+        new RefreshSession(
+            authorSessionId,
+            authorId,
+            "digest".getBytes(StandardCharsets.UTF_8),
+            Instant.now(),
+            author.getAccessTokenVersion()));
+    String authorToken = jwtToken.create(author, authorSessionId, 0).value();
+
+    HttpHeaders authorHeaders = new HttpHeaders();
+    authorHeaders.setBearerAuth(authorToken);
+    ResponseEntity<String> authorResponse =
+        restTemplate.exchange(
+            url("/api/v1/admin/users"),
+            HttpMethod.GET,
+            new HttpEntity<>(null, authorHeaders),
+            String.class);
+    assertThat(authorResponse.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+
+    UUID adminId = UUID.randomUUID();
+    User admin =
+        new User(
+            adminId,
+            "admin-" + adminId + "@example.com",
+            "admin-" + adminId + "@example.com",
+            "Admin",
+            passwords.encode("safe-password"),
+            "zh-TW");
+    admin.changeRole(UserRole.ADMIN);
+    admin.verify(Instant.now());
+    users.saveAndFlush(admin);
+
+    UUID adminSessionId = UUID.randomUUID();
+    sessions.saveAndFlush(
+        new RefreshSession(
+            adminSessionId,
+            adminId,
+            "digest2".getBytes(StandardCharsets.UTF_8),
+            Instant.now(),
+            admin.getAccessTokenVersion()));
+    String adminToken = jwtToken.create(admin, adminSessionId, 0).value();
+
+    HttpHeaders adminHeaders = new HttpHeaders();
+    adminHeaders.setBearerAuth(adminToken);
+    ResponseEntity<String> adminResponse =
+        restTemplate.exchange(
+            url("/api/v1/admin/users"),
+            HttpMethod.GET,
+            new HttpEntity<>(null, adminHeaders),
+            String.class);
+    assertThat(adminResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+  }
+
+  @Test
+  void nonAllowlistedAuthEndpointRejectsAnonymousAccessWith401() {
+    ResponseEntity<String> response =
+        restTemplate.postForEntity(
+            url("/api/v1/auth/non-existent-secret-route"), null, String.class);
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
   }
 
