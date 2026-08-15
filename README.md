@@ -44,6 +44,48 @@ docker compose ps
 - `APP_BOOTSTRAP_ADMIN_EMAIL`
 - `APP_BOOTSTRAP_ADMIN_PASSWORD`：本機自行設定，至少 8 字元，請勿提交 `.env`
 
+## 正式部署
+
+正式環境使用 GHCR 的 backend/frontend public images，production Compose 以 edge Nginx 統一處理 TLS、frontend 與 `/api/`，不啟動 Mailpit，也不對外發佈 backend 或 PostgreSQL。前置條件：一台可由 SSH 管理的 Linux VM、Docker Compose plugin、Git，以及 Cloudflare DNS 已將 `nhb.pp.ua` 設為 proxied；GHCR 內本專案的兩個 image 必須設為 Public。
+
+一次性 VM 安裝：
+
+```bash
+sudo mkdir -p /opt/blog-admin-system /etc/ssl/cloudflare
+sudo chown "$USER":"$USER" /opt/blog-admin-system
+git clone https://github.com/zxjte9411/blog-admin-system.git /opt/blog-admin-system
+cd /opt/blog-admin-system
+mkdir -p backups
+cp .env.production.example .env
+chmod 600 .env
+${EDITOR:-vi} .env
+sudo usermod -aG docker "$USER"
+# 重新登入 VM 讓 docker 群組生效
+```
+
+將 Cloudflare Origin Certificate 與私密金鑰手動放在 `/etc/ssl/cloudflare/nhb.pp.ua.pem`、`/etc/ssl/cloudflare/nhb.pp.ua.key`，並執行 `sudo chown root:root /etc/ssl/cloudflare/nhb.pp.ua.* && sudo chmod 600 /etc/ssl/cloudflare/nhb.pp.ua.key`。`.env` 填入 production 的 PostgreSQL 密碼、至少 32 bytes 的 JWT secret、Supabase issuer/JWKS/URL/publishable key、bootstrap admin、`GMAIL_SMTP_USERNAME`、Gmail App Password 與 `APP_MAIL_FROM`；不要填入或提交 Supabase Service Role Key。`.env.production.example` 的兩個 digest 只是顯然非真實的格式占位值，CI 會以本次 build 的 immutable digest 覆寫它們。
+
+edge Nginx 由 Docker Compose 啟動，唯一本機公開 port 是 `80:80` 與 `443:443`；frontend、backend、PostgreSQL 不公開 host port。首次切換前先執行 `sudo systemctl disable --now nginx` 釋放 80/443，再啟動 edge container；確認 edge healthcheck 後才可移除 host Nginx 套件。
+
+GitHub Repository secrets 設定 `VM_HOST`、`VM_USER`、`SSH_PRIVATE_KEY` 三個值；`production` Environment 可選擇性用於部署核准規則。另需設定 Repository variable `VM_SSH_KNOWN_HOSTS`，內容是受信任取得的 VM `host key` 完整 known_hosts 行（例如 `host ssh-ed25519 AAAA...`），不可在 CI 使用 `ssh-keyscan`。main push 在 `verify`、`frontend-verify`、`compose-smoke` 成功後建置並推送兩個 commit-SHA tag image，透過 runner 內建 OpenSSH 將 digest 傳給 VM，再更新 public repo 到本次 SHA 執行部署。部署前請在 Cloudflare SSL/TLS 設為 **Full (strict)**，並將 firewall 只開放 Cloudflare IP 的 TCP 80/443，以及管理 IP 的 TCP 22；不要開放 backend、PostgreSQL 或 Compose 的 8080 給公網。
+
+`VM_USER` 必須能直接操作 Docker；加入 `docker` 群組並重新登入後，請確認 `docker ps` 不需 `sudo` 即可執行。
+
+Supabase 與 Google callback 設定不同：Supabase Auth 的 Site URL 設為 `https://nhb.pp.ua`，Redirect URLs 加入 `https://nhb.pp.ua/login` 與 `https://nhb.pp.ua/invite*`；Google Cloud OAuth client 的 Authorized redirect URI 則填 Supabase 提供的 `https://<project-ref>.supabase.co/auth/v1/callback`，不是 frontend 或 API URL。正式環境沒有 API 子網域，所有 API 皆經 `https://nhb.pp.ua/api/` 轉送。Gmail SMTP 必須使用開啟 2-Step Verification 帳號產生的 App Password，不可使用一般 Gmail 密碼。
+
+部署與驗證：
+
+```bash
+cd /opt/blog-admin-system
+docker compose --env-file .env -f compose.production.yaml config
+./deploy/deploy.sh
+docker compose --env-file .env -f compose.production.yaml ps
+curl --fail https://nhb.pp.ua/
+docker compose --env-file .env -f compose.production.yaml exec -T edge wget --no-check-certificate --spider --quiet https://127.0.0.1/
+```
+
+`deploy/deploy.sh` 會在已有運行中的 db container 時先將 timestamped `pg_dump` 存到 VM 本機 `backups/`，並只保留最近 7 份，作為 VM 本機回復點；若 production data volume 存在但 db 未運行，會拒絕部署而不略過備份。首次部署尚未建立 data volume 時才會跳過備份，備份不會上傳外部服務。
+
 Google 登入相關環境變數區分如下：
 
 - **後端驗證設定**（Docker Compose 啟動時必要，供 Spring Boot 驗證 Supabase JWT 簽名與 issuer；本機若不連接真實 Supabase 亦須依 `.env.example` 填寫佔位 URL 供 Compose 檢查）：

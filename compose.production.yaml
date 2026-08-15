@@ -1,0 +1,91 @@
+name: blog-admin-system-production
+
+services:
+  edge:
+    image: nginx:1.27.5-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/edge-nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/ssl/cloudflare/nhb.pp.ua.pem:/etc/ssl/cloudflare/nhb.pp.ua.pem:ro
+      - /etc/ssl/cloudflare/nhb.pp.ua.key:/etc/ssl/cloudflare/nhb.pp.ua.key:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-check-certificate --spider --quiet https://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  db:
+    image: postgres:18.4
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set the production PostgreSQL database name}
+      POSTGRES_USER: ${POSTGRES_USER:?Set the production PostgreSQL user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set the production PostgreSQL password}
+    volumes:
+      - postgres_production_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  backend:
+    image: ghcr.io/zxjte9411/blog-admin-system-backend@${BACKEND_IMAGE_DIGEST:?Set the backend image digest}
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:?Set the production PostgreSQL database name}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:?Set the production PostgreSQL user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set the production PostgreSQL password}
+      APP_SECURITY_JWT_SECRET: ${APP_SECURITY_JWT_SECRET:?Set the production JWT secret}
+      SUPABASE_JWT_ISSUER: ${SUPABASE_JWT_ISSUER:?Set the Supabase JWT issuer}
+      SUPABASE_JWKS_URL: ${SUPABASE_JWKS_URL:?Set the Supabase JWKS URL}
+      APP_BOOTSTRAP_ADMIN_EMAIL: ${APP_BOOTSTRAP_ADMIN_EMAIL:?Set the bootstrap admin email}
+      APP_BOOTSTRAP_ADMIN_PASSWORD: ${APP_BOOTSTRAP_ADMIN_PASSWORD:?Set the bootstrap admin password}
+      APP_MAIL_FROM: ${APP_MAIL_FROM:?Set the production sender address}
+      APP_FRONTEND_BASE_URL: ${APP_FRONTEND_BASE_URL:?Set the production frontend URL}
+      SPRING_LIQUIBASE_ENABLED: "true"
+      SPRING_MAIL_HOST: smtp.gmail.com
+      SPRING_MAIL_PORT: "587"
+      SPRING_MAIL_USERNAME: ${GMAIL_SMTP_USERNAME:?Set the Gmail SMTP username}
+      SPRING_MAIL_PASSWORD: ${GMAIL_SMTP_APP_PASSWORD:?Set the Gmail SMTP App Password}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "true"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "true"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED: "true"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_CONNECTIONTIMEOUT: "10000"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_TIMEOUT: "10000"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_WRITETIMEOUT: "10000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://127.0.0.1:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  frontend:
+    image: ghcr.io/zxjte9411/blog-admin-system-frontend@${FRONTEND_IMAGE_DIGEST:?Set the frontend image digest}
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL:?Set the Supabase project URL}
+      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:?Set the Supabase publishable key}
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  postgres_production_data:
+    name: blog-admin-system-production_postgres_production_data
