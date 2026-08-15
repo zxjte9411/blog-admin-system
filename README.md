@@ -46,14 +46,14 @@ docker compose ps
 
 Google 登入相關環境變數區分如下：
 
-- **後端驗證設定**（供 Spring Boot 驗證 Supabase JWT 簽名與 issuer）：
+- **後端驗證設定**（Docker Compose 啟動時必要，供 Spring Boot 驗證 Supabase JWT 簽名與 issuer；本機若不連接真實 Supabase 亦須依 `.env.example` 填寫佔位 URL 供 Compose 檢查）：
   - `SUPABASE_JWT_ISSUER`：Supabase 發行者 URL（如 `https://<project-ref>.supabase.co/auth/v1`）
   - `SUPABASE_JWKS_URL`：Supabase JWKS 端點（如 `https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json`）
-- **前端公開設定**（瀏覽器可見，Compose 啟動容器時產生 `config.js`）：
+- **前端公開設定**（瀏覽器可見，選填，Compose 啟動容器時產生 `config.js`）：
   - `SUPABASE_URL`：Supabase 專案 URL
   - `SUPABASE_PUBLISHABLE_KEY`：Supabase 公開 Publishable Key（**切勿使用 Service Role Key 或任何 Secret Key**）
 
-**Fallback 行為**：若前端未設定 `SUPABASE_URL` 或 `SUPABASE_PUBLISHABLE_KEY`，介面會自動隱藏 Google 登入按鈕與 Google 邀請兌換入口，原生 Email/Password 登入與註冊仍可完全正常運作。
+**Frontend Fallback 行為**：若前端未設定 `SUPABASE_URL` 或 `SUPABASE_PUBLISHABLE_KEY`，介面會自動隱藏 Google 登入按鈕與 Google 邀請兌換入口，原生 Email/Password 登入與註冊仍可完全正常運作。
 
 應用程式首次啟動時，只有在 `APP_BOOTSTRAP_ADMIN_EMAIL` 對應的帳號不存在時，才會建立 bootstrap admin。之後重啟不會覆寫既有帳號或密碼。登入測試帳號使用 `.env` 內的 `APP_BOOTSTRAP_ADMIN_EMAIL` 與 `APP_BOOTSTRAP_ADMIN_PASSWORD`，README 不提供固定密碼。
 
@@ -131,7 +131,7 @@ Compose 啟動時會依 `.env` 的 `APP_BOOTSTRAP_ADMIN_EMAIL` 與 `APP_BOOTSTRA
 
 ## 功能
 
-系統提供帳號登入（支援 Email/Password 與 Google 登入）與管理員邀請（支援密碼與 Google 帳號兌換）。登入後，使用者可管理文章的新增、編輯、刪除、搜尋與分頁，並切換草稿與發布狀態。文章支援標籤；訪客可瀏覽已發布的公開文章與標籤。
+系統提供帳號登入（支援 Email/Password 與 Google 登入）與由 Admin 發出之使用者邀請（支援密碼與 Google 帳號兌換，受邀者兌換後為 Author 角色）。登入後，使用者可管理文章的新增、編輯、刪除、搜尋與分頁，並切換草稿與發布狀態。文章支援標籤；訪客可瀏覽已發布的公開文章與標籤。
 
 系統也提供帳戶資料、session 管理、使用者角色與啟用狀態管理，以及 email 變更、密碼變更、忘記密碼與密碼重設流程。相關通知會送到 Mailpit，方便在本機檢查郵件內容。
 

@@ -125,3 +125,23 @@ erDiagram
     users ||--o{ password_setting_changes : "operator_id"
 ```
 
+## 重要約束與 Partial / Expression Index 說明
+
+依據 Liquibase changelogs（`backend/src/main/resources/db/changelog/`），本系統資料庫具備下列重要約束與索引設計：
+
+1. **`user_identities` 複合唯一約束**：
+   - `UNIQUE (provider, subject)`：同一個第三方 Provider 的 Subject 只能綁定單一本地帳號。
+   - `UNIQUE (user_id, provider)`：每個本地 User 對同一 Provider 僅能綁定一個身份識別。
+2. **條件式唯一索引（Partial Unique Indexes）**：
+   - `admin_invitations`：`one_pending_admin_invitation ON (email) WHERE used_at IS NULL`，確保每個 Email 同一時間僅能有一筆未使用的有效邀請。
+   - `email_verification_tokens`：`one_active_email_token ON (user_id) WHERE used_at IS NULL AND invalidated_at IS NULL`，確保每個 User 僅能有一筆有效驗證連結。
+   - `password_reset_tokens`：`one_active_password_reset ON (user_id) WHERE used_at IS NULL`，確保每個 User 僅能有一筆有效重設連結。
+   - `email_change_tokens`：`one_active_email_change ON (user_id) WHERE used_at IS NULL`，確保每個 User 僅能有一筆有效 Email 變更確認連結。
+3. **`tags` 大小寫不敏感與格式約束**：
+   - `CHECK (name = btrim(name))`：禁止標籤名稱前後包含空白字元。
+   - `UNIQUE INDEX tags_name_ci_unique ON tags (lower(name))`：以小寫運算式索引確保標籤名稱在大小寫不區分情況下的唯一性。
+4. **`password_settings` 與 `password_setting_changes` 安全約束**：
+   - `password_settings`：主鍵為 `id BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (id)` 確保全系統僅有一筆全域單例設定，並以 `CHECK (minimum_length BETWEEN 8 AND 128)` 限制長度範圍。
+   - `password_setting_changes`：透過資料庫觸發器 `password_setting_changes_immutable` 阻絕所有 `UPDATE` 與 `DELETE` 操作，確保密碼政策變更稽核紀錄的不可變性（immutable audit log）。
+
+
