@@ -133,10 +133,11 @@ erDiagram
    - `UNIQUE (provider, subject)`：同一個第三方 Provider 的 Subject 只能綁定單一本地帳號。
    - `UNIQUE (user_id, provider)`：每個本地 User 對同一 Provider 僅能綁定一個身份識別。
 2. **條件式唯一索引（Partial Unique Indexes）**：
-   - `admin_invitations`：`one_pending_admin_invitation ON (email) WHERE used_at IS NULL`，確保每個 Email 同一時間僅能有一筆未使用的有效邀請。
-   - `email_verification_tokens`：`one_active_email_token ON (user_id) WHERE used_at IS NULL AND invalidated_at IS NULL`，確保每個 User 僅能有一筆有效驗證連結。
-   - `password_reset_tokens`：`one_active_password_reset ON (user_id) WHERE used_at IS NULL`，確保每個 User 僅能有一筆有效重設連結。
-   - `email_change_tokens`：`one_active_email_change ON (user_id) WHERE used_at IS NULL`，確保每個 User 僅能有一筆有效 Email 變更確認連結。
+   - `admin_invitations`：`one_pending_admin_invitation ON (email) WHERE used_at IS NULL`，確保同一 Email 最多一筆未使用的 pending invitation。
+   - `email_verification_tokens`：`one_active_email_token ON (user_id) WHERE used_at IS NULL AND invalidated_at IS NULL`，確保每個 User 最多一筆未使用且未 invalidated 的 verification token。
+   - `password_reset_tokens`：`one_active_password_reset ON (user_id) WHERE used_at IS NULL`，確保每個 User 最多一筆未使用的 password reset token。
+   - `email_change_tokens`：`one_active_email_change ON (user_id) WHERE used_at IS NULL`，確保每個 User 最多一筆未使用的 email change token。
+   - Token／Invitation 是否仍在有效期限內，另由應用層依 `expires_at` 判斷；上述 partial unique indexes 不包含 expiration predicate。
 3. **`tags` 大小寫不敏感與格式約束**：
    - `CHECK (name = btrim(name))`：禁止標籤名稱前後包含空白字元。
    - `UNIQUE INDEX tags_name_ci_unique ON tags (lower(name))`：以小寫運算式索引確保標籤名稱在大小寫不區分情況下的唯一性。
