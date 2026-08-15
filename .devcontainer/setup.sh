@@ -5,6 +5,8 @@ set -euo pipefail
 apt-get update
 apt-get install -y build-essential
 
+curl -fsSL https://antigravity.google/cli/install.sh | bash
+
 # Install Homebrew
 if ! command -v brew >/dev/null 2>&1; then
   NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
