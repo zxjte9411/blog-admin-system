@@ -44,4 +44,4 @@ EOF
 fi
 
 docker compose --env-file .env -f compose.production.yaml pull
-docker compose --env-file .env -f compose.production.yaml up -d --wait --wait-timeout 120 --remove-orphans
+docker compose --env-file .env -f compose.production.yaml up -d --wait --wait-timeout 600 --remove-orphans
