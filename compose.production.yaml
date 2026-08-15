@@ -69,7 +69,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 8m
 
   frontend:
     image: ghcr.io/zxjte9411/blog-admin-system-frontend@${FRONTEND_IMAGE_DIGEST:?Set the frontend image digest}
