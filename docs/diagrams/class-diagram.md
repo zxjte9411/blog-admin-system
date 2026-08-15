@@ -23,8 +23,20 @@ classDiagram
         +void changePasswordKeepingSessions(String hash)
         +void changeEmail(String email)
         +void verify(Instant at)
+        +void disable()
         +void setEnabled(boolean enabled)
         +void changeRole(UserRole newRole)
+    }
+
+    class UserIdentity {
+        -UUID id
+        -UUID userId
+        -String provider
+        -String subject
+        +UUID getId()
+        +UUID getUserId()
+        +String getProvider()
+        +String getSubject()
     }
 
     class Article {
@@ -66,10 +78,16 @@ classDiagram
         +void revoke(Instant now)
     }
 
+    class SupabaseJwtVerifier {
+        -JwtDecoder jwtDecoder
+        +Claims verify(String compact)
+    }
+
     class AuthenticationController {
-        -AuthenticationService service
-        -JwtToken jwt
+        -AuthenticationService authenticationService
+        -JwtToken jwtToken
         +LoginResponse login(LoginRequest request, HttpServletResponse response)
+        +LoginResponse google(GoogleLoginRequest request, HttpServletResponse response)
         +LoginResponse refresh(String token, HttpServletResponse response)
         +List~SessionResponse~ sessions(Authentication authentication)
         +void deleteSession(UUID id, Authentication authentication)
@@ -77,18 +95,40 @@ classDiagram
     }
 
     class AuthenticationService {
-        -UserRepository users
-        -RefreshSessionRepository sessions
-        -PasswordEncoder passwords
+        -UserRepository userRepository
+        -RefreshSessionRepository refreshSessionRepository
+        -PasswordEncoder passwordEncoder
+        -UserIdentityRepository userIdentityRepository
+        -SupabaseJwtVerifier supabaseJwtVerifier
+        -AdminUserService adminUserService
         +Result login(String email, String password)
+        +Result googleLogin(String accessToken)
+        +Result googleLogin(String accessToken, String invitationToken)
         +Result refresh(String token)
         +void logout(String token)
         +List~RefreshSession~ sessions(User user)
         +void revokeOther(User user, UUID id, UUID currentSessionId)
     }
 
+    class AdminUserService {
+        -UserRepository userRepository
+        -InvitationRepository invitationRepository
+        -PasswordSettingChangeRepository passwordSettingChangeRepository
+        -PasswordEncoder passwordEncoder
+        -PasswordPolicy passwordPolicy
+        -PasswordSettingRepository passwordSettingRepository
+        +List~User~ list(UserRole role, Boolean enabled, String query)
+        +User update(User actor, UUID targetUserId, UserRole role, Boolean enabled)
+        +Invitation invite(String email)
+        +User redeem(String token, String displayName, String password, String language)
+        +User redeemGoogle(String token, String email, String displayName)
+        +int getMinimum()
+        +int setMinimum(User actor, int minimumLength)
+        +List~PasswordSettingChange~ history()
+    }
+
     class ArticleController {
-        -ArticleService service
+        -ArticleService articleService
         +ArticleView create(User user, CreateArticleRequest request)
         +Page~ArticleView~ list(User user, filters, Pageable page)
         +ArticleView get(UUID id, User user)
@@ -100,8 +140,8 @@ classDiagram
     }
 
     class ArticleService {
-        -ArticleRepository articles
-        -TagRepository tags
+        -ArticleRepository articleRepository
+        -TagRepository tagRepository
         +Article create(User user, article data)
         +Page~Article~ list(User user, filters, Pageable page)
         +Article get(User user, UUID id)
@@ -114,9 +154,8 @@ classDiagram
     }
 
     class JwtToken {
-        -byte[] key
+        -JwtEncoder jwtEncoder
         +Token create(User user, UUID sessionId, int accessTokenVersion)
-        +Claims verify(String token)
     }
 
     class UserRole {
@@ -133,7 +172,10 @@ classDiagram
 
     AuthenticationController --> AuthenticationService : Controller→Service
     AuthenticationController --> JwtToken : 直接使用
-    AuthenticationService --> User : 驗證／載入
+    AuthenticationService --> SupabaseJwtVerifier : 驗證 Supabase JWT
+    AuthenticationService --> AdminUserService : 兌換 Google 邀請
+    AuthenticationService --> User : 驗證／載入／建立
+    AuthenticationService --> UserIdentity : 建立／查詢
     AuthenticationService --> RefreshSession : 建立／輪替／撤銷
     ArticleController --> ArticleService : Controller→Service
     ArticleService --> Article : 管理
@@ -141,5 +183,7 @@ classDiagram
     User --> UserRole : role
     Article --> PublicationStatus : status
     User "1" --> "0..*" Article : owner
+    User "1" --> "0..*" UserIdentity : 外部身份
     Article "0..*" -- "0..*" Tag : article_tags
 ```
+

@@ -6,6 +6,7 @@
 sequenceDiagram
     participant V as 訪客／使用者
     participant UI as Angular 管理介面
+    participant SP as Supabase / Google OAuth
     participant API as Spring Boot API
     participant S as 領域服務
     participant DB as PostgreSQL
@@ -15,7 +16,7 @@ sequenceDiagram
         Note over V,MP: Public Registration、Email Verification Link
         V->>UI: 填寫 Email、Display Name、Password、Preferred Language
         UI->>API: POST /api/v1/auth/registrations
-        API->>S: publicRegistration()
+        API->>S: register()
         S->>DB: 以 normalized email 查詢 User
         alt 新 User 或既有未驗證 User
             S->>DB: 建立／更新 User；失效舊連結並儲存新 tokenHash
@@ -29,7 +30,7 @@ sequenceDiagram
 
         V->>UI: 要求重送 Email Verification Link
         UI->>API: POST /api/v1/auth/email-verifications/resend
-        API->>S: resendEmailVerification()
+        API->>S: resend()
         S->>DB: 查詢未驗證 User、套用限流、失效舊連結
         alt 可寄送新連結
             S->>DB: 儲存新 tokenHash
@@ -43,7 +44,7 @@ sequenceDiagram
 
         V->>UI: 提交 Email Verification Link token
         UI->>API: POST /api/v1/auth/email-verifications
-        API->>S: verifyEmail(token)
+        API->>S: verify(token)
         S->>DB: 以 tokenHash 原子消費連結並標記 User verifiedAt
         alt token 有效
             DB-->>S: 驗證完成
@@ -57,7 +58,7 @@ sequenceDiagram
     end
 
     rect rgb(240, 253, 244)
-        Note over V,DB: 登入、JWT、Refresh Session
+        Note over V,DB: 登入、Google 登入、JWT、Refresh Session
         V->>UI: 輸入 Email 與 Password
         UI->>API: POST /api/v1/auth/login
         API->>S: login(email, password)
@@ -70,6 +71,32 @@ sequenceDiagram
             S-->>API: User、refresh token、sessionId
             API-->>UI: JWT access token；Set-Cookie refresh_token
             Note right of API: HttpOnly；Secure；SameSite=Lax；Path=/api/v1/auth
+            UI->>UI: 將 access token 保存至 localStorage
+        end
+
+        V->>UI: 點擊 Google 登入
+        UI->>SP: signInWithOAuth({ provider: 'google', redirectTo })
+        SP-->>UI: 完成 OAuth 授權並返回 Supabase session（含 access_token）
+        UI->>API: POST /api/v1/auth/google（accessToken）
+        API->>S: googleLogin(accessToken)
+        S->>S: SupabaseJwtVerifier 驗證簽名、issuer、aud 與 email_verified
+        S->>DB: 查詢 user_identities(provider='google', subject)
+        alt 首次 Google 登入（尚未綁定）
+            S->>DB: 鎖定並以 normalized email 查詢 User
+            alt User 不存在
+                S->>DB: 建立已驗證 User（隨機密碼、預設 zh-TW）
+            else 既有 User（須為 Verified 且 enabled）
+                Note right of S: 連結既有 User
+            end
+            S->>DB: 建立 user_identities(userId, 'google', subject)
+        end
+        alt User 未 enabled 或未 Verified
+            S-->>API: 401 Unauthorized
+            API-->>UI: 401 Unauthorized
+        else 驗證成功
+            S->>DB: 建立 Refresh Session（只儲存 tokenHash）
+            S-->>API: User、refresh token、sessionId
+            API-->>UI: JWT access token；Set-Cookie refresh_token
             UI->>UI: 將 access token 保存至 localStorage
         end
 
@@ -90,6 +117,7 @@ sequenceDiagram
         API->>S: logout(refresh_token)
         S->>DB: 撤銷目前 Refresh Session
         API-->>UI: 清除 refresh_token cookie
+        UI->>SP: supabase.signOut({ scope: 'local' })
 
         V->>UI: 查看 Refresh Session
         UI->>API: GET /api/v1/auth/sessions
@@ -126,26 +154,26 @@ sequenceDiagram
 
         V->>UI: 忘記 Password
         UI->>API: POST /api/v1/auth/password-resets
-        API->>S: requestPasswordReset(email)
+        API->>S: requestReset(email)
         S->>DB: 查詢 User 並儲存 password reset tokenHash
         S->>MP: 寄送 Password 重設郵件（可找到 User 時）
         API-->>UI: 中性成功
         V->>UI: 提交 Password reset link
         UI->>API: POST /api/v1/auth/password-resets/{token}
-        API->>S: resetPassword(token, newPassword)
+        API->>S: reset(token, newPassword)
         S->>DB: 原子消費 token、驗證長度並更新 passwordHash
         S->>DB: 撤銷所有 Refresh Session
         API-->>UI: 成功或錯誤回應
 
         V->>UI: 要求 Email 變更
         UI->>API: POST /api/v1/account/email
-        API->>S: requestEmailChange(User, newEmail)
+        API->>S: requestEmail(User, newEmail)
         S->>DB: 儲存 email change tokenHash 與 newEmail
         S->>MP: 寄送 Email change link
         MP-->>V: 收到確認郵件
         V->>UI: 提交 Email change link
         UI->>API: POST /api/v1/auth/email-changes/{token}
-        API->>S: confirmEmailChange(token)
+        API->>S: confirmEmail(token)
         S->>DB: 原子消費 token 並更新 User Email
         API-->>UI: Email 已變更
     end
@@ -205,8 +233,8 @@ sequenceDiagram
         Note over V,DB: Anonymous Public Article 與公開 Tag
         V->>UI: 瀏覽 Public Article／Tag
         UI->>API: GET /api/v1/public/articles?title=&tagId=&page=&size=
-        API->>S: publicArticles(query, source IP)
-        S->>S: 檢查來源 IP 限流
+        API->>S: publicArticleViews(query, tag, page, source IP)
+        S->>S: 檢查來源 IP 限流（per-instance 記憶體限流）
         alt 超過每分鐘 60 次
             S-->>API: 429 Too Many Requests
             API-->>UI: 429 Too Many Requests
@@ -215,18 +243,18 @@ sequenceDiagram
             DB-->>S: Public Article page
             API-->>UI: Public Article 清單
             UI->>API: GET /api/v1/public/articles/{id}
-            API->>S: publicArticle(id)
+            API->>S: publicArticleView(id, source IP)
             S->>DB: 讀取 Published 且未刪除的內容
             API-->>UI: Public Article 內容
             UI->>API: GET /api/v1/public/tags?page=&size=
-            API->>S: publicTags()
+            API->>S: publicTags(page, source IP)
             S->>DB: 只讀取被 Public Article 使用的 Tag
             API-->>UI: Public Tag 清單
         end
     end
 
     rect rgb(254, 242, 242)
-        Note over V,MP: Admin Invitation、User 管理與 Password Minimum Length
+        Note over V,MP: Admin Invitation、Google 邀請兌換、User 管理與 Password Minimum Length
         V->>UI: Admin 建立 Invitation
         UI->>API: POST /api/v1/admin/invitations
         API->>S: invite(email)
@@ -239,14 +267,30 @@ sequenceDiagram
             MP-->>V: 收到 Invitation 郵件
             API-->>UI: accepted
         end
-        V->>UI: Redeem Invitation，設定 Display Name、Password、Preferred Language
+
+        V->>UI: 以密碼 Redeem Invitation（Display Name、Password、Preferred Language）
         UI->>API: POST /api/v1/auth/invitations/{token}/redeem
-        API->>S: redeemInvitation(token, user data)
+        API->>S: redeem(token, displayName, password, preferredLanguage)
         S->>DB: 原子消費 Invitation、建立已驗證 User
         API-->>UI: Invitation User
 
-        UI->>API: GET /api/v1/admin/users?role=&enabled=&q=
-        API->>S: list Users（Admin 授權）
+        V->>UI: 以 Google 帳號兌換 Invitation
+        UI->>SP: signInWithOAuth({ provider: 'google', redirectTo: '/invite?token=...' })
+        SP-->>UI: 完成 OAuth 授權並返回 Supabase session（含 access_token）
+        UI->>API: POST /api/v1/auth/google（accessToken, invitationToken）
+        API->>S: googleLogin(accessToken, invitationToken)
+        S->>S: SupabaseJwtVerifier 驗證 claims（email、displayName、subject）
+        S->>S: adminUserService.redeemGoogle(token, claims.email, claims.displayName)
+        S->>DB: 驗證 invitation tokenHash、未過期且 email 相符
+        S->>DB: 建立已驗證 User、標記 Invitation 已使用
+        S->>DB: 建立 user_identities(userId, 'google', subject)
+        S->>DB: 建立 Refresh Session（只儲存 tokenHash）
+        S-->>API: User、refresh token、sessionId
+        API-->>UI: JWT access token；Set-Cookie refresh_token
+        UI->>UI: 將 access token 保存至 localStorage
+
+        UI->>API: GET /api/v1/admin/users?role=&enabled=&query=
+        API->>S: list(role, enabled, query)（Admin 授權）
         S->>DB: 依 role／enabled／Email／Display Name 篩選
         API-->>UI: User 清單
         V->>UI: 調整其他 User 的 role／enabled
@@ -280,3 +324,4 @@ sequenceDiagram
         API-->>UI: 變更歷史
     end
 ```
+
