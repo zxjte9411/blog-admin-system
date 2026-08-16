@@ -28,6 +28,8 @@ export class PasswordSettingsPage implements OnInit {
   private readonly api = inject(AdminSettingsApi);
   private readonly cdr = inject(ChangeDetectorRef);
   items: PasswordSettingChange[] = [];
+  historyLoading = false;
+  historyLoaded = false;
   currentMinimum: number | null = null;
   loading = false;
   submitted = false;
@@ -87,17 +89,23 @@ export class PasswordSettingsPage implements OnInit {
   }
 
   private readHistory() {
+    this.historyLoading = true;
     this.api.passwordMinimumLengthHistory().subscribe({
       next: (items) => {
         this.items = items;
+        this.historyLoading = false;
+        this.historyLoaded = true;
         this.cdr.markForCheck();
       },
-      error: (e: HttpErrorResponse) => this.fail(e.status),
+      error: (e: HttpErrorResponse) => {
+        this.historyLoading = false;
+        this.fail(e.status, false);
+      },
     });
   }
 
-  private fail(status: number) {
-    this.loading = false;
+  private fail(status: number, stopLoading = true) {
+    if (stopLoading) this.loading = false;
     this.message = '';
     this.error =
       status === 401

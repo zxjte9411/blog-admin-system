@@ -41,8 +41,11 @@
         }}</span>
       }
     </label>
-    <fieldset class="tag-field">
+    <fieldset class="tag-field" [attr.aria-busy]="tagsLoading">
       <legend>{{ language.t.availableTags }}</legend>
+      @if (tagsLoading) {
+        <progress class="loading-bar" [attr.aria-label]="language.t.loading"></progress>
+      }
       @if (availableTags.length) {
         <div class="tag-checkboxes">
           @for (tag of availableTags; track tag.id) {

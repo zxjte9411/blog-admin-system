@@ -45,15 +45,24 @@ export class ArticleEditorPage implements OnInit {
   });
   availableTags: PublicTag[] = [];
   selectedTagIds = new Set<string>();
+  tagsLoading = false;
   loading = false;
   error = '';
   submitted = false;
   protected edit = false;
   ngOnInit() {
     this.edit = this.route.snapshot.routeConfig?.path === 'articles/:id/edit';
-    this.tagsApi.tags(undefined, 100).subscribe((r) => {
-      this.availableTags = r.content ?? [];
-      this.cdr.markForCheck();
+    this.tagsLoading = true;
+    this.tagsApi.tags(undefined, 100).subscribe({
+      next: (r) => {
+        this.availableTags = r.content ?? [];
+        this.tagsLoading = false;
+        this.cdr.markForCheck();
+      },
+      error: (e: HttpErrorResponse) => {
+        this.tagsLoading = false;
+        this.fail(e.status);
+      },
     });
     if (this.edit) this.load();
   }

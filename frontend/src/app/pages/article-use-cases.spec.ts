@@ -68,6 +68,41 @@ describe('article use-case pages', () => {
     request.flush({});
   });
 
+  it('shows local tag loading feedback until tags resolve', async () => {
+    await setup(ArticleCreatePage, 'articles/new');
+    const fixture = TestBed.createComponent(ArticleCreatePage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    const tags = http.expectOne('/api/v1/public/tags?size=100');
+    const tagField = fixture.nativeElement.querySelector('.tag-field') as HTMLElement;
+
+    expect(tagField.getAttribute('aria-busy')).toBe('true');
+    expect(tagField.querySelector('progress')).toBeTruthy();
+
+    tags.flush({ content: [{ id: 'tag-1', name: 'Angular' }] });
+    fixture.detectChanges();
+
+    expect(tagField.getAttribute('aria-busy')).toBe('false');
+    expect(tagField.querySelector('progress')).toBeNull();
+    expect(tagField.textContent).toContain('Angular');
+  });
+
+  it('shows the existing error alert when tags fail to load', async () => {
+    await setup(ArticleCreatePage, 'articles/new');
+    const fixture = TestBed.createComponent(ArticleCreatePage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http
+      .expectOne('/api/v1/public/tags?size=100')
+      .flush('error', { status: 500, statusText: 'Server error' });
+    fixture.detectChanges();
+
+    const tagField = fixture.nativeElement.querySelector('.tag-field') as HTMLElement;
+    expect(tagField.getAttribute('aria-busy')).toBe('false');
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
+    expect(fixture.nativeElement.textContent).toContain(TestBed.inject(Language).t.error);
+  });
+
   it('loads and updates an existing article', async () => {
     await setup(ArticleEditPage, 'articles/:id/edit', 'article-1');
     const fixture = TestBed.createComponent(ArticleEditPage);

@@ -139,6 +139,68 @@ describe('admin pages', () => {
     expect(fixture.nativeElement.textContent).toContain('16');
   });
 
+  it('keeps password history loading separate from the minimum setting', async () => {
+    await setup(PasswordSettingsPage);
+    const fixture = TestBed.createComponent(PasswordSettingsPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    const minimum = http.expectOne('/api/v1/admin/settings/password-minimum-length');
+    const history = http.expectOne('/api/v1/admin/settings/password-minimum-length/history');
+    const historyRegion = fixture.nativeElement.querySelector('.table-wrap') as HTMLElement;
+
+    expect(historyRegion.getAttribute('aria-busy')).toBe('true');
+    expect(historyRegion.querySelector('progress')).toBeTruthy();
+
+    minimum.flush({ value: 12 });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('12');
+    expect(historyRegion.getAttribute('aria-busy')).toBe('true');
+    expect(historyRegion.querySelector('table')).toBeNull();
+
+    history.flush([]);
+    fixture.detectChanges();
+
+    expect(historyRegion.getAttribute('aria-busy')).toBe('false');
+    expect(historyRegion.querySelector('progress')).toBeNull();
+    expect(historyRegion.querySelector('table')).toBeTruthy();
+  });
+
+  it('shows history errors and retries minimum and history together', async () => {
+    await setup(PasswordSettingsPage);
+    const fixture = TestBed.createComponent(PasswordSettingsPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/admin/settings/password-minimum-length').flush({ value: 12 });
+    const history = http.expectOne('/api/v1/admin/settings/password-minimum-length/history');
+    history.flush('error', { status: 500, statusText: 'Server error' });
+    fixture.detectChanges();
+
+    const historyRegion = fixture.nativeElement.querySelector('.table-wrap') as HTMLElement;
+    expect(historyRegion.getAttribute('aria-busy')).toBe('false');
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
+
+    fixture.componentInstance.retry();
+    const minimumRetry = http.expectOne('/api/v1/admin/settings/password-minimum-length');
+    const historyRetry = http.expectOne('/api/v1/admin/settings/password-minimum-length/history');
+    minimumRetry.flush({ value: 12 });
+    historyRetry.flush([
+      {
+        id: 'change-1',
+        operatorId: 'admin-1',
+        previousValue: 8,
+        newValue: 12,
+        changedAt: '2026-08-14T10:00:00Z',
+      },
+    ]);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+    expect(historyRegion.getAttribute('aria-busy')).toBe('false');
+    expect(historyRegion.querySelector('table')).toBeTruthy();
+    expect(historyRegion.textContent).toContain('admin-1');
+  });
+
   it('lazy-loads each admin page with adminGuard and no canDeactivate guard', async () => {
     for (const path of ['admin/users', 'admin/invitations', 'admin/settings/password']) {
       const route = routes.find((candidate) => candidate.path === path);
