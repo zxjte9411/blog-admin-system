@@ -21,14 +21,16 @@
     @if (language.error()) {
       <div class="error" role="alert">{{ language.error() }}</div>
     }
-    <app-account-form
-      [form]="form"
-      [fields]="fields"
-      [loading]="loading"
-      [submitAttempted]="submitAttempted"
-      [login]="true"
-      (submitted)="submit()"
-    />
+    <fieldset class="login-controls" [disabled]="callbackProcessing">
+      <app-account-form
+        [form]="form"
+        [fields]="fields"
+        [loading]="loading"
+        [submitAttempted]="submitAttempted"
+        [login]="true"
+        (submitted)="submit()"
+      />
+    </fieldset>
     @if (googleLoginAvailable) {
       <div class="oauth-divider" aria-hidden="true">
         <span>{{ language.t.or }}</span>
