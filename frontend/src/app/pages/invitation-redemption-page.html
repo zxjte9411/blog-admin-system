@@ -7,15 +7,29 @@
     @if (loading) {
       <progress class="loading-bar" [attr.aria-label]="language.t.loading"></progress>
     }
-    @if (message) {
-      <div class="success" role="status">{{ message }}</div>
-    }
     @if (error) {
       <div class="error" role="alert">{{ error }}</div>
     }
-    @if (missingToken) {
-      <div class="error" role="alert">{{ language.t.invalidToken }}</div>
-    } @else {
+    @if (invitationStatus === 'validating') {
+      <div role="status">{{ language.t.invitationValidating }}</div>
+    } @else if (invitationStatus === 'requestError') {
+      <div class="error" role="alert">{{ language.t.invitationRequestError }}</div>
+      <button class="ui-ghost retry-action" type="button" (click)="retry()">
+        {{ language.t.retryAction }}
+      </button>
+    } @else if (invitationStatus === 'expired') {
+      <div class="error" role="alert">{{ language.t.invitationExpired }}</div>
+    } @else if (invitationStatus === 'alreadyUsed') {
+      <div class="error" role="alert">{{ language.t.invitationAlreadyUsed }}</div>
+    } @else if (invitationStatus === 'invalid') {
+      <div class="error" role="alert">{{ language.t.invitationInvalid }}</div>
+    } @else if (invitationStatus === 'accepted') {
+      <div class="success" role="status">{{ message }}</div>
+    } @else if (invitationStatus === 'valid' && invitationContext) {
+      <div class="account-summary">
+        <span>{{ language.t.invitationEmail }}</span>
+        <output>{{ invitationContext.email }}</output>
+      </div>
       <app-account-form
         [form]="form"
         [fields]="fields"
@@ -26,7 +40,7 @@
         (submitted)="submit()"
       />
     }
-    @if (!missingToken && googleLoginAvailable) {
+    @if (invitationStatus === 'valid' && googleLoginAvailable) {
       <div class="oauth-divider" aria-hidden="true">
         <span>{{ language.t.or }}</span>
       </div>

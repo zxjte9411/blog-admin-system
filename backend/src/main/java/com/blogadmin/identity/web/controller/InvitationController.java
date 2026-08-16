@@ -4,8 +4,11 @@ import com.blogadmin.identity.application.AdminUserService;
 import com.blogadmin.identity.domain.user.User;
 import com.blogadmin.identity.web.dto.InvitationRedeemRequest;
 import com.blogadmin.identity.web.dto.InvitationUserResponse;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,6 +21,13 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/v1/auth/invitations")
 public class InvitationController {
   private final AdminUserService adminUserService;
+
+  @GetMapping("/{token}/context")
+  public InvitationRedemptionContextResponse context(@PathVariable String token) {
+    AdminUserService.RedemptionContext context = adminUserService.redemptionContext(token);
+    return new InvitationRedemptionContextResponse(
+        context.status(), context.email(), context.expiresAt());
+  }
 
   @PostMapping("/{token}/redeem")
   public InvitationUserResponse redeem(
@@ -40,4 +50,8 @@ public class InvitationController {
         user.isEnabled(),
         user.getVerifiedAt());
   }
+
+  @JsonInclude(JsonInclude.Include.NON_NULL)
+  public record InvitationRedemptionContextResponse(
+      String status, String email, Instant expiresAt) {}
 }

@@ -109,6 +109,7 @@ public class SecurityConfig {
         matchers.matcher(HttpMethod.POST, "/api/v1/auth/email-verifications/resend"),
         matchers.matcher(HttpMethod.POST, "/api/v1/auth/password-resets"),
         matchers.matcher(HttpMethod.POST, "/api/v1/auth/password-resets/{token}"),
+        matchers.matcher(HttpMethod.GET, "/api/v1/auth/invitations/{token}/context"),
         matchers.matcher(HttpMethod.POST, "/api/v1/auth/invitations/{token}/redeem"),
         matchers.matcher(HttpMethod.POST, "/api/v1/auth/email-changes/{token}"));
   }

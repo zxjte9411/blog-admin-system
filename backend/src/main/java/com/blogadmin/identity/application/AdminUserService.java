@@ -187,6 +187,24 @@ public class AdminUserService {
     return user;
   }
 
+  public RedemptionContext redemptionContext(String token) {
+    if (token == null) {
+      return RedemptionContext.invalid();
+    }
+    Invitation invitation =
+        invitationRepository.findByTokenHash(OpaqueToken.digest(token)).orElse(null);
+    if (invitation == null) {
+      return RedemptionContext.invalid();
+    }
+    if (invitation.getUsedAt() != null) {
+      return RedemptionContext.alreadyUsed();
+    }
+    if (!invitation.getExpiresAt().isAfter(Instant.now())) {
+      return RedemptionContext.expired();
+    }
+    return RedemptionContext.valid(invitation.getEmail(), invitation.getExpiresAt());
+  }
+
   public int getMinimum() {
     return passwordSettingRepository.findById(true).orElseThrow().getMinimumLength();
   }
@@ -230,4 +248,22 @@ public class AdminUserService {
   public static class InvalidMinimumException extends RuntimeException {}
 
   public static class InvalidInvitationException extends RuntimeException {}
+
+  public record RedemptionContext(String status, String email, Instant expiresAt) {
+    private static RedemptionContext invalid() {
+      return new RedemptionContext("invalid", null, null);
+    }
+
+    private static RedemptionContext expired() {
+      return new RedemptionContext("expired", null, null);
+    }
+
+    private static RedemptionContext alreadyUsed() {
+      return new RedemptionContext("alreadyUsed", null, null);
+    }
+
+    private static RedemptionContext valid(String email, Instant expiresAt) {
+      return new RedemptionContext("valid", email, expiresAt);
+    }
+  }
 }

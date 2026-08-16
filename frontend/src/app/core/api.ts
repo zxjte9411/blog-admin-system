@@ -85,6 +85,13 @@ export interface Invitation {
   usedAt: string | null;
 }
 
+export type InvitationRedemptionStatus = 'valid' | 'expired' | 'alreadyUsed' | 'invalid';
+export interface InvitationRedemptionContext {
+  status: InvitationRedemptionStatus;
+  email?: string;
+  expiresAt?: string;
+}
+
 export interface InvitationUser {
   id: string;
   email: string;
@@ -257,6 +264,9 @@ export class AuthenticationApi {
   }
   verifyEmail(request: EmailVerificationRequest): Observable<void> {
     return this.http.post<void>('/api/v1/auth/email-verifications', request);
+  }
+  getInvitationContext(token: string): Observable<InvitationRedemptionContext> {
+    return this.http.get<InvitationRedemptionContext>(`/api/v1/auth/invitations/${token}/context`);
   }
   redeemInvitation(token: string, request: InvitationRedeemRequest): Observable<InvitationUser> {
     return this.http.post<InvitationUser>(`/api/v1/auth/invitations/${token}/redeem`, request);
