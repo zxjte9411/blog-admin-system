@@ -5,6 +5,9 @@
       <h1>{{ language.t.nav.deletedArticles }}</h1>
     </div>
   </div>
+  @if (loading) {
+    <progress class="loading-bar" [attr.aria-label]="language.t.loading"></progress>
+  }
   <p class="notice deleted-notice">{{ language.t.deletedNotice }}</p>
   @if (error) {
     <p class="error" role="alert">{{ error }}</p>
@@ -12,7 +15,11 @@
   @if (message) {
     <p class="success" role="status">{{ message }}</p>
   }
-  @if (!loading && !items.length && !error) {
+  @if (loading && !items.length) {
+    <div class="skeleton" [attr.aria-label]="language.t.loading" role="status">
+      <span></span><span></span><span></span>
+    </div>
+  } @else if (!loading && !items.length && !error) {
     <p class="empty">{{ language.t.empty }}</p>
   }
   @if (items.length) {
@@ -31,21 +38,49 @@
         </thead>
         <tbody>
           @for (article of items; track article.id) {
-            <tr>
+            <tr [attr.aria-busy]="isPending(article) ? 'true' : null">
               <td>{{ article.title }}</td>
               <td>
-                <button class="text-link" type="button" (click)="restore(article)">
-                  {{ language.t.restore }}
-                </button>
-                @if (auth.user?.role === 'ADMIN') {
+                <div class="row-actions" [attr.aria-busy]="isPending(article) ? 'true' : null">
                   <button
-                    class="text-link danger"
+                    class="ui-outline compact-btn restore-action"
                     type="button"
-                    (click)="purge(article, $event.currentTarget)"
+                    [disabled]="isPending(article)"
+                    [attr.aria-label]="
+                      (pendingAction(article) === 'restore'
+                        ? language.t.pending
+                        : language.t.restore) +
+                      ' ' +
+                      article.title
+                    "
+                    (click)="restore(article)"
                   >
-                    {{ language.t.permanentDelete }}
+                    {{
+                      pendingAction(article) === 'restore' ? language.t.pending : language.t.restore
+                    }}
                   </button>
-                }
+                  @if (auth.user?.role === 'ADMIN') {
+                    <button
+                      class="ui-primary compact-btn danger-btn danger purge-action"
+                      type="button"
+                      [disabled]="isPending(article)"
+                      [attr.aria-label]="
+                        (pendingAction(article) === 'purge'
+                          ? language.t.pending
+                          : language.t.permanentDelete) +
+                        ' ' +
+                        article.title
+                      "
+                      (click)="purge(article, $event.currentTarget)"
+                    >
+                      {{
+                        pendingAction(article) === 'purge'
+                          ? language.t.pending
+                          : language.t.permanentDelete
+                      }}
+                    </button>
+                  }
+                </div>
               </td>
             </tr>
           }

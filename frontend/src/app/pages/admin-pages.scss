@@ -262,8 +262,47 @@ h1 {
 }
 .row-actions {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+.compact-btn {
+  min-height: 2.75rem;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.85rem;
+}
+.danger-btn {
+  border-color: #b33b2d;
+  background: #b33b2d;
+  color: #fff;
+
+  &:hover {
+    border-color: #8f291e;
+    background: #8f291e;
+  }
+}
+.skeleton {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.75rem;
+}
+.skeleton span {
+  display: block;
+  height: 4.2rem;
+  border-block: 1px solid var(--line);
+  background: linear-gradient(90deg, #eee7dc 25%, #fffaf0 50%, #eee7dc 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton span {
+    animation: none;
+  }
 }
 @media (max-width: 700px) {
   .admin-form {

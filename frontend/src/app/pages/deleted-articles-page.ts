@@ -15,6 +15,8 @@ import { Auth } from '../core/auth';
 import { AppShell } from '../layouts/app-shell';
 import { getPageNumbers } from '../core/pagination';
 
+type PendingAction = 'restore' | 'purge';
+
 @Component({
   standalone: true,
   imports: [CommonModule, AppShell],
@@ -34,6 +36,7 @@ export class DeletedArticlesPage implements OnInit {
   loading = false;
   error = '';
   message = '';
+  pendingActions = new Map<string, PendingAction>();
   modalState: { title: string; message: string; confirmText: string; action: () => void } | null =
     null;
   private triggerElement: HTMLElement | null = null;
@@ -41,9 +44,18 @@ export class DeletedArticlesPage implements OnInit {
     this.read();
   }
   restore(article: Article) {
-    this.api.restore(article.id).subscribe({ next: () => this.read(), error: () => this.fail() });
+    if (this.isPending(article)) return;
+    this.setPending(article.id, 'restore');
+    this.api.restore(article.id).subscribe({
+      next: () => this.read(article.id),
+      error: () => {
+        this.clearPending(article.id);
+        this.fail();
+      },
+    });
   }
   purge(article: Article, trigger?: EventTarget | null) {
+    if (this.isPending(article)) return;
     this.modalState = {
       title: this.language.t.permanentDelete,
       message: this.language.t.confirmPermanentDelete.replace('{title}', article.title),
@@ -69,12 +81,16 @@ export class DeletedArticlesPage implements OnInit {
     action?.();
   }
   private executePurge(article: Article) {
+    this.setPending(article.id, 'purge');
     this.api.purge(article.id).subscribe({
       next: () => {
         this.message = this.language.t.permanentDeleteSuccess.replace('{title}', article.title);
-        this.read();
+        this.read(article.id);
       },
-      error: (e: HttpErrorResponse) => this.fail(e.status),
+      error: (e: HttpErrorResponse) => {
+        this.clearPending(article.id);
+        this.fail(e.status);
+      },
     });
   }
   previousPage() {
@@ -98,16 +114,38 @@ export class DeletedArticlesPage implements OnInit {
   get pageNumbers() {
     return getPageNumbers(this.page, this.totalPages);
   }
-  private read() {
+  isPending(article: Article) {
+    return this.pendingActions.has(article.id);
+  }
+  pendingAction(article: Article) {
+    return this.pendingActions.get(article.id);
+  }
+  private setPending(id: string, action: PendingAction) {
+    this.pendingActions = new Map(this.pendingActions).set(id, action);
+    this.cdr.markForCheck();
+  }
+  private clearPending(id: string) {
+    if (!this.pendingActions.has(id)) return;
+    this.pendingActions = new Map(this.pendingActions);
+    this.pendingActions.delete(id);
+    this.cdr.markForCheck();
+  }
+  private read(releasePendingId?: string) {
     this.loading = true;
+    this.error = '';
+    this.cdr.markForCheck();
     this.api.deleted(this.page).subscribe({
       next: (r) => {
         this.items = r.content;
         this.totalPages = r.page?.totalPages ?? r.totalPages;
+        if (releasePendingId) this.clearPending(releasePendingId);
         this.loading = false;
         this.cdr.markForCheck();
       },
-      error: (e: HttpErrorResponse) => this.fail(e.status),
+      error: (e: HttpErrorResponse) => {
+        if (releasePendingId) this.clearPending(releasePendingId);
+        this.fail(e.status);
+      },
     });
   }
   private fail(status = 0) {

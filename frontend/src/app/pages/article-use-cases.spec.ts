@@ -429,6 +429,110 @@ describe('article use-case pages', () => {
       .flush({ content: [], page: { totalPages: 0 } });
   });
 
+  it('keeps deleted rows visible through pagination and scopes pending state to one row', async () => {
+    await setup(DeletedArticlesPage, 'articles/deleted');
+    const fixture = TestBed.createComponent(DeletedArticlesPage);
+    fixture.componentInstance.auth.user = {
+      id: 'admin',
+      displayName: 'Admin',
+      preferredLanguage: 'zh-TW',
+      role: 'ADMIN',
+    };
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+
+    expect(fixture.nativeElement.querySelector('.loading-bar')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.skeleton')).toBeTruthy();
+
+    http.expectOne('/api/v1/articles/deleted?page=0').flush({
+      content: [
+        { id: 'a1', title: 'First' },
+        { id: 'a2', title: 'Second' },
+      ],
+      page: { totalPages: 3 },
+    });
+    fixture.detectChanges();
+
+    fixture.componentInstance.nextPage();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.loading-bar')).toBeTruthy();
+    expect(fixture.nativeElement.querySelectorAll('tbody tr')).toHaveLength(2);
+    http.expectOne('/api/v1/articles/deleted?page=1').flush({
+      content: [
+        { id: 'b1', title: 'Third' },
+        { id: 'b2', title: 'Fourth' },
+        { id: 'b3', title: 'Fifth' },
+      ],
+      page: { totalPages: 3 },
+    });
+    fixture.detectChanges();
+
+    let rows = fixture.nativeElement.querySelectorAll('tbody tr');
+    const firstRestore = rows[0].querySelector('.restore-action') as HTMLButtonElement;
+    const secondRestore = rows[1].querySelector('.restore-action') as HTMLButtonElement;
+    firstRestore.click();
+    fixture.detectChanges();
+
+    expect(rows[0].getAttribute('aria-busy')).toBe('true');
+    expect(firstRestore.disabled).toBe(true);
+    expect(rows[0].textContent).toContain(fixture.componentInstance.language.t.pending);
+    expect(secondRestore.disabled).toBe(false);
+
+    http.expectOne('/api/v1/articles/b1/restore').flush({});
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.loading-bar')).toBeTruthy();
+    expect(fixture.nativeElement.querySelectorAll('tbody tr')).toHaveLength(3);
+    http.expectOne('/api/v1/articles/deleted?page=1').flush({
+      content: [
+        { id: 'b2', title: 'Fourth' },
+        { id: 'b3', title: 'Fifth' },
+      ],
+      page: { totalPages: 3 },
+    });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('tbody tr')).toHaveLength(2);
+    expect(fixture.nativeElement.querySelector('tbody')?.textContent).not.toContain('Third');
+
+    const dialog = fixture.nativeElement.querySelector('dialog') as HTMLDialogElement;
+    dialog.showModal = vi.fn();
+    dialog.close = vi.fn();
+    rows = fixture.nativeElement.querySelectorAll('tbody tr');
+    const purge = rows[0].querySelector('.purge-action') as HTMLButtonElement;
+    expect(purge.classList.contains('ui-primary')).toBe(true);
+    purge.click();
+    fixture.detectChanges();
+    expect(dialog.showModal).toHaveBeenCalled();
+    expect(dialog.textContent).toContain(
+      fixture.componentInstance.language.t.confirmPermanentDelete.replace('{title}', 'Fourth'),
+    );
+
+    (dialog.querySelector('.ui-primary.danger-btn') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    rows = fixture.nativeElement.querySelectorAll('tbody tr');
+    expect(rows[0].getAttribute('aria-busy')).toBe('true');
+    expect(rows[0].querySelector('.row-actions')?.getAttribute('aria-busy')).toBe('true');
+    expect((rows[0].querySelector('.purge-action') as HTMLButtonElement).disabled).toBe(true);
+    expect((rows[0].querySelector('.restore-action') as HTMLButtonElement).disabled).toBe(true);
+    expect(rows[0].textContent).toContain(fixture.componentInstance.language.t.pending);
+    expect(rows[1].getAttribute('aria-busy')).toBeNull();
+    expect(rows[1].querySelector('.row-actions')?.getAttribute('aria-busy')).toBeNull();
+    expect((rows[1].querySelector('.restore-action') as HTMLButtonElement).disabled).toBe(false);
+    expect((rows[1].querySelector('.purge-action') as HTMLButtonElement).disabled).toBe(false);
+
+    http.expectOne('/api/v1/articles/deleted/b2').flush(null);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.loading-bar')).toBeTruthy();
+    expect(fixture.nativeElement.querySelectorAll('tbody tr')).toHaveLength(2);
+    http.expectOne('/api/v1/articles/deleted?page=1').flush({
+      content: [{ id: 'b3', title: 'Fifth' }],
+      page: { totalPages: 2 },
+    });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.loading-bar')).toBeNull();
+    expect(fixture.nativeElement.querySelectorAll('tbody tr')).toHaveLength(1);
+    expect(fixture.nativeElement.querySelector('tbody')?.textContent).toContain('Fifth');
+  });
+
   it('uses a native dialog for permanent deletion and returns focus', async () => {
     await setup(DeletedArticlesPage, 'articles/deleted');
     const fixture = TestBed.createComponent(DeletedArticlesPage);
