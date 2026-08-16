@@ -7,6 +7,11 @@
     @if (loading) {
       <progress class="loading-bar" [attr.aria-label]="language.t.loading"></progress>
     }
+    @if (callbackProcessing) {
+      <div class="processing-status" role="status" aria-live="polite" aria-busy="true">
+        {{ language.t.loginCallbackProcessing }}
+      </div>
+    }
     @if (message) {
       <div class="success" role="status">{{ message }}</div>
     }

@@ -296,7 +296,7 @@ describe('authentication use-case pages', () => {
     vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
 
     const fixture = TestBed.createComponent(LoginPage);
-    fixture.componentInstance.ngOnInit();
+    fixture.detectChanges();
     await Promise.resolve();
 
     const http = TestBed.inject(HttpTestingController);
@@ -329,7 +329,7 @@ describe('authentication use-case pages', () => {
     vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
 
     const fixture = TestBed.createComponent(LoginPage);
-    fixture.componentInstance.ngOnInit();
+    fixture.detectChanges();
     await Promise.resolve();
 
     TestBed.inject(HttpTestingController)
@@ -340,6 +340,218 @@ describe('authentication use-case pages', () => {
     expect(fixture.componentInstance.error).toBe(fixture.componentInstance.language.t.unauthorized);
     expect(fixture.componentInstance.auth.token).toBeNull();
     expect(router.navigateByUrl).not.toHaveBeenCalled();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[role="status"]')).toBeNull();
+    expect(
+      [...fixture.nativeElement.querySelectorAll('input, form button, .google-login')].some(
+        (control) => (control as HTMLInputElement | HTMLButtonElement).matches(':disabled'),
+      ),
+    ).toBe(false);
+  });
+
+  it('shows callback processing in the page until navigation completes', async () => {
+    (globalThis as typeof globalThis & { __BLOG_ADMIN_CONFIG__?: object }).__BLOG_ADMIN_CONFIG__ = {
+      supabaseUrl: 'https://project.supabase.co',
+      supabasePublishableKey: 'sb_publishable_test',
+    };
+    const supabase = TestBed.inject(SUPABASE_AUTH) as ReturnType<typeof fakeSupabase>;
+    let resolveSession!: (value: {
+      data: { session: { access_token: string } };
+      error: null;
+    }) => void;
+    supabase.getSession.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSession = resolve;
+      }),
+    );
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'url', 'get').mockReturnValue('/login?code=oauth-code');
+    let resolveNavigation!: (value: boolean) => void;
+    vi.spyOn(router, 'navigateByUrl').mockReturnValue(
+      new Promise((resolve) => {
+        resolveNavigation = resolve;
+      }),
+    );
+
+    const fixture = TestBed.createComponent(LoginPage);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[role="status"]')?.textContent).toContain(
+      fixture.componentInstance.language.t.loginCallbackProcessing,
+    );
+    expect(fixture.nativeElement.querySelector('[role="status"]')?.getAttribute('aria-busy')).toBe(
+      'true',
+    );
+    expect(
+      [...fixture.nativeElement.querySelectorAll('input, form button, .google-login')].every(
+        (control) => (control as HTMLInputElement | HTMLButtonElement).matches(':disabled'),
+      ),
+    ).toBe(true);
+
+    resolveSession({ data: { session: { access_token: 'supabase-token' } }, error: null });
+    await Promise.resolve();
+
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/auth/google').flush({ accessToken: 'local-token' });
+    http.expectOne('/api/v1/account/me').flush({
+      id: 'user-1',
+      displayName: 'Ada',
+      preferredLanguage: 'en',
+      role: 'AUTHOR',
+    });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.loading).toBe(true);
+    expect(fixture.nativeElement.querySelector('[role="status"]')).not.toBeNull();
+    resolveNavigation(true);
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[role="status"]')).toBeNull();
+    expect(
+      [...fixture.nativeElement.querySelectorAll('input, form button, .google-login')].some(
+        (control) => (control as HTMLInputElement | HTMLButtonElement).disabled,
+      ),
+    ).toBe(false);
+  });
+
+  it('clears callback processing and explains when Supabase has no session', async () => {
+    (globalThis as typeof globalThis & { __BLOG_ADMIN_CONFIG__?: object }).__BLOG_ADMIN_CONFIG__ = {
+      supabaseUrl: 'https://project.supabase.co',
+      supabasePublishableKey: 'sb_publishable_test',
+    };
+    const supabase = TestBed.inject(SUPABASE_AUTH) as ReturnType<typeof fakeSupabase>;
+    supabase.getSession.mockResolvedValue({ data: { session: null }, error: null });
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'url', 'get').mockReturnValue('/login?code=oauth-code');
+
+    const fixture = TestBed.createComponent(LoginPage);
+    fixture.detectChanges();
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.loading).toBe(false);
+    expect(fixture.componentInstance.error).toBe(
+      fixture.componentInstance.language.t.loginCallbackNoSession,
+    );
+    expect(fixture.nativeElement.querySelector('[role="status"]')).toBeNull();
+    expect(
+      [...fixture.nativeElement.querySelectorAll('input, form button, .google-login')].some(
+        (control) => (control as HTMLInputElement | HTMLButtonElement).disabled,
+      ),
+    ).toBe(false);
+  });
+
+  it('clears callback processing and explains a Supabase session error', async () => {
+    (globalThis as typeof globalThis & { __BLOG_ADMIN_CONFIG__?: object }).__BLOG_ADMIN_CONFIG__ = {
+      supabaseUrl: 'https://project.supabase.co',
+      supabasePublishableKey: 'sb_publishable_test',
+    };
+    const supabase = TestBed.inject(SUPABASE_AUTH) as ReturnType<typeof fakeSupabase>;
+    supabase.getSession.mockResolvedValue({
+      data: { session: null },
+      error: { message: 'Supabase is unavailable' },
+    });
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'url', 'get').mockReturnValue('/login?code=oauth-code');
+
+    const fixture = TestBed.createComponent(LoginPage);
+    fixture.detectChanges();
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.loading).toBe(false);
+    expect(fixture.componentInstance.error).toBe(
+      fixture.componentInstance.language.t.loginCallbackError,
+    );
+    expect(fixture.nativeElement.querySelector('[role="status"]')).toBeNull();
+    expect(
+      [...fixture.nativeElement.querySelectorAll('input, form button, .google-login')].some(
+        (control) => (control as HTMLInputElement | HTMLButtonElement).matches(':disabled'),
+      ),
+    ).toBe(false);
+  });
+
+  it('clears callback processing when Auth cannot load the user', async () => {
+    (globalThis as typeof globalThis & { __BLOG_ADMIN_CONFIG__?: object }).__BLOG_ADMIN_CONFIG__ = {
+      supabaseUrl: 'https://project.supabase.co',
+      supabasePublishableKey: 'sb_publishable_test',
+    };
+    const supabase = TestBed.inject(SUPABASE_AUTH) as ReturnType<typeof fakeSupabase>;
+    supabase.getSession.mockResolvedValue({
+      data: { session: { access_token: 'supabase-token' } },
+      error: null,
+    });
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'url', 'get').mockReturnValue('/login?code=oauth-code');
+    vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+
+    const fixture = TestBed.createComponent(LoginPage);
+    fixture.detectChanges();
+    await Promise.resolve();
+
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/auth/google').flush({ accessToken: 'local-token' });
+    http.expectOne('/api/v1/account/me').flush({}, { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.loading).toBe(false);
+    expect(fixture.componentInstance.error).toBe(
+      fixture.componentInstance.language.t.loginCallbackError,
+    );
+    expect(fixture.nativeElement.querySelector('[role="status"]')).toBeNull();
+    expect(
+      [...fixture.nativeElement.querySelectorAll('input, form button, .google-login')].some(
+        (control) => (control as HTMLInputElement | HTMLButtonElement).matches(':disabled'),
+      ),
+    ).toBe(false);
+  });
+
+  it.each([
+    ['navigation returns false', 'false'],
+    ['navigation rejects', 'rejects'],
+  ] as const)('clears callback processing when %s', async (_case, outcome) => {
+    (globalThis as typeof globalThis & { __BLOG_ADMIN_CONFIG__?: object }).__BLOG_ADMIN_CONFIG__ = {
+      supabaseUrl: 'https://project.supabase.co',
+      supabasePublishableKey: 'sb_publishable_test',
+    };
+    const supabase = TestBed.inject(SUPABASE_AUTH) as ReturnType<typeof fakeSupabase>;
+    supabase.getSession.mockResolvedValue({
+      data: { session: { access_token: 'supabase-token' } },
+      error: null,
+    });
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'url', 'get').mockReturnValue('/login?code=oauth-code');
+    const navigate = vi.spyOn(router, 'navigateByUrl');
+    if (outcome === 'false') navigate.mockResolvedValue(false);
+    else navigate.mockRejectedValue(new Error('navigation failed'));
+
+    const fixture = TestBed.createComponent(LoginPage);
+    fixture.detectChanges();
+    await Promise.resolve();
+
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/auth/google').flush({ accessToken: 'local-token' });
+    http.expectOne('/api/v1/account/me').flush({
+      id: 'user-1',
+      displayName: 'Ada',
+      preferredLanguage: 'en',
+      role: 'AUTHOR',
+    });
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    expect(navigate).toHaveBeenCalledWith('/articles');
+    expect(fixture.componentInstance.loading).toBe(false);
+    expect(fixture.componentInstance.error).toBe(
+      fixture.componentInstance.language.t.loginCallbackError,
+    );
+    expect(fixture.nativeElement.querySelector('[role="status"]')).toBeNull();
+    expect(
+      [...fixture.nativeElement.querySelectorAll('input, form button, .google-login')].some(
+        (control) => (control as HTMLInputElement | HTMLButtonElement).matches(':disabled'),
+      ),
+    ).toBe(false);
   });
 
   it('completes an implicit-flow Google callback from the URL hash', async () => {

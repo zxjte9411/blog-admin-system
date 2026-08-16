@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, inject, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthenticationApi } from '../core/api';
@@ -20,6 +21,7 @@ export class LoginPage extends FormUseCase implements OnInit {
   private readonly api = inject(AuthenticationApi);
   private readonly router = inject(Router);
   private readonly supabase = inject(SUPABASE_AUTH);
+  callbackProcessing = false;
 
   constructor() {
     super(['email', 'password']);
@@ -45,6 +47,10 @@ export class LoginPage extends FormUseCase implements OnInit {
     const hasCodeCallback = this.router.parseUrl(this.router.url).queryParams['code'];
     const hasImplicitCallback = window.location.hash.includes('access_token=');
     if (hasCodeCallback || hasImplicitCallback) {
+      this.callbackProcessing = true;
+      this.loading = true;
+      this.error = '';
+      this.cdr.markForCheck();
       void this.restoreSupabaseSession();
     }
   }
@@ -76,29 +82,67 @@ export class LoginPage extends FormUseCase implements OnInit {
     try {
       const { data, error } = await this.supabase.getSession();
       if (error) {
-        this.fail(0);
+        this.callbackFail(this.language.t.loginCallbackError);
       } else if (data.session) {
-        this.loading = true;
         this.api.googleLogin(data.session.access_token).subscribe({
           next: (result) => this.finishLogin(result.accessToken, true),
-          error: (requestError) => this.handleError(requestError),
+          error: (requestError: HttpErrorResponse) => this.callbackRequestFailed(requestError),
         });
-      }
+      } else this.callbackFail(this.language.t.loginCallbackNoSession);
     } catch {
-      this.fail(0);
+      this.callbackFail(this.language.t.loginCallbackError);
     }
   }
 
   private finishLogin(accessToken: string, redirectToProfileIfIncomplete = false) {
+    const isCallback = this.callbackProcessing;
     this.auth.setToken(accessToken);
+    if (!isCallback) this.loading = false;
+    this.auth.load().subscribe(
+      (user) => {
+        if (!user && isCallback) {
+          this.callbackFail(this.language.t.loginCallbackError);
+          return;
+        }
+        if (user) this.language.usePreferred(user.preferredLanguage);
+        const destination =
+          redirectToProfileIfIncomplete && !user?.displayName?.trim()
+            ? '/account/profile'
+            : '/articles';
+        if (!isCallback) {
+          void this.router.navigateByUrl(destination);
+          return;
+        }
+        void this.router.navigateByUrl(destination).then(
+          (navigated) =>
+            navigated
+              ? this.callbackComplete()
+              : this.callbackFail(this.language.t.loginCallbackError),
+          () => this.callbackFail(this.language.t.loginCallbackError),
+        );
+      },
+      () => {
+        if (isCallback) this.callbackFail(this.language.t.loginCallbackError);
+      },
+    );
+  }
+
+  private callbackRequestFailed(error: HttpErrorResponse) {
+    this.callbackProcessing = false;
+    this.handleError(error);
+  }
+
+  private callbackComplete() {
+    this.callbackProcessing = false;
     this.loading = false;
-    this.auth.load().subscribe((user) => {
-      if (user) this.language.usePreferred(user.preferredLanguage);
-      const destination =
-        redirectToProfileIfIncomplete && !user?.displayName?.trim()
-          ? '/account/profile'
-          : '/articles';
-      void this.router.navigateByUrl(destination);
-    });
+    this.cdr.markForCheck();
+  }
+
+  private callbackFail(error: string) {
+    this.callbackProcessing = false;
+    this.loading = false;
+    this.message = '';
+    this.error = error;
+    this.cdr.markForCheck();
   }
 }
