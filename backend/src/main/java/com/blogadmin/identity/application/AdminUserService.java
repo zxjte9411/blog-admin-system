@@ -143,17 +143,21 @@ public class AdminUserService {
 
   @Transactional
   public User redeemGoogle(String token, String email, String displayName) {
-    if (token == null || email == null) {
+    if (token == null) {
+      throw new InvitationInvalidatedException();
+    }
+    if (email == null) {
       throw new InvalidInvitationException();
     }
     byte[] hash = OpaqueToken.digest(token);
     Invitation invitation =
-        invitationRepository.findByTokenHash(hash).orElseThrow(InvalidInvitationException::new);
+        invitationRepository.findByTokenHash(hash).orElseThrow(InvitationInvalidatedException::new);
     Instant now = Instant.now();
     String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
-    if (invitation.getUsedAt() != null
-        || !invitation.getExpiresAt().isAfter(now)
-        || !invitation.getEmail().equals(normalizedEmail)) {
+    if (invitation.getUsedAt() != null || !invitation.getExpiresAt().isAfter(now)) {
+      throw new InvitationInvalidatedException();
+    }
+    if (!invitation.getEmail().equals(normalizedEmail)) {
       throw new InvalidInvitationException();
     }
     userRepository.lockNormalizedEmail(normalizedEmail);
@@ -163,10 +167,11 @@ public class AdminUserService {
     Invitation lockedInvitation =
         invitationRepository
             .findLockedByTokenHash(hash)
-            .orElseThrow(InvalidInvitationException::new);
-    if (lockedInvitation.getUsedAt() != null
-        || !lockedInvitation.getExpiresAt().isAfter(now)
-        || !lockedInvitation.getEmail().equals(normalizedEmail)) {
+            .orElseThrow(InvitationInvalidatedException::new);
+    if (lockedInvitation.getUsedAt() != null || !lockedInvitation.getExpiresAt().isAfter(now)) {
+      throw new InvitationInvalidatedException();
+    }
+    if (!lockedInvitation.getEmail().equals(normalizedEmail)) {
       throw new InvalidInvitationException();
     }
     String name = displayName == null ? "" : displayName.trim();
@@ -248,6 +253,8 @@ public class AdminUserService {
   public static class InvalidMinimumException extends RuntimeException {}
 
   public static class InvalidInvitationException extends RuntimeException {}
+
+  public static class InvitationInvalidatedException extends RuntimeException {}
 
   public record RedemptionContext(String status, String email, Instant expiresAt) {
     private static RedemptionContext invalid() {

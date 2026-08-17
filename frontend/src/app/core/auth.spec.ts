@@ -50,6 +50,34 @@ describe('auth seams', () => {
     expect(auth.token).toBe('new');
   });
 
+  it('passes a Google 401 through without refreshing or redirecting', () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        provideHttpClient(withInterceptors([authInterceptor])),
+        provideHttpClientTesting(),
+      ],
+    });
+    const auth = TestBed.inject(Auth);
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'navigateByUrl');
+    const http = TestBed.inject(HttpTestingController);
+    auth.setToken('old');
+    let response: { status: number; code?: string } | undefined;
+
+    TestBed.inject(HttpClient)
+      .post('/api/v1/auth/google', {})
+      .subscribe({ error: (error) => (response = error) });
+    http
+      .expectOne('/api/v1/auth/google')
+      .flush({ code: 'invitation_invalidated' }, { status: 401, statusText: 'Unauthorized' });
+
+    expect(response).toMatchObject({ status: 401, error: { code: 'invitation_invalidated' } });
+    http.expectNone('/api/v1/auth/refresh');
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    expect(auth.token).toBe('old');
+  });
+
   it('deduplicates concurrent refresh requests', async () => {
     TestBed.configureTestingModule({
       providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],

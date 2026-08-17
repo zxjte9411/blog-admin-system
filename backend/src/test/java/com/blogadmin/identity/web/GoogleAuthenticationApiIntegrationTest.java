@@ -11,6 +11,7 @@ import com.blogadmin.identity.domain.invitation.InvitationRepository;
 import com.blogadmin.identity.domain.password.PasswordResetTokenRepository;
 import com.blogadmin.identity.domain.session.RefreshSessionRepository;
 import com.blogadmin.identity.domain.user.User;
+import com.blogadmin.identity.domain.user.UserIdentity;
 import com.blogadmin.identity.domain.user.UserIdentityRepository;
 import com.blogadmin.identity.domain.user.UserRepository;
 import com.blogadmin.identity.domain.user.UserRole;
@@ -129,6 +130,20 @@ class GoogleAuthenticationApiIntegrationTest extends AbstractPostgresIntegration
 
     assertThat(userRepository.findAll()).hasSize(1);
     assertThat(userRepository.findById(userId).orElseThrow().getEmail()).isEqualTo(originalEmail);
+  }
+
+  @Test
+  void googleLoginRejectsASecondIdentityForAUserWithoutInvitationInvalidationCode() {
+    UUID userId = createVerifiedUser();
+    String email = getUserEmail(userId);
+    userIdentityRepository.saveAndFlush(
+        new UserIdentity(UUID.randomUUID(), userId, "google", "already-bound-subject"));
+
+    ResponseEntity<Map> response =
+        postGoogleLogin(SupabaseJwksTestFixture.createValidGoogleToken("different-subject", email));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(response.getBody()).doesNotContainKey("code");
   }
 
   @Test
@@ -282,11 +297,10 @@ class GoogleAuthenticationApiIntegrationTest extends AbstractPostgresIntegration
         .isNotNull();
 
     // Redeeming the second time must be rejected
-    assertThat(
-            restTemplate
-                .postForEntity(url("/api/v1/auth/google"), request, Map.class)
-                .getStatusCode())
-        .isEqualTo(HttpStatus.UNAUTHORIZED);
+    ResponseEntity<Map> secondResponse =
+        restTemplate.postForEntity(url("/api/v1/auth/google"), request, Map.class);
+    assertThat(secondResponse.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(secondResponse.getBody()).containsEntry("code", "invitation_invalidated");
   }
 
   @Test
@@ -304,6 +318,32 @@ class GoogleAuthenticationApiIntegrationTest extends AbstractPostgresIntegration
             userRepository.findAll().stream()
                 .filter(user -> user.getNormalizedEmail().equals("different@example.com")))
         .isEmpty();
+  }
+
+  @Test
+  void googleLoginRejectsInvitationWhenUserAlreadyExistsWithoutInvalidationCode() {
+    UUID userId = createVerifiedUser();
+    String email = getUserEmail(userId);
+    String token = "existing-user-google-invitation";
+    invitationRepository.saveAndFlush(
+        new Invitation(
+            UUID.randomUUID(),
+            email,
+            SupabaseJwksTestFixture.sha256(token),
+            Instant.now().plus(1, ChronoUnit.DAYS)));
+
+    ResponseEntity<Map> response =
+        restTemplate.postForEntity(
+            url("/api/v1/auth/google"),
+            Map.of(
+                "accessToken",
+                SupabaseJwksTestFixture.createValidGoogleToken(UUID.randomUUID().toString(), email),
+                "invitationToken",
+                token),
+            Map.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(response.getBody()).doesNotContainKey("code");
   }
 
   @Test
@@ -344,9 +384,32 @@ class GoogleAuthenticationApiIntegrationTest extends AbstractPostgresIntegration
     String supabaseToken =
         SupabaseJwksTestFixture.createValidGoogleToken(
             UUID.randomUUID().toString(), invitation.getEmail());
-    assertGoogleLoginUnauthorized(supabaseToken, token);
+    ResponseEntity<Map> response =
+        restTemplate.postForEntity(
+            url("/api/v1/auth/google"),
+            Map.of("accessToken", supabaseToken, "invitationToken", token),
+            Map.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(response.getBody()).containsEntry("code", "invitation_invalidated");
     assertThat(invitationRepository.findById(invitation.getId()).orElseThrow().getUsedAt())
         .isNull();
+  }
+
+  @Test
+  void googleLoginMarksAnInvalidatedInvitationWithAStableErrorCode() {
+    String token = "missing-google-invitation";
+    String supabaseToken =
+        SupabaseJwksTestFixture.createValidGoogleToken(
+            UUID.randomUUID().toString(), "google-invited@example.com");
+
+    ResponseEntity<Map> response =
+        restTemplate.postForEntity(
+            url("/api/v1/auth/google"),
+            Map.of("accessToken", supabaseToken, "invitationToken", token),
+            Map.class);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(response.getBody()).containsEntry("code", "invitation_invalidated");
   }
 
   @Test
@@ -459,6 +522,7 @@ class GoogleAuthenticationApiIntegrationTest extends AbstractPostgresIntegration
             Map.of("accessToken", accessToken, "invitationToken", invitationToken),
             String.class);
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    assertThat(response.getBody()).doesNotContain("invitation_invalidated");
   }
 
   private InvitationLink createInvitation(String email) {

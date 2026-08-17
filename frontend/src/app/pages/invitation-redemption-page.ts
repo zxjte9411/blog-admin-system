@@ -29,6 +29,7 @@ export class InvitationRedemptionPage extends FormUseCase implements OnInit {
   private readonly supabase = inject(SUPABASE_AUTH);
   readonly token: string;
   missingToken = false;
+  callbackProcessing = false;
   invitationContext: InvitationRedemptionContext | null = null;
   invitationStatus: InvitationRedemptionStatus | 'validating' | 'accepted' | 'requestError';
 
@@ -53,11 +54,15 @@ export class InvitationRedemptionPage extends FormUseCase implements OnInit {
   }
 
   ngOnInit() {
-    if (this.token) this.readContext();
+    if (this.token) {
+      this.callbackProcessing = this.hasGoogleCallback();
+      this.readContext();
+    }
   }
 
   async googleLogin() {
-    if (this.invitationStatus !== 'valid' || !isSupabaseConfigured()) return;
+    if (this.callbackProcessing || this.invitationStatus !== 'valid' || !isSupabaseConfigured())
+      return;
     this.loading = true;
     this.error = '';
     try {
@@ -74,12 +79,22 @@ export class InvitationRedemptionPage extends FormUseCase implements OnInit {
   }
 
   submit() {
-    if (this.invitationStatus !== 'valid' || this.message || !this.valid()) return;
+    if (
+      this.callbackProcessing ||
+      this.invitationStatus !== 'valid' ||
+      this.message ||
+      !this.valid()
+    ) {
+      return;
+    }
     this.api
       .redeemInvitation(this.token, this.form.getRawValue() as InvitationRedeemRequest)
       .subscribe({
         next: () => this.accept(),
-        error: (error: HttpErrorResponse) => this.reinspectAfterFailure(error),
+        error: (error: HttpErrorResponse) =>
+          this.shouldReinspectPassword(error)
+            ? this.reinspectAfterFailure(error)
+            : this.handleError(error),
       });
   }
 
@@ -98,9 +113,14 @@ export class InvitationRedemptionPage extends FormUseCase implements OnInit {
         this.invitationContext = context;
         this.invitationStatus = context.status;
         this.loading = false;
-        this.cdr.markForCheck();
         if (context.status === 'valid' && this.hasGoogleCallback()) {
+          this.callbackProcessing = true;
+          this.loading = true;
+          this.cdr.markForCheck();
           void this.restoreSupabaseSession();
+        } else {
+          this.callbackProcessing = false;
+          this.cdr.markForCheck();
         }
       },
       error: () => this.contextRequestFailed(),
@@ -108,6 +128,7 @@ export class InvitationRedemptionPage extends FormUseCase implements OnInit {
   }
 
   private contextRequestFailed() {
+    this.callbackProcessing = false;
     this.loading = false;
     this.error = '';
     this.message = '';
@@ -123,7 +144,7 @@ export class InvitationRedemptionPage extends FormUseCase implements OnInit {
     this.cdr.markForCheck();
   }
 
-  private reinspectAfterFailure(error: HttpErrorResponse) {
+  private reinspectAfterFailure(error: HttpErrorResponse, callback = false) {
     this.loading = true;
     this.error = '';
     this.message = '';
@@ -132,45 +153,96 @@ export class InvitationRedemptionPage extends FormUseCase implements OnInit {
         this.invitationContext = context;
         this.invitationStatus = context.status;
         this.loading = false;
-        if (context.status === 'valid') this.handleError(error);
-        else this.cdr.markForCheck();
+        if (context.status === 'valid') {
+          if (callback) this.callbackRequestFailed(error);
+          else this.handleError(error);
+        } else {
+          this.callbackProcessing = false;
+          this.cdr.markForCheck();
+        }
       },
       error: () => {
         this.invitationStatus = 'valid';
         this.loading = false;
-        this.handleError(error);
+        this.callbackProcessing = false;
+        if (callback) this.callbackRequestFailed(error);
+        else this.handleError(error);
       },
     });
   }
 
-  private hasGoogleCallback() {
+  private hasGoogleCallback(): boolean {
     const hasCodeCallback = this.router.parseUrl(this.router.url).queryParams['code'];
-    return hasCodeCallback || window.location.hash.includes('access_token=');
+    return Boolean(hasCodeCallback || window.location.hash.includes('access_token='));
   }
 
   private async restoreSupabaseSession() {
     try {
       const { data, error } = await this.supabase.getSession();
       if (error) {
-        this.fail(0);
+        this.callbackFail();
       } else if (data.session) {
         this.loading = true;
         this.api.googleLogin(data.session.access_token, this.token).subscribe({
           next: (result) => this.finishLogin(result.accessToken),
-          error: (requestError) => this.reinspectAfterFailure(requestError),
+          error: (requestError: HttpErrorResponse) =>
+            this.shouldReinspectGoogle(requestError)
+              ? this.reinspectAfterFailure(requestError, true)
+              : this.callbackRequestFailed(requestError),
         });
-      }
+      } else this.callbackFail();
     } catch {
-      this.fail(0);
+      this.callbackFail();
     }
   }
 
   private finishLogin(accessToken: string) {
     this.auth.setToken(accessToken);
-    this.loading = false;
-    this.auth.load().subscribe((user) => {
-      if (user) this.language.usePreferred(user.preferredLanguage);
-      void this.router.navigateByUrl('/articles');
+    this.loading = true;
+    this.auth.load().subscribe({
+      next: (user) => {
+        if (!user) {
+          this.callbackFail();
+          return;
+        }
+        this.language.usePreferred(user.preferredLanguage);
+        void this.router.navigateByUrl('/articles').then(
+          (navigated) => (navigated ? this.callbackComplete() : this.callbackFail()),
+          () => this.callbackFail(),
+        );
+      },
+      error: () => this.callbackFail(),
     });
+  }
+
+  private callbackRequestFailed(error: HttpErrorResponse) {
+    this.callbackFail(error.status);
+  }
+
+  private callbackComplete() {
+    this.callbackProcessing = false;
+    this.loading = false;
+    this.cdr.markForCheck();
+  }
+
+  private callbackFail(status = 0) {
+    this.callbackProcessing = false;
+    this.fail(status);
+  }
+
+  private shouldReinspectPassword(error: HttpErrorResponse) {
+    return error.status === 404 || this.isInvitationInvalidated(error);
+  }
+
+  private shouldReinspectGoogle(error: HttpErrorResponse) {
+    return this.isInvitationInvalidated(error);
+  }
+
+  private isInvitationInvalidated(error: HttpErrorResponse) {
+    return (
+      typeof error.error === 'object' &&
+      error.error !== null &&
+      (error.error as { code?: unknown }).code === 'invitation_invalidated'
+    );
   }
 }

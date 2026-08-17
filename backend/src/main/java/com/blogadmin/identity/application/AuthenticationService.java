@@ -59,6 +59,8 @@ public class AuthenticationService {
       User user;
       try {
         user = adminUserService.redeemGoogle(invitationToken, claims.email(), claims.displayName());
+      } catch (AdminUserService.InvitationInvalidatedException exception) {
+        throw new InvitationInvalidatedException();
       } catch (AdminUserService.InvalidInvitationException
           | AdminUserService.AlreadyExistsException exception) {
         throw new BadCredentialsException();
@@ -187,6 +189,8 @@ public class AuthenticationService {
   public record Result(User user, String refreshToken, UUID sessionId, int accessTokenVersion) {}
 
   public static class BadCredentialsException extends RuntimeException {}
+
+  public static class InvitationInvalidatedException extends RuntimeException {}
 
   public static class SessionNotFoundException extends RuntimeException {}
 }

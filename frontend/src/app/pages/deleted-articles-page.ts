@@ -94,19 +94,19 @@ export class DeletedArticlesPage implements OnInit {
     });
   }
   previousPage() {
-    if (this.page > 0) {
+    if (!this.loading && this.page > 0) {
       this.page--;
       this.read();
     }
   }
   nextPage() {
-    if (this.page + 1 < this.totalPages) {
+    if (!this.loading && this.page + 1 < this.totalPages) {
       this.page++;
       this.read();
     }
   }
   goToPage(page: number) {
-    if (page >= 0 && page < this.totalPages && page !== this.page) {
+    if (!this.loading && page >= 0 && page < this.totalPages && page !== this.page) {
       this.page = page;
       this.read();
     }

@@ -93,7 +93,7 @@
           class="page-btn"
           type="button"
           (click)="previousPage()"
-          [disabled]="page === 0"
+          [disabled]="loading || page === 0"
           aria-label="Previous page"
         >
           &lsaquo;
@@ -104,6 +104,7 @@
             type="button"
             [class.is-active]="p === page"
             [attr.aria-current]="p === page ? 'page' : null"
+            [disabled]="loading"
             (click)="goToPage(p)"
           >
             {{ p + 1 }}
@@ -113,7 +114,7 @@
           class="page-btn"
           type="button"
           (click)="nextPage()"
-          [disabled]="page + 1 >= totalPages"
+          [disabled]="loading || page + 1 >= totalPages"
           aria-label="Next page"
         >
           &rsaquo;

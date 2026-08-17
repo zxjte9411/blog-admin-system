@@ -207,7 +207,7 @@ class AdminUserServiceTest {
     @Test
     void rejectsNullTokenOrEmail() {
       assertThatThrownBy(() -> adminUserService.redeemGoogle(null, "user@example.com", "Name"))
-          .isInstanceOf(AdminUserService.InvalidInvitationException.class);
+          .isInstanceOf(AdminUserService.InvitationInvalidatedException.class);
       assertThatThrownBy(() -> adminUserService.redeemGoogle("token", null, "Name"))
           .isInstanceOf(AdminUserService.InvalidInvitationException.class);
     }

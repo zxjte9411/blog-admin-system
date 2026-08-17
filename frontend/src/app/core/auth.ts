@@ -113,7 +113,8 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
       if (
         error.status !== 401 ||
         request.url.endsWith('/auth/refresh') ||
-        request.url.endsWith('/auth/login')
+        request.url.endsWith('/auth/login') ||
+        request.url.endsWith('/auth/google')
       ) {
         throw error;
       }

@@ -61,7 +61,7 @@ export class ArticleEditorPage implements OnInit {
       },
       error: (e: HttpErrorResponse) => {
         this.tagsLoading = false;
-        this.fail(e.status);
+        this.fail(e.status, false);
       },
     });
     if (this.edit) this.load();
@@ -72,6 +72,7 @@ export class ArticleEditorPage implements OnInit {
     this.form.markAsDirty();
   }
   submit() {
+    if (this.loading) return;
     this.submitted = true;
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -129,8 +130,8 @@ export class ArticleEditorPage implements OnInit {
       error: (e: HttpErrorResponse) => this.fail(e.status),
     });
   }
-  private fail(status: number) {
-    this.loading = false;
+  private fail(status: number, stopLoading = true) {
+    if (stopLoading) this.loading = false;
     this.error =
       status === 401
         ? this.language.t.unauthorized

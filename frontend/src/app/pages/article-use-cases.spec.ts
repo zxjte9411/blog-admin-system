@@ -533,6 +533,38 @@ describe('article use-case pages', () => {
     expect(fixture.nativeElement.querySelector('tbody')?.textContent).toContain('Fifth');
   });
 
+  it('does not send another deleted-page request while pagination is loading', async () => {
+    await setup(DeletedArticlesPage, 'articles/deleted');
+    const fixture = TestBed.createComponent(DeletedArticlesPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/articles/deleted?page=0').flush({
+      content: [{ id: 'a1', title: 'Deleted' }],
+      page: { totalPages: 3 },
+    });
+
+    fixture.componentInstance.nextPage();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.loading).toBe(true);
+    expect(
+      [...fixture.nativeElement.querySelectorAll('.page-btn')].every(
+        (button: HTMLButtonElement) => button.disabled,
+      ),
+    ).toBe(true);
+
+    fixture.componentInstance.nextPage();
+    fixture.componentInstance.goToPage(2);
+    fixture.componentInstance.previousPage();
+    expect(fixture.componentInstance.page).toBe(1);
+    expect(http.match('/api/v1/articles/deleted?page=0')).toHaveLength(0);
+    expect(http.match('/api/v1/articles/deleted?page=2')).toHaveLength(0);
+
+    http.expectOne('/api/v1/articles/deleted?page=1').flush({
+      content: [],
+      page: { totalPages: 3 },
+    });
+  });
+
   it('uses a native dialog for permanent deletion and returns focus', async () => {
     await setup(DeletedArticlesPage, 'articles/deleted');
     const fixture = TestBed.createComponent(DeletedArticlesPage);
@@ -610,6 +642,44 @@ describe('article use-case pages', () => {
           ? language.t.forbidden
           : language.t.conflict;
     expect(fixture.componentInstance.error).toBe(expected);
+  });
+
+  it('keeps edit loading and submit blocked when tags fail before the article resolves', async () => {
+    await setup(ArticleEditPage, 'articles/:id/edit', 'article-1');
+    const fixture = TestBed.createComponent(ArticleEditPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    const tags = http.expectOne('/api/v1/public/tags?size=100');
+    const article = http.expectOne('/api/v1/articles/article-1');
+
+    tags.flush('error', { status: 500, statusText: 'Server error' });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.tagsLoading).toBe(false);
+    expect(fixture.componentInstance.loading).toBe(true);
+    expect(fixture.componentInstance.error).toBe(TestBed.inject(Language).t.error);
+    expect(
+      (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).disabled,
+    ).toBe(true);
+
+    fixture.componentInstance.form.patchValue({ title: 'Title', content: 'Content' });
+    fixture.componentInstance.submit();
+    expect(
+      http.match(
+        (request) => request.url === '/api/v1/articles/article-1' && request.method === 'PUT',
+      ),
+    ).toHaveLength(0);
+
+    article.flush({
+      title: 'Existing title',
+      content: 'Existing content',
+      status: 'DRAFT',
+      tagIds: [],
+      tagNames: [],
+      version: 1,
+    });
+    fixture.detectChanges();
+    expect(fixture.componentInstance.loading).toBe(false);
   });
 
   it.each([401, 403, 409])('maps article editor submit status %s', async (status) => {

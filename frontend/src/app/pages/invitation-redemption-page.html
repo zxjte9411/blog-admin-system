@@ -7,6 +7,11 @@
     @if (loading) {
       <progress class="loading-bar" [attr.aria-label]="language.t.loading"></progress>
     }
+    @if (callbackProcessing) {
+      <div class="processing-status" role="status" aria-live="polite" aria-busy="true">
+        {{ language.t.loginCallbackProcessing }}
+      </div>
+    }
     @if (error) {
       <div class="error" role="alert">{{ error }}</div>
     }
@@ -30,15 +35,17 @@
         <span>{{ language.t.invitationEmail }}</span>
         <output>{{ invitationContext.email }}</output>
       </div>
-      <app-account-form
-        [form]="form"
-        [fields]="fields"
-        [loading]="loading"
-        [submitAttempted]="submitAttempted"
-        [passwordHint]="true"
-        [displayNameHint]="true"
-        (submitted)="submit()"
-      />
+      <fieldset [disabled]="callbackProcessing">
+        <app-account-form
+          [form]="form"
+          [fields]="fields"
+          [loading]="loading"
+          [submitAttempted]="submitAttempted"
+          [passwordHint]="true"
+          [displayNameHint]="true"
+          (submitted)="submit()"
+        />
+      </fieldset>
     }
     @if (invitationStatus === 'valid' && googleLoginAvailable) {
       <div class="oauth-divider" aria-hidden="true">
@@ -47,7 +54,7 @@
       <button
         class="ui-ghost google-login"
         type="button"
-        [disabled]="loading"
+        [disabled]="loading || callbackProcessing"
         (click)="googleLogin()"
       >
         {{ language.t.googleLogin }}

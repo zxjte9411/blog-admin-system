@@ -197,6 +197,22 @@ describe('authentication use-case pages', () => {
     expect(fixture.nativeElement.querySelector('form')).not.toBeNull();
   });
 
+  it('marks a Google callback as processing while invitation context is validating', () => {
+    TestBed.overrideProvider(ActivatedRoute, { useValue: routeWithToken('invite-token') });
+    vi.spyOn(TestBed.inject(AuthenticationApi), 'getInvitationContext').mockReturnValue(NEVER);
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'url', 'get').mockReturnValue('/invite?code=oauth-code&token=invite-token');
+
+    const fixture = TestBed.createComponent(InvitationRedemptionPage);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.callbackProcessing).toBe(true);
+    expect(fixture.nativeElement.querySelector('[role="status"]')?.textContent).toContain(
+      fixture.componentInstance.language.t.loginCallbackProcessing,
+    );
+    expect(fixture.nativeElement.querySelector('form')).toBeNull();
+  });
+
   it('replaces the password form with a login CTA after success without creating a session', () => {
     TestBed.overrideProvider(ActivatedRoute, { useValue: routeWithToken('invite-token') });
     const api = TestBed.inject(AuthenticationApi);
@@ -233,7 +249,7 @@ describe('authentication use-case pages', () => {
       .mockReturnValueOnce(of(validInvitationContext))
       .mockReturnValueOnce(of({ status: 'alreadyUsed' }));
     vi.spyOn(api, 'redeemInvitation').mockReturnValue(
-      throwError(() => ({ status: 409, error: { detail: 'Invitation is no longer available' } })),
+      throwError(() => ({ status: 404, error: { detail: 'Invitation is no longer available' } })),
     );
 
     const fixture = TestBed.createComponent(InvitationRedemptionPage);
@@ -262,7 +278,7 @@ describe('authentication use-case pages', () => {
       .mockReturnValueOnce(of(validInvitationContext))
       .mockReturnValueOnce(recheck);
     vi.spyOn(api, 'redeemInvitation').mockReturnValue(
-      throwError(() => ({ status: 409, error: { detail: 'User already exists' } })),
+      throwError(() => ({ status: 404, error: { detail: 'User already exists' } })),
     );
 
     const fixture = TestBed.createComponent(InvitationRedemptionPage);
@@ -276,9 +292,33 @@ describe('authentication use-case pages', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain(
-      fixture.componentInstance.language.t.conflict,
+      fixture.componentInstance.language.t.notFound,
     );
     expect(fixture.nativeElement.querySelector('form')).not.toBeNull();
+  });
+
+  it('does not recheck an invitation after a password redemption conflict', () => {
+    TestBed.overrideProvider(ActivatedRoute, { useValue: routeWithToken('invite-token') });
+    const api = TestBed.inject(AuthenticationApi);
+    const getContext = vi
+      .spyOn(api, 'getInvitationContext')
+      .mockReturnValue(of(validInvitationContext));
+    vi.spyOn(api, 'redeemInvitation').mockReturnValue(
+      throwError(() => ({ status: 409, error: { detail: 'User already exists' } })),
+    );
+
+    const fixture = TestBed.createComponent(InvitationRedemptionPage);
+    fixture.detectChanges();
+    fixture.componentInstance.form.patchValue({
+      displayName: 'Ada',
+      password: 'secret',
+      preferredLanguage: 'en',
+    });
+    fixture.componentInstance.submit();
+    fixture.detectChanges();
+
+    expect(getContext).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.error).toBe(fixture.componentInstance.language.t.conflict);
   });
 
   it('completes the Google callback through the backend Google Login use case', async () => {
@@ -674,6 +714,187 @@ describe('authentication use-case pages', () => {
     } finally {
       window.location.hash = previousHash;
     }
+  });
+
+  it('keeps invitation callback processing until navigation completes', async () => {
+    TestBed.overrideProvider(ActivatedRoute, { useValue: routeWithToken('invite-token') });
+    vi.spyOn(TestBed.inject(AuthenticationApi), 'getInvitationContext').mockReturnValue(
+      of(validInvitationContext),
+    );
+    (globalThis as typeof globalThis & { __BLOG_ADMIN_CONFIG__?: object }).__BLOG_ADMIN_CONFIG__ = {
+      supabaseUrl: 'https://project.supabase.co',
+      supabasePublishableKey: 'sb_publishable_test',
+    };
+    const supabase = TestBed.inject(SUPABASE_AUTH) as ReturnType<typeof fakeSupabase>;
+    let resolveSession!: (value: {
+      data: { session: { access_token: string } };
+      error: null;
+    }) => void;
+    supabase.getSession.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSession = resolve;
+      }),
+    );
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'url', 'get').mockReturnValue('/invite?code=oauth-code&token=invite-token');
+    let resolveNavigation!: (value: boolean) => void;
+    vi.spyOn(router, 'navigateByUrl').mockReturnValue(
+      new Promise((resolve) => {
+        resolveNavigation = resolve;
+      }),
+    );
+
+    const fixture = TestBed.createComponent(InvitationRedemptionPage);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.loading).toBe(true);
+    expect(
+      [...fixture.nativeElement.querySelectorAll('input, form button, .google-login')].every(
+        (control) => (control as HTMLInputElement | HTMLButtonElement).matches(':disabled'),
+      ),
+    ).toBe(true);
+
+    resolveSession({ data: { session: { access_token: 'supabase-token' } }, error: null });
+    await Promise.resolve();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/auth/google').flush({ accessToken: 'local-token' });
+    http.expectOne('/api/v1/account/me').flush({
+      id: 'user-1',
+      displayName: 'Ada',
+      preferredLanguage: 'en',
+      role: 'AUTHOR',
+    });
+
+    expect(fixture.componentInstance.loading).toBe(true);
+    resolveNavigation(true);
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.loading).toBe(false);
+    expect(
+      [...fixture.nativeElement.querySelectorAll('input, form button, .google-login')].some(
+        (control) => (control as HTMLInputElement | HTMLButtonElement).disabled,
+      ),
+    ).toBe(false);
+  });
+
+  it('releases invitation callback processing when Supabase has no session', async () => {
+    TestBed.overrideProvider(ActivatedRoute, { useValue: routeWithToken('invite-token') });
+    const api = TestBed.inject(AuthenticationApi);
+    const getContext = vi
+      .spyOn(api, 'getInvitationContext')
+      .mockReturnValue(of(validInvitationContext));
+    (globalThis as typeof globalThis & { __BLOG_ADMIN_CONFIG__?: object }).__BLOG_ADMIN_CONFIG__ = {
+      supabaseUrl: 'https://project.supabase.co',
+      supabasePublishableKey: 'sb_publishable_test',
+    };
+    const supabase = TestBed.inject(SUPABASE_AUTH) as ReturnType<typeof fakeSupabase>;
+    supabase.getSession.mockResolvedValue({ data: { session: null }, error: null });
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'url', 'get').mockReturnValue('/invite?code=oauth-code&token=invite-token');
+
+    const fixture = TestBed.createComponent(InvitationRedemptionPage);
+    fixture.detectChanges();
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    expect(getContext).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.loading).toBe(false);
+    expect(fixture.componentInstance.error).toBe(fixture.componentInstance.language.t.error);
+    expect(
+      [...fixture.nativeElement.querySelectorAll('input, form button, .google-login')].some(
+        (control) => (control as HTMLInputElement | HTMLButtonElement).matches(':disabled'),
+      ),
+    ).toBe(false);
+  });
+
+  it('does not recheck a valid invitation for a general Google callback error', async () => {
+    TestBed.overrideProvider(ActivatedRoute, { useValue: routeWithToken('invite-token') });
+    const api = TestBed.inject(AuthenticationApi);
+    const getContext = vi
+      .spyOn(api, 'getInvitationContext')
+      .mockReturnValue(of(validInvitationContext));
+    (globalThis as typeof globalThis & { __BLOG_ADMIN_CONFIG__?: object }).__BLOG_ADMIN_CONFIG__ = {
+      supabaseUrl: 'https://project.supabase.co',
+      supabasePublishableKey: 'sb_publishable_test',
+    };
+    const supabase = TestBed.inject(SUPABASE_AUTH) as ReturnType<typeof fakeSupabase>;
+    supabase.getSession.mockResolvedValue({
+      data: { session: { access_token: 'supabase-token' } },
+      error: null,
+    });
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'url', 'get').mockReturnValue('/invite?code=oauth-code&token=invite-token');
+
+    const fixture = TestBed.createComponent(InvitationRedemptionPage);
+    fixture.detectChanges();
+    await Promise.resolve();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/auth/google')
+      .flush({}, { status: 401, statusText: 'Unauthorized' });
+    fixture.detectChanges();
+
+    expect(getContext).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.loading).toBe(false);
+    expect(fixture.componentInstance.error).toBe(fixture.componentInstance.language.t.unauthorized);
+  });
+
+  it('rechecks an invalidated Google callback and renders the final invitation state', async () => {
+    TestBed.overrideProvider(ActivatedRoute, { useValue: routeWithToken('invite-token') });
+    const api = TestBed.inject(AuthenticationApi);
+    const getContext = vi
+      .spyOn(api, 'getInvitationContext')
+      .mockReturnValueOnce(of(validInvitationContext))
+      .mockReturnValueOnce(of({ status: 'expired' }));
+    (globalThis as typeof globalThis & { __BLOG_ADMIN_CONFIG__?: object }).__BLOG_ADMIN_CONFIG__ = {
+      supabaseUrl: 'https://project.supabase.co',
+      supabasePublishableKey: 'sb_publishable_test',
+    };
+    const supabase = TestBed.inject(SUPABASE_AUTH) as ReturnType<typeof fakeSupabase>;
+    supabase.getSession.mockResolvedValue({
+      data: { session: { access_token: 'supabase-token' } },
+      error: null,
+    });
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'url', 'get').mockReturnValue('/invite?code=oauth-code&token=invite-token');
+
+    const fixture = TestBed.createComponent(InvitationRedemptionPage);
+    fixture.detectChanges();
+    await Promise.resolve();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/auth/google')
+      .flush({ code: 'invitation_invalidated' }, { status: 401, statusText: 'Unauthorized' });
+    fixture.detectChanges();
+
+    expect(getContext).toHaveBeenCalledTimes(2);
+    expect(fixture.componentInstance.invitationStatus).toBe('expired');
+    expect(fixture.nativeElement.textContent).toContain(
+      fixture.componentInstance.language.t.invitationExpired,
+    );
+    expect(fixture.nativeElement.querySelector('form')).toBeNull();
+  });
+
+  it.each([400, 0])('does not recheck an invitation for password error status %s', (status) => {
+    TestBed.overrideProvider(ActivatedRoute, { useValue: routeWithToken('invite-token') });
+    const api = TestBed.inject(AuthenticationApi);
+    const getContext = vi
+      .spyOn(api, 'getInvitationContext')
+      .mockReturnValue(of(validInvitationContext));
+    vi.spyOn(api, 'redeemInvitation').mockReturnValue(
+      throwError(() => ({ status, error: { detail: 'Original password error' } })),
+    );
+
+    const fixture = TestBed.createComponent(InvitationRedemptionPage);
+    fixture.detectChanges();
+    fixture.componentInstance.form.patchValue({
+      displayName: 'Ada',
+      password: 'secret',
+      preferredLanguage: 'en',
+    });
+    fixture.componentInstance.submit();
+
+    expect(getContext).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.error).toBe(fixture.componentInstance.language.t.error);
   });
 });
 

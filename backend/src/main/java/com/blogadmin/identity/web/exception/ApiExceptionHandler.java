@@ -6,6 +6,7 @@ import com.blogadmin.identity.application.AdminUserService.ForbiddenException;
 import com.blogadmin.identity.application.AdminUserService.InvalidMinimumException;
 import com.blogadmin.identity.application.AdminUserService.LastAdminException;
 import com.blogadmin.identity.application.AuthenticationService.BadCredentialsException;
+import com.blogadmin.identity.application.AuthenticationService.InvitationInvalidatedException;
 import com.blogadmin.identity.application.AuthenticationService.SessionNotFoundException;
 import com.blogadmin.identity.application.RegistrationService.InvalidRegistrationException;
 import com.blogadmin.identity.application.RegistrationService.RateLimitedException;
@@ -66,6 +67,16 @@ public class ApiExceptionHandler {
   ResponseEntity<ProblemDetail> unauthorized() {
     var problem =
         ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Authentication failed");
+    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+        .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+        .body(problem);
+  }
+
+  @ExceptionHandler(InvitationInvalidatedException.class)
+  ResponseEntity<ProblemDetail> invitationInvalidated() {
+    var problem =
+        ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Authentication failed");
+    problem.setProperty("code", "invitation_invalidated");
     return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
         .contentType(MediaType.APPLICATION_PROBLEM_JSON)
         .body(problem);
