@@ -26,7 +26,6 @@ describe('AppShell', () => {
         { provide: SUPABASE_AUTH, useValue: supabase },
       ],
     }).compileComponents();
-    vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
   });
 
   it('provides the shell landmarks and skip link', () => {
@@ -59,8 +58,10 @@ describe('AppShell', () => {
     expect(document.body.style.overflow).toBe('hidden');
     expect(drawer.contains(document.activeElement)).toBe(true);
 
-    const links = drawer.querySelectorAll<HTMLAnchorElement>('a.nav-link');
-    links[links.length - 1].focus();
+    const links = Array.from(drawer.querySelectorAll<HTMLAnchorElement>('a.nav-link')).filter(
+      (link) => !link.closest('li')?.hidden,
+    );
+    links.at(-1)?.focus();
     drawer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
     expect(document.activeElement).toBe(links[0]);
 
@@ -75,6 +76,72 @@ describe('AppShell', () => {
     backdrop.click();
     fixture.detectChanges();
     expect(menuButton.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('keeps focus within visible anonymous navigation links', () => {
+    const fixture = TestBed.createComponent(AppShell);
+    fixture.detectChanges();
+
+    const menuButton = fixture.nativeElement.querySelector('.menu-toggle') as HTMLButtonElement;
+    menuButton.click();
+    fixture.detectChanges();
+
+    const drawer = fixture.nativeElement.querySelector('#mobile-navigation') as HTMLElement;
+    const visibleLinks = Array.from(
+      drawer.querySelectorAll<HTMLAnchorElement>('a.nav-link'),
+    ).filter((link) => !link.closest('li')?.hidden);
+    visibleLinks.at(-1)?.focus();
+    drawer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+
+    expect(document.activeElement).toBe(visibleLinks[0]);
+  });
+
+  it('toggles the drawer from the menu button and restores focus', () => {
+    const fixture = TestBed.createComponent(AppShell);
+    fixture.detectChanges();
+
+    const menuButton = fixture.nativeElement.querySelector('.menu-toggle') as HTMLButtonElement;
+    menuButton.click();
+    fixture.detectChanges();
+    expect(menuButton.getAttribute('aria-label')).toBe('Close navigation menu');
+
+    menuButton.click();
+    fixture.detectChanges();
+
+    expect(menuButton.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(menuButton);
+  });
+
+  it('closes when a navigation link is activated', () => {
+    const fixture = TestBed.createComponent(AppShell);
+    fixture.detectChanges();
+    vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+
+    const menuButton = fixture.nativeElement.querySelector('.menu-toggle') as HTMLButtonElement;
+    menuButton.click();
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('a[href="/public/tags"]') as HTMLAnchorElement).click();
+    fixture.detectChanges();
+
+    expect(menuButton.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(menuButton);
+  });
+
+  it('closes when router navigation starts', async () => {
+    const fixture = TestBed.createComponent(AppShell);
+    fixture.detectChanges();
+
+    const menuButton = fixture.nativeElement.querySelector('.menu-toggle') as HTMLButtonElement;
+    menuButton.click();
+    fixture.detectChanges();
+
+    await TestBed.inject(Router)
+      .navigateByUrl('/public/articles')
+      .catch(() => false);
+    fixture.detectChanges();
+
+    expect(menuButton.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(menuButton);
   });
 
   it('shows public navigation and hides protected navigation anonymously', () => {
@@ -94,6 +161,7 @@ describe('AppShell', () => {
 
   it('logs out from the local session and Supabase', async () => {
     const fixture = TestBed.createComponent(AppShell);
+    vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
     fixture.componentInstance.auth.setToken('local-token');
     fixture.componentInstance.logout();
 

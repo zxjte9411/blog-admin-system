@@ -111,6 +111,14 @@ export class AppShell implements OnInit, OnDestroy {
     elementToFocus?.focus();
   }
 
+  toggleMenu() {
+    if (this.isMenuOpen) {
+      this.closeMenu();
+    } else {
+      this.openMenu();
+    }
+  }
+
   @HostListener('document:keydown', ['$event'])
   onDocumentKeydown(event: KeyboardEvent) {
     if (this.isMenuOpen && event.key === 'Escape') {
@@ -120,19 +128,13 @@ export class AppShell implements OnInit, OnDestroy {
   }
 
   onDrawerKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      this.closeMenu();
-      return;
-    }
-
     if (event.key !== 'Tab' || !this.mobileNavigation) return;
 
     const focusableElements = Array.from(
       this.mobileNavigation.nativeElement.querySelectorAll<HTMLElement>(
         'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
       ),
-    );
+    ).filter((element) => !element.hidden && !element.closest('[hidden]'));
     if (!focusableElements.length) {
       event.preventDefault();
       return;

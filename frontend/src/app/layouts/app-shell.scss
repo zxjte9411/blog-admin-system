@@ -102,10 +102,9 @@
 }
 
 .app-shell-sidebar nav {
-  display: flex;
+  display: block;
   gap: 1.5rem;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  overflow: visible;
 }
 
 .drawer-backdrop {
@@ -119,6 +118,7 @@
 
 .nav-group {
   min-width: max-content;
+  margin-bottom: 1.5rem;
 }
 .nav-group:not(:has(li:not([hidden]))) {
   display: none;
@@ -135,7 +135,7 @@ li[hidden] {
   text-transform: uppercase;
 }
 .nav-group ul {
-  display: flex;
+  display: grid;
   gap: 0.2rem;
   margin: 0;
   padding: 0;
@@ -186,17 +186,6 @@ li[hidden] {
     border-inline-end: 1px solid var(--line);
     padding: 1.5rem 1rem;
   }
-
-  .app-shell-sidebar nav {
-    display: block;
-    overflow: visible;
-  }
-  .nav-group {
-    margin-bottom: 1.5rem;
-  }
-  .nav-group ul {
-    display: grid;
-  }
 }
 
 @media (max-width: 767px) {
@@ -231,19 +220,6 @@ li[hidden] {
   .app-shell-sidebar.is-open {
     transform: translateX(0);
     visibility: visible;
-  }
-
-  .app-shell-sidebar nav {
-    display: block;
-    overflow: visible;
-  }
-
-  .nav-group {
-    margin-bottom: 1.5rem;
-  }
-
-  .nav-group ul {
-    display: grid;
   }
 
   .drawer-backdrop {
