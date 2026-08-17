@@ -78,7 +78,31 @@ chmod 600 .env
 
 `SUPABASE_URL` 與 `SUPABASE_PUBLISHABLE_KEY` 會提供給瀏覽器使用；這兩個值也只能是 URL 與 publishable key，不可混入 service role key 或其他 secret。公開 `config.js` 同樣遵守這個界線。
 
-### 2.2 驗證 Compose 設定
+### 2.2 設定／本機／線上對照
+
+先在本機用 localhost 驗證，再將同一套 Supabase project 的對應值填入 VM `.env`。表中的 `<正式網域>` 與 `<同一 Supabase project URL>` 只是假值，不要替換後寫回本文件。
+
+| 設定 | 本機 | 線上 |
+| --- | --- | --- |
+| `APP_FRONTEND_BASE_URL` | `http://localhost:4200` | `https://<正式網域>` |
+| Supabase Dashboard **Site URL** | `http://localhost:4200` | 與 `APP_FRONTEND_BASE_URL` 完全一致 |
+| Supabase **Redirect URLs** | `http://localhost:4200/login`、`http://localhost:4200/invite/**` | `https://<正式網域>/login`、`https://<正式網域>/invite/**` |
+| Google OAuth **Redirect URI** | 使用 Supabase Dashboard 顯示的 callback URI | 使用同一個 Supabase callback URI；不要自行拼接 |
+| `SUPABASE_URL` | `<同一 Supabase project URL>` | 同一個 project URL |
+| `SUPABASE_PUBLISHABLE_KEY` | 該 project 的 publishable key | 該 project 的 publishable key；不可使用 service role key |
+| `SUPABASE_JWT_ISSUER` | `${SUPABASE_URL}/auth/v1` | 同一 project 的 `${SUPABASE_URL}/auth/v1` |
+| `SUPABASE_JWKS_URL` | `${SUPABASE_JWT_ISSUER}/.well-known/jwks.json` | 同一 project 的相同 JWKS 路徑 |
+| `APP_SECURITY_JWT_SECRET` | 隨機且至少 32 bytes | 另一組隨機且至少 32 bytes；只放 VM `.env` |
+
+**一致性檢查：**`SUPABASE_URL`、`SUPABASE_PUBLISHABLE_KEY`、`SUPABASE_JWT_ISSUER`、`SUPABASE_JWKS_URL` 必須來自同一個 Supabase project。修改 project 時四者一起更新，並重新確認 Dashboard 與 Google OAuth URI。
+
+建立 secret 時只在終端機產生並填入未提交的 `.env`：
+
+```sh
+openssl rand -base64 32
+```
+
+### 2.3 驗證 Compose 設定
 
 不要把完整輸出保存或貼出，因為 Compose 展開後可能包含 secret。只做本機驗證：
 
