@@ -4,8 +4,8 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 import { ArticleCreatePage } from './article-create-page';
 import { ArticleEditPage } from './article-edit-page';
+import { ArticleEditorPage, canLeaveArticle } from './article-editor-page';
 import { ArticleListPage } from './article-list-page';
-import { canLeaveArticle } from './article-editor-page';
 import { DeletedArticlesPage } from './deleted-articles-page';
 import { Language } from '../core/language';
 import { Auth } from '../core/auth';
@@ -15,6 +15,7 @@ function setup(
   component:
     | typeof ArticleCreatePage
     | typeof ArticleEditPage
+    | typeof ArticleEditorPage
     | typeof ArticleListPage
     | typeof DeletedArticlesPage,
   path: string,
@@ -50,6 +51,17 @@ describe('article use-case pages', () => {
       page: { totalPages: 3 },
     };
     expect(page.page?.totalPages).toBe(3);
+  });
+
+  it('marks the unique article submit control for mobile sticky styling', async () => {
+    await setup(ArticleEditorPage, 'articles/new');
+    const fixture = TestBed.createComponent(ArticleEditorPage);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/public/tags?size=100').flush([]);
+
+    const submits = fixture.nativeElement.querySelectorAll('button[type="submit"]');
+    expect(submits).toHaveLength(1);
+    expect(submits[0].classList).toContain('article-submit');
   });
 
   it('shows required field errors and submits a new article', async () => {

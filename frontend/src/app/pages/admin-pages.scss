@@ -452,6 +452,16 @@ h1 {
   }
 }
 
+@media (max-width: 767px) {
+  .article-form > .article-submit {
+    position: sticky;
+    z-index: 1;
+    bottom: 0;
+    min-block-size: 44px;
+    padding-block-end: calc(0.65rem + env(safe-area-inset-bottom));
+  }
+}
+
 .confirm-dialog {
   position: fixed;
   inset: 0;
