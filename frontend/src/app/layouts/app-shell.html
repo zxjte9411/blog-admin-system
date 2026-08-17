@@ -1,5 +1,26 @@
 <a class="skip-link" href="#content">Skip to main content</a>
 <header class="app-shell-header">
+  <button
+    #menuButton
+    class="menu-toggle"
+    type="button"
+    [attr.aria-label]="
+      isMenuOpen
+        ? language.lang() === 'en'
+          ? 'Close navigation menu'
+          : '關閉導覽選單'
+        : language.lang() === 'en'
+          ? 'Open navigation menu'
+          : '開啟導覽選單'
+    "
+    [attr.aria-expanded]="isMenuOpen"
+    aria-controls="mobile-navigation"
+    (click)="openMenu()"
+  >
+    <span aria-hidden="true"></span>
+    <span aria-hidden="true"></span>
+    <span aria-hidden="true"></span>
+  </button>
   <a routerLink="/public/articles" class="brand">{{ language.t.title }}</a>
   <span class="spacer"></span>
   <button class="ui-ghost" type="button" (click)="toggleLanguage()">
@@ -14,7 +35,19 @@
   }
 </header>
 <div class="shell">
-  <aside class="app-shell-sidebar">
+  <aside
+    #mobileNavigation
+    id="mobile-navigation"
+    class="app-shell-sidebar"
+    [class.is-open]="isMenuOpen"
+    [attr.role]="isMenuOpen ? 'dialog' : null"
+    [attr.aria-label]="
+      isMenuOpen ? (language.lang() === 'en' ? 'Navigation menu' : '導覽選單') : null
+    "
+    [attr.aria-modal]="isMenuOpen ? 'true' : null"
+    tabindex="-1"
+    (keydown)="onDrawerKeydown($event)"
+  >
     <nav aria-label="Primary navigation">
       @for (group of navGroups; track group.label) {
         <section class="nav-group" [attr.aria-label]="navGroupLabel(group.label)">
@@ -28,6 +61,7 @@
                   routerLinkActive="is-active"
                   [routerLinkActiveOptions]="{ exact: true }"
                   [ariaCurrentWhenActive]="'page'"
+                  (click)="onNavLinkClick()"
                 >
                   {{ navLabel(link) }}
                 </a>
@@ -38,6 +72,13 @@
       }
     </nav>
   </aside>
+  <button
+    class="drawer-backdrop"
+    type="button"
+    [hidden]="!isMenuOpen"
+    [attr.aria-label]="language.lang() === 'en' ? 'Close navigation menu' : '關閉導覽選單'"
+    (click)="closeMenu()"
+  ></button>
   <main id="content" class="app-shell-main" tabindex="-1" [attr.aria-busy]="loading">
     <ng-content />
   </main>

@@ -2,13 +2,18 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  ElementRef,
+  HostListener,
   Input,
+  OnDestroy,
   OnInit,
+  ViewChild,
   inject,
 } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { Router, RouterLink, RouterLinkActive } from '@angular/router';
-import { catchError, defer, forkJoin, of } from 'rxjs';
+import { NavigationStart, Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { Subscription, catchError, defer, filter, forkJoin, of } from 'rxjs';
 import { Auth } from '../core/auth';
 import { Language } from '../core/language';
 import { SUPABASE_AUTH } from '../core/supabase';
@@ -21,15 +26,24 @@ import { SUPABASE_AUTH } from '../core/supabase';
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './app-shell.scss',
 })
-export class AppShell implements OnInit {
+export class AppShell implements OnInit, OnDestroy {
   readonly auth = inject(Auth);
   readonly language = inject(Language);
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly supabase = inject(SUPABASE_AUTH);
+  private readonly document = inject(DOCUMENT);
+
+  @ViewChild('menuButton') private menuButton?: ElementRef<HTMLButtonElement>;
+  @ViewChild('mobileNavigation') private mobileNavigation?: ElementRef<HTMLElement>;
 
   @Input() loading = false;
+
+  isMenuOpen = false;
+  private previousFocusedElement: HTMLElement | null = null;
+  private previousBodyOverflow = '';
+  private readonly routerEventsSubscription = new Subscription();
 
   readonly navGroups = [
     { label: 'public', links: ['/public/articles', '/public/tags'] },
@@ -50,10 +64,95 @@ export class AppShell implements OnInit {
   ];
 
   ngOnInit() {
+    this.routerEventsSubscription.add(
+      this.router.events
+        .pipe(filter((event) => event instanceof NavigationStart))
+        .subscribe(() => this.closeMenu()),
+    );
+
     if (this.auth.token && !this.auth.user) {
       this.auth.load().subscribe(() => {
         this.cdr.markForCheck();
       });
+    }
+  }
+
+  ngOnDestroy() {
+    this.routerEventsSubscription.unsubscribe();
+    if (this.isMenuOpen) {
+      this.document.body.style.overflow = this.previousBodyOverflow;
+    }
+  }
+
+  openMenu() {
+    if (this.isMenuOpen) return;
+
+    const activeElement = this.document.activeElement;
+    this.previousFocusedElement =
+      activeElement instanceof HTMLElement && activeElement !== this.document.body
+        ? activeElement
+        : (this.menuButton?.nativeElement ?? null);
+    this.previousBodyOverflow = this.document.body.style.overflow;
+    this.document.body.style.overflow = 'hidden';
+    this.isMenuOpen = true;
+    this.cdr.markForCheck();
+    this.mobileNavigation?.nativeElement.focus();
+  }
+
+  closeMenu() {
+    if (!this.isMenuOpen) return;
+
+    this.isMenuOpen = false;
+    this.document.body.style.overflow = this.previousBodyOverflow;
+    this.cdr.markForCheck();
+
+    const elementToFocus = this.previousFocusedElement;
+    this.previousFocusedElement = null;
+    elementToFocus?.focus();
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onDocumentKeydown(event: KeyboardEvent) {
+    if (this.isMenuOpen && event.key === 'Escape') {
+      event.preventDefault();
+      this.closeMenu();
+    }
+  }
+
+  onDrawerKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.closeMenu();
+      return;
+    }
+
+    if (event.key !== 'Tab' || !this.mobileNavigation) return;
+
+    const focusableElements = Array.from(
+      this.mobileNavigation.nativeElement.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    );
+    if (!focusableElements.length) {
+      event.preventDefault();
+      return;
+    }
+
+    const first = focusableElements[0];
+    const last = focusableElements[focusableElements.length - 1];
+    const activeElement = this.document.activeElement;
+    if (
+      event.shiftKey &&
+      (activeElement === first || activeElement === this.mobileNavigation.nativeElement)
+    ) {
+      event.preventDefault();
+      last.focus();
+    } else if (
+      !event.shiftKey &&
+      (activeElement === last || activeElement === this.mobileNavigation.nativeElement)
+    ) {
+      event.preventDefault();
+      first.focus();
     }
   }
 
@@ -95,6 +194,10 @@ export class AppShell implements OnInit {
 
   hasVisibleLinks(group: { links: string[] }) {
     return group.links.some((link) => this.canSeeNav(link));
+  }
+
+  onNavLinkClick() {
+    this.closeMenu();
   }
 
   logout() {

@@ -40,6 +40,43 @@ describe('AppShell', () => {
     expect(fixture.nativeElement.querySelector('main').id).toBe('content');
   });
 
+  it('opens the mobile navigation drawer and restores focus when dismissed', () => {
+    const fixture = TestBed.createComponent(AppShell);
+    fixture.detectChanges();
+
+    const menuButton = fixture.nativeElement.querySelector('.menu-toggle') as HTMLButtonElement;
+    expect(menuButton.getAttribute('aria-label')).toBe('Open navigation menu');
+    expect(menuButton.getAttribute('aria-expanded')).toBe('false');
+    expect(menuButton.getAttribute('aria-controls')).toBe('mobile-navigation');
+
+    menuButton.click();
+    fixture.detectChanges();
+
+    const drawer = fixture.nativeElement.querySelector('#mobile-navigation') as HTMLElement;
+    const backdrop = fixture.nativeElement.querySelector('.drawer-backdrop') as HTMLButtonElement;
+    expect(menuButton.getAttribute('aria-expanded')).toBe('true');
+    expect(drawer.classList.contains('is-open')).toBe(true);
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(drawer.contains(document.activeElement)).toBe(true);
+
+    const links = drawer.querySelectorAll<HTMLAnchorElement>('a.nav-link');
+    links[links.length - 1].focus();
+    drawer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    expect(document.activeElement).toBe(links[0]);
+
+    drawer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    expect(menuButton.getAttribute('aria-expanded')).toBe('false');
+    expect(document.body.style.overflow).toBe('');
+    expect(document.activeElement).toBe(menuButton);
+
+    menuButton.click();
+    fixture.detectChanges();
+    backdrop.click();
+    fixture.detectChanges();
+    expect(menuButton.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('shows public navigation and hides protected navigation anonymously', () => {
     const fixture = TestBed.createComponent(AppShell);
     fixture.detectChanges();
