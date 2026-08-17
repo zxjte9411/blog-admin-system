@@ -16,14 +16,17 @@
     @if (language.error()) {
       <div class="error" role="alert">{{ language.error() }}</div>
     }
-    <app-account-form
-      [form]="form"
-      [fields]="fields"
-      [loading]="loading"
-      [submitAttempted]="submitAttempted"
-      [displayNameHint]="true"
-      (submitted)="submit()"
-      (languageChanged)="onLanguageChange($event)"
-    />
+    <fieldset class="account-fields">
+      <legend class="sr-only">{{ title }}</legend>
+      <app-account-form
+        [form]="form"
+        [fields]="fields"
+        [loading]="loading"
+        [submitAttempted]="submitAttempted"
+        [displayNameHint]="true"
+        (submitted)="submit()"
+        (languageChanged)="onLanguageChange($event)"
+      />
+    </fieldset>
   </app-account-layout>
 </app-shell>

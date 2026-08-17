@@ -1,10 +1,22 @@
 :host {
   display: block;
 }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .user-management {
   margin-top: 1.5rem;
 }
 .table-wrap {
+  min-inline-size: 0;
   overflow-x: auto;
   margin-top: 1.75rem;
 }
@@ -35,6 +47,8 @@ th {
 .user-name,
 .user-email {
   display: block;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
 .user-name {
   font-weight: 700;
@@ -67,6 +81,8 @@ th {
   background-size: 0.75rem;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   cursor: pointer;
+  min-inline-size: 0;
+  max-inline-size: 100%;
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease;
@@ -75,8 +91,7 @@ th {
     border-color: var(--ink);
   }
 
-  &:focus {
-    outline: none;
+  &:focus-visible {
     border-color: var(--amber);
     box-shadow: 0 0 0 3px rgba(178, 106, 8, 0.12);
   }
@@ -166,6 +181,14 @@ th {
     border-bottom: 0;
     padding: 0.55rem 0;
     text-align: left;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .data-table td > * {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    overflow-wrap: anywhere;
   }
 
   .data-table td::before {

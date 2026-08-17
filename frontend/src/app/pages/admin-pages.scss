@@ -31,6 +31,8 @@ h1 {
 .error {
   margin: 1rem 0;
   padding: 0.85rem 1rem;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
 .success {
   color: #185c37;
@@ -229,6 +231,7 @@ h1 {
 }
 .table-wrap {
   width: 100%;
+  min-inline-size: 0;
   overflow-x: auto;
   margin-top: 1.75rem;
 }
@@ -244,6 +247,8 @@ h1 {
   padding: 1rem 0.75rem;
   border-bottom: 1px solid var(--line);
   vertical-align: top;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
 .data-table th {
   border-top: 2px solid var(--ink);
@@ -452,10 +457,14 @@ h1 {
   inset: 0;
   margin: auto;
   width: min(26rem, 90%);
+  max-inline-size: calc(100% - 2rem);
+  box-sizing: border-box;
+  min-inline-size: 0;
   padding: 1.25rem;
   border: 1px solid var(--line);
   border-radius: 0.5rem;
   background: var(--paper);
+  overflow-wrap: anywhere;
 
   &::backdrop {
     background: #0006;
@@ -473,6 +482,7 @@ h1 {
   .dialog-actions {
     display: flex;
     justify-content: flex-end;
+    flex-wrap: wrap;
     gap: 0.5rem;
   }
 

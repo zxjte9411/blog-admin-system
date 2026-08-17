@@ -49,6 +49,41 @@ describe('user account pages', () => {
     expect(email).toHaveBeenCalledWith({ email: 'new@example.com' });
   });
 
+  it('renders profile and password controls in separate named fieldsets', () => {
+    const api = TestBed.inject(UserApi);
+    vi.spyOn(api, 'me').mockReturnValue(
+      of({ id: 'user-1', displayName: 'Ada', preferredLanguage: 'zh-TW', role: 'AUTHOR' }),
+    );
+
+    const profileFixture = TestBed.createComponent(UserProfilePage);
+    profileFixture.detectChanges();
+    const passwordFixture = TestBed.createComponent(UserPasswordPage);
+    passwordFixture.detectChanges();
+
+    const profileFieldset = profileFixture.nativeElement.querySelector(
+      'fieldset.account-fields',
+    ) as HTMLFieldSetElement;
+    const passwordFieldset = passwordFixture.nativeElement.querySelector(
+      'fieldset.account-fields',
+    ) as HTMLFieldSetElement;
+    expect(profileFieldset).toBeTruthy();
+    expect(profileFieldset.querySelector('legend')?.textContent?.trim()).toBeTruthy();
+    expect(passwordFieldset).toBeTruthy();
+    expect(passwordFieldset.querySelector('legend')?.textContent?.trim()).toBeTruthy();
+  });
+
+  it('renders email controls in a named fieldset', () => {
+    const fixture = TestBed.createComponent(UserEmailPage);
+    fixture.detectChanges();
+
+    const fieldset = fixture.nativeElement.querySelector(
+      'fieldset.account-fields',
+    ) as HTMLFieldSetElement;
+    expect(fieldset).toBeTruthy();
+    expect(fieldset.querySelector('legend')?.textContent?.trim()).toBeTruthy();
+    expect(fieldset.querySelector('#field-email')).toBeTruthy();
+  });
+
   it('keeps sessions pagination local to UserSessionsPage', () => {
     const page = TestBed.createComponent(UserSessionsPage).componentInstance;
     page.ngOnInit();
@@ -68,6 +103,30 @@ describe('user account pages', () => {
     expect(page.pagedSessions).toHaveLength(1);
     page.previousPage();
     expect(page.page).toBe(0);
+  });
+
+  it('renders refresh sessions as labeled records without hiding revoke actions', () => {
+    const fixture = TestBed.createComponent(UserSessionsPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/auth/sessions?page=0').flush([
+      {
+        id: 'session-with-a-long-identifier-that-must-wrap',
+        current: false,
+        createdAt: '2026-08-14T10:00:00Z',
+        lastUsedAt: '2026-08-14T11:00:00Z',
+      },
+    ]);
+    fixture.detectChanges();
+
+    const table = fixture.nativeElement.querySelector('table') as HTMLTableElement;
+    expect(table.classList).toContain('responsive-data-table');
+    expect(
+      [...table.querySelectorAll('tbody td')].every((cell) => cell.getAttribute('data-label')),
+    ).toBe(true);
+    expect(fixture.nativeElement.querySelector('.danger')?.textContent).toContain(
+      fixture.componentInstance.language.t.revoke,
+    );
   });
 
   it('reloads sessions after a successful revoke', () => {

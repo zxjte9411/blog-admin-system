@@ -178,6 +178,33 @@ describe('admin pages', () => {
     expect(region.textContent).toContain('Author');
   });
 
+  it('renders managed users as responsive records with labeled cells', async () => {
+    await setup(ManagedUsersPage);
+    const fixture = TestBed.createComponent(ManagedUsersPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/admin/users').flush([
+      {
+        id: 'author-1',
+        email: 'very-long-user-address-that-must-wrap@example.com',
+        displayName: 'Author',
+        role: 'AUTHOR',
+        enabled: true,
+        verifiedAt: null,
+      },
+    ]);
+    fixture.detectChanges();
+
+    const table = fixture.nativeElement.querySelector('table') as HTMLTableElement;
+    expect(table.classList).toContain('responsive-data-table');
+    expect(
+      [...table.querySelectorAll('tbody td')].every(
+        (cell) => (cell as HTMLElement).dataset['label'],
+      ),
+    ).toBe(true);
+    expect(table.textContent).toContain('very-long-user-address-that-must-wrap@example.com');
+  });
+
   it('creates an invitation and renders the invitation list', async () => {
     await setup(InvitationsPage);
     const fixture = TestBed.createComponent(InvitationsPage);
@@ -200,6 +227,28 @@ describe('admin pages', () => {
     expect(request.request.body).toEqual({ email: 'new@example.com' });
     request.flush(null, { status: 202, statusText: 'Accepted' });
     http.expectOne('/api/v1/admin/invitations').flush([]);
+  });
+
+  it('labels invitation cells for a narrow single-column layout', async () => {
+    await setup(InvitationsPage);
+    const fixture = TestBed.createComponent(InvitationsPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/admin/invitations').flush([
+      {
+        id: 'invitation-1',
+        email: 'long-invitation-address-that-must-wrap@example.com',
+        expiresAt: '2026-08-15T10:00:00Z',
+      },
+    ]);
+    fixture.detectChanges();
+
+    const table = fixture.nativeElement.querySelector('table') as HTMLTableElement;
+    expect(table.classList).toContain('responsive-data-table');
+    expect(table.querySelector('tbody td')?.getAttribute('data-label')).toBe(
+      fixture.componentInstance.language.t.field.email,
+    );
+    expect(table.textContent).toContain('long-invitation-address-that-must-wrap@example.com');
   });
 
   it('renders five invitation skeleton rows only for an empty initial list request', async () => {
@@ -408,6 +457,31 @@ describe('admin pages', () => {
     expect(historyRegion.getAttribute('aria-busy')).toBe('false');
     expect(historyRegion.querySelector('progress')).toBeNull();
     expect(historyRegion.querySelector('table')).toBeTruthy();
+  });
+
+  it('renders password-setting history as labeled mobile records', async () => {
+    await setup(PasswordSettingsPage);
+    const fixture = TestBed.createComponent(PasswordSettingsPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/admin/settings/password-minimum-length').flush({ value: 12 });
+    http.expectOne('/api/v1/admin/settings/password-minimum-length/history').flush([
+      {
+        id: 'change-1',
+        operatorId: 'admin-with-a-long-identifier',
+        previousValue: 8,
+        newValue: 12,
+        changedAt: '2026-08-14T10:00:00Z',
+      },
+    ]);
+    fixture.detectChanges();
+
+    const table = fixture.nativeElement.querySelector('.password-history') as HTMLTableElement;
+    expect(table.classList).toContain('responsive-data-table');
+    expect(
+      [...table.querySelectorAll('tbody td')].every((cell) => cell.getAttribute('data-label')),
+    ).toBe(true);
+    expect(table.textContent).toContain('admin-with-a-long-identifier');
   });
 
   it('shows history errors and retries minimum and history together', async () => {

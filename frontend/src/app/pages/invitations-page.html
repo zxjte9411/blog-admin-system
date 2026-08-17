@@ -53,7 +53,7 @@
         <span></span><span></span><span></span><span></span><span></span>
       </div>
     } @else {
-      <table class="data-table">
+      <table class="data-table responsive-data-table">
         <caption>
           {{
             language.t.invitationsHeading
@@ -67,7 +67,7 @@
         <tbody>
           @for (invitation of items; track invitation.id) {
             <tr>
-              <td>{{ invitation.email }}</td>
+              <td [attr.data-label]="language.t.field.email">{{ invitation.email }}</td>
             </tr>
           }
         </tbody>
