@@ -29,7 +29,8 @@ export class ManagedUsersPage implements OnInit {
   private readonly api = inject(AdminUserApi);
   private readonly cdr = inject(ChangeDetectorRef);
   items: Row[] = [];
-  loading = false;
+  listLoading = false;
+  updatingRowId: string | null = null;
   error = '';
   message = '';
 
@@ -81,42 +82,45 @@ export class ManagedUsersPage implements OnInit {
   }
 
   private update(row: Row, previous: Row) {
-    this.loading = true;
+    const id = String(row['id']);
+    this.updatingRowId = id;
     this.error = '';
     this.api
-      .update(String(row['id']), {
+      .update(id, {
         role: row['role'] as ManagedUser['role'],
         enabled: row['enabled'] as boolean,
       })
       .subscribe({
         next: (updated) => {
           this.replace(row, (updated as unknown as Row) || row);
-          this.loading = false;
+          this.updatingRowId = null;
           this.message = this.language.t.success;
           this.cdr.markForCheck();
         },
         error: (e: HttpErrorResponse) => {
           this.replace(row, previous);
-          this.fail(e.status);
+          this.fail(e.status, 'row');
         },
       });
   }
 
   private read() {
-    this.loading = true;
+    this.listLoading = true;
     this.error = '';
+    this.cdr.markForCheck();
     this.api.list().subscribe({
       next: (users) => {
         this.items = users as unknown as Row[];
-        this.loading = false;
+        this.listLoading = false;
         this.cdr.markForCheck();
       },
-      error: (e: HttpErrorResponse) => this.fail(e.status),
+      error: (e: HttpErrorResponse) => this.fail(e.status, 'list'),
     });
   }
 
-  private fail(status: number) {
-    this.loading = false;
+  private fail(status: number, source: 'list' | 'row') {
+    if (source === 'list') this.listLoading = false;
+    else this.updatingRowId = null;
     this.message = '';
     this.error =
       status === 401

@@ -28,7 +28,8 @@ export class InvitationsPage implements OnInit {
   private readonly api = inject(AdminUserApi);
   private readonly cdr = inject(ChangeDetectorRef);
   items: Invitation[] = [];
-  loading = false;
+  listLoading = false;
+  submitting = false;
   submitted = false;
   error = '';
   message = '';
@@ -44,16 +45,17 @@ export class InvitationsPage implements OnInit {
       this.form.markAllAsTouched();
       return;
     }
-    this.loading = true;
+    this.submitting = true;
     this.error = '';
     this.api.invite(this.form.getRawValue()).subscribe({
       next: () => {
         this.form.reset();
         this.submitted = false;
+        this.submitting = false;
         this.message = this.language.t.success;
         this.read();
       },
-      error: (e: HttpErrorResponse) => this.fail(e.status),
+      error: (e: HttpErrorResponse) => this.fail(e.status, 'submit'),
     });
   }
 
@@ -68,19 +70,21 @@ export class InvitationsPage implements OnInit {
   }
 
   private read() {
-    this.loading = true;
+    this.listLoading = true;
+    this.cdr.markForCheck();
     this.api.invitations().subscribe({
       next: (items) => {
         this.items = items;
-        this.loading = false;
+        this.listLoading = false;
         this.cdr.markForCheck();
       },
-      error: (e: HttpErrorResponse) => this.fail(e.status),
+      error: (e: HttpErrorResponse) => this.fail(e.status, 'list'),
     });
   }
 
-  private fail(status: number) {
-    this.loading = false;
+  private fail(status: number, source: 'list' | 'submit') {
+    if (source === 'list') this.listLoading = false;
+    else this.submitting = false;
     this.message = '';
     this.error =
       status === 401

@@ -32,6 +32,7 @@ export class PublicPage implements OnInit {
   page = 0;
   totalPages = 0;
   loading = false;
+  readonly articleSkeletons = [0, 1, 2];
   private errorKey: 'forbidden' | 'notFound' | 'error' | '' = '';
 
   dateValue(row: PublicArticle | PublicTag) {
@@ -66,6 +67,7 @@ export class PublicPage implements OnInit {
 
   private read() {
     this.loading = true;
+    if (this.routeKey === 'public/articles') this.cdr.markForCheck();
     const tagId = this.route.snapshot.queryParamMap.get('tagId');
     const next = (value: Page<PublicArticle | PublicTag> | (PublicArticle | PublicTag)[]) => {
       const response: Page<PublicArticle | PublicTag> = Array.isArray(value)

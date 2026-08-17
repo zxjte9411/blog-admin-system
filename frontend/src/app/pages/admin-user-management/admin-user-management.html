@@ -1,12 +1,16 @@
-<section class="user-management" aria-labelledby="user-management-heading">
+<section
+  class="user-management"
+  aria-labelledby="user-management-heading"
+  [attr.aria-busy]="loading"
+>
   <h2 id="user-management-heading" class="sr-only">{{ dataLabel }}</h2>
   @if (loading && !items.length) {
     <div class="skeleton" [attr.aria-label]="loadingLabel" role="status">
-      <span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span>
     </div>
-  } @else if (!items.length) {
+  } @else if (!items.length && !hasError) {
     <p class="empty">{{ emptyLabel }}</p>
-  } @else {
+  } @else if (items.length) {
     <div class="table-wrap">
       <table class="data-table">
         <caption>
@@ -24,7 +28,7 @@
         </thead>
         <tbody>
           @for (row of items; track row['id']) {
-            <tr class="mat-mdc-row">
+            <tr class="mat-mdc-row" [attr.aria-busy]="isUpdating(row) ? 'true' : null">
               <td [attr.data-label]="dataLabel">
                 <span class="user-name">{{ row['displayName'] || row['email'] || row['id'] }}</span>
                 <span class="user-email">{{ row['email'] }}</span>

@@ -30,6 +30,42 @@
   height: 0.25rem;
   accent-color: var(--amber);
 }
+.article-skeleton {
+  display: grid;
+  gap: 0;
+  margin-top: 1.75rem;
+}
+.article-skeleton-card {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.article-skeleton-card span {
+  display: block;
+  height: 0.9rem;
+  border-radius: 0.15rem;
+  background: linear-gradient(90deg, var(--cream) 25%, var(--paper) 50%, var(--cream) 75%);
+  background-size: 200% 100%;
+  animation: article-shimmer 1.2s linear infinite;
+}
+.article-skeleton-title {
+  width: min(70%, 22rem);
+  height: 1.25rem !important;
+}
+.article-skeleton-meta {
+  width: min(42%, 12rem);
+}
+@keyframes article-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .article-skeleton-card span {
+    animation: none;
+  }
+}
 .error {
   margin: 1.25rem 0;
   padding: 1rem;

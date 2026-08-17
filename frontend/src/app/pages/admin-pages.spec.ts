@@ -70,6 +70,114 @@ describe('admin pages', () => {
     expect(enabledRequest.request.body).toEqual({ role: 'ADMIN', enabled: false });
   });
 
+  it('keeps the managed-user list idle while a row update is pending', async () => {
+    await setup(ManagedUsersPage);
+    const fixture = TestBed.createComponent(ManagedUsersPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/admin/users').flush([
+      {
+        id: 'author-1',
+        email: 'author@example.com',
+        displayName: 'Author',
+        role: 'AUTHOR',
+        enabled: true,
+        verifiedAt: null,
+      },
+    ]);
+    fixture.detectChanges();
+
+    const role = fixture.nativeElement.querySelector('[name="role-author-1"]') as HTMLSelectElement;
+    role.value = 'ADMIN';
+    role.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const region = fixture.nativeElement.querySelector('.user-management') as HTMLElement;
+    expect(region.getAttribute('aria-busy')).toBe('false');
+    expect(region.querySelector('.skeleton')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.loading-bar')).toBeNull();
+
+    http.expectOne('/api/v1/admin/users/author-1').flush({
+      id: 'author-1',
+      email: 'author@example.com',
+      displayName: 'Author',
+      role: 'ADMIN',
+      enabled: true,
+      verifiedAt: null,
+    });
+  });
+
+  it('renders five managed-user skeleton rows in one status region while initially loading', async () => {
+    await setup(ManagedUsersPage);
+    const fixture = TestBed.createComponent(ManagedUsersPage);
+    fixture.detectChanges();
+
+    const region = fixture.nativeElement.querySelector('.user-management') as HTMLElement;
+    const skeleton = region.querySelector('.skeleton') as HTMLElement;
+
+    expect(region.getAttribute('aria-busy')).toBe('true');
+    expect(skeleton.querySelectorAll('span')).toHaveLength(5);
+    expect(region.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(fixture.nativeElement.querySelector('.loading-bar')).toBeNull();
+    expect(skeleton.getAttribute('aria-label')).toBe(fixture.componentInstance.language.t.loading);
+    expect(skeleton.querySelectorAll('span[role="status"]')).toHaveLength(0);
+  });
+
+  it('ends the initial managed-user loading state without showing empty after a failure', async () => {
+    await setup(ManagedUsersPage);
+    const fixture = TestBed.createComponent(ManagedUsersPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+
+    http
+      .expectOne('/api/v1/admin/users')
+      .flush('error', { status: 500, statusText: 'Server error' });
+    fixture.detectChanges();
+
+    const region = fixture.nativeElement.querySelector('.user-management') as HTMLElement;
+    expect(region.getAttribute('aria-busy')).toBe('false');
+    expect(region.querySelector('.skeleton')).toBeNull();
+    expect(region.querySelector('.empty')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.loading-bar')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
+  });
+
+  it('keeps managed users visible during reload and does not show empty after an error', async () => {
+    await setup(ManagedUsersPage);
+    const fixture = TestBed.createComponent(ManagedUsersPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/admin/users').flush([
+      {
+        id: 'author-1',
+        email: 'author@example.com',
+        displayName: 'Author',
+        role: 'AUTHOR',
+        enabled: true,
+        verifiedAt: null,
+      },
+    ]);
+    fixture.detectChanges();
+
+    fixture.componentInstance.retry();
+    fixture.detectChanges();
+    const region = fixture.nativeElement.querySelector('.user-management') as HTMLElement;
+    expect(region.getAttribute('aria-busy')).toBe('true');
+    expect(region.querySelector('table')).toBeTruthy();
+    expect(region.querySelector('.skeleton')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.loading-bar')).toBeTruthy();
+
+    http
+      .expectOne('/api/v1/admin/users')
+      .flush('error', { status: 500, statusText: 'Server error' });
+    fixture.detectChanges();
+
+    expect(region.getAttribute('aria-busy')).toBe('false');
+    expect(region.querySelector('.skeleton')).toBeNull();
+    expect(region.querySelector('.empty')).toBeNull();
+    expect(region.textContent).toContain('Author');
+  });
+
   it('creates an invitation and renders the invitation list', async () => {
     await setup(InvitationsPage);
     const fixture = TestBed.createComponent(InvitationsPage);
@@ -92,6 +200,142 @@ describe('admin pages', () => {
     expect(request.request.body).toEqual({ email: 'new@example.com' });
     request.flush(null, { status: 202, statusText: 'Accepted' });
     http.expectOne('/api/v1/admin/invitations').flush([]);
+  });
+
+  it('renders five invitation skeleton rows only for an empty initial list request', async () => {
+    await setup(InvitationsPage);
+    const fixture = TestBed.createComponent(InvitationsPage);
+    fixture.detectChanges();
+
+    const region = fixture.nativeElement.querySelector('.table-wrap') as HTMLElement;
+    const skeleton = region.querySelector('.skeleton') as HTMLElement;
+    const submit = fixture.nativeElement.querySelector(
+      'button[type="submit"]',
+    ) as HTMLButtonElement;
+
+    expect(region.getAttribute('aria-busy')).toBe('true');
+    expect(skeleton.querySelectorAll('span')).toHaveLength(5);
+    expect(region.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(fixture.nativeElement.querySelector('.loading-bar')).toBeNull();
+    expect(skeleton.getAttribute('aria-label')).toBe(fixture.componentInstance.language.t.loading);
+    expect(skeleton.querySelectorAll('span[role="status"]')).toHaveLength(0);
+    expect(submit.disabled).toBe(false);
+  });
+
+  it('ends the initial invitation loading state without showing empty after a failure', async () => {
+    await setup(InvitationsPage);
+    const fixture = TestBed.createComponent(InvitationsPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+
+    http
+      .expectOne('/api/v1/admin/invitations')
+      .flush('error', { status: 500, statusText: 'Server error' });
+    fixture.detectChanges();
+
+    const region = fixture.nativeElement.querySelector('.table-wrap') as HTMLElement;
+    expect(region.getAttribute('aria-busy')).toBe('false');
+    expect(region.querySelector('.skeleton')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.empty')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.loading-bar')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
+  });
+
+  it('separates invitation submission from list reload while retaining existing rows', async () => {
+    await setup(InvitationsPage);
+    const fixture = TestBed.createComponent(InvitationsPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http
+      .expectOne('/api/v1/admin/invitations')
+      .flush([
+        { id: 'invitation-1', email: 'pending@example.com', expiresAt: '2026-08-15T10:00:00Z' },
+      ]);
+    fixture.detectChanges();
+
+    const email = fixture.nativeElement.querySelector('#invitation-email') as HTMLInputElement;
+    email.value = 'new@example.com';
+    email.dispatchEvent(new Event('input'));
+    fixture.nativeElement.querySelector('form').requestSubmit();
+    fixture.detectChanges();
+
+    const submit = fixture.nativeElement.querySelector(
+      'button[type="submit"]',
+    ) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    expect(fixture.nativeElement.querySelector('.table-wrap').textContent).toContain(
+      'pending@example.com',
+    );
+    expect(fixture.nativeElement.querySelector('.skeleton')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.table-wrap').getAttribute('aria-busy')).toBe(
+      'false',
+    );
+
+    http
+      .expectOne('/api/v1/admin/invitations')
+      .flush(null, { status: 202, statusText: 'Accepted' });
+    fixture.detectChanges();
+    const reload = http.expectOne('/api/v1/admin/invitations');
+
+    expect(submit.disabled).toBe(false);
+    expect(fixture.nativeElement.querySelector('.table-wrap').textContent).toContain(
+      'pending@example.com',
+    );
+    expect(fixture.nativeElement.querySelector('.table-wrap').getAttribute('aria-busy')).toBe(
+      'true',
+    );
+    expect(fixture.nativeElement.querySelector('.loading-bar')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.skeleton')).toBeNull();
+
+    reload.flush([
+      { id: 'invitation-2', email: 'new@example.com', expiresAt: '2026-08-16T10:00:00Z' },
+    ]);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.table-wrap').textContent).toContain(
+      'new@example.com',
+    );
+  });
+
+  it('ends invitation submission and list loading independently on failures', async () => {
+    await setup(InvitationsPage);
+    const fixture = TestBed.createComponent(InvitationsPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http
+      .expectOne('/api/v1/admin/invitations')
+      .flush([
+        { id: 'invitation-1', email: 'pending@example.com', expiresAt: '2026-08-15T10:00:00Z' },
+      ]);
+    fixture.detectChanges();
+
+    const email = fixture.nativeElement.querySelector('#invitation-email') as HTMLInputElement;
+    email.value = 'new@example.com';
+    email.dispatchEvent(new Event('input'));
+    fixture.nativeElement.querySelector('form').requestSubmit();
+    const submitRequest = http.expectOne('/api/v1/admin/invitations');
+    submitRequest.flush('error', { status: 500, statusText: 'Server error' });
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).disabled,
+    ).toBe(false);
+    expect(fixture.nativeElement.querySelector('.table-wrap').textContent).toContain(
+      'pending@example.com',
+    );
+    expect(fixture.nativeElement.querySelector('.table-wrap').getAttribute('aria-busy')).toBe(
+      'false',
+    );
+
+    fixture.componentInstance.retry();
+    const listRequest = http.expectOne('/api/v1/admin/invitations');
+    listRequest.flush('error', { status: 500, statusText: 'Server error' });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.table-wrap').getAttribute('aria-busy')).toBe(
+      'false',
+    );
+    expect(fixture.nativeElement.querySelector('.skeleton')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
   });
 
   it('reads, updates, and renders password setting changes', async () => {

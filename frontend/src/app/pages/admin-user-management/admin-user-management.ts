@@ -16,6 +16,8 @@ type UserChange = { row: Row; value: unknown };
 export class AdminUserManagement {
   @Input() items: Row[] = [];
   @Input() loading = false;
+  @Input() updatingRowId: string | null = null;
+  @Input() hasError = false;
   @Input() emptyLabel = '';
   @Input() loadingLabel = '';
   @Input() dataLabel = '';
@@ -50,5 +52,9 @@ export class AdminUserManagement {
       return this.disableActionLabel || this.disabledLabel;
     }
     return this.enableActionLabel || this.enabledLabel;
+  }
+
+  isUpdating(row: Row) {
+    return String(row['id']) === this.updatingRowId;
   }
 }

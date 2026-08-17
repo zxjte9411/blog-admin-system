@@ -1,4 +1,4 @@
-<app-shell [loading]="loading">
+<app-shell [loading]="listLoading">
   <div class="page-intro">
     <div>
       <p class="eyebrow">{{ language.t.title }}</p>
@@ -6,7 +6,7 @@
     </div>
   </div>
 
-  @if (loading) {
+  @if (listLoading && items.length) {
     <progress class="loading-bar" [attr.aria-label]="language.t.loading"></progress>
   }
   @if (message) {
@@ -23,7 +23,9 @@
 
   <app-admin-user-management
     [items]="items"
-    [loading]="loading"
+    [loading]="listLoading"
+    [updatingRowId]="updatingRowId"
+    [hasError]="!!error"
     [emptyLabel]="language.t.empty"
     [loadingLabel]="language.t.loading"
     [dataLabel]="language.t.userInfo"

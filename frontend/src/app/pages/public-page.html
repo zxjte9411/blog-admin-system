@@ -7,7 +7,7 @@
       <h1>{{ heading }}</h1>
     </div>
   </header>
-  @if (loading) {
+  @if (loading && (routeKey !== 'public/articles' || items.length)) {
     <progress class="loading-bar" [attr.aria-label]="language.t.loading"></progress>
   }
   @if (error) {
@@ -18,97 +18,125 @@
       <h2>{{ detail['title'] }}</h2>
       <p>{{ detail['content'] }}</p>
     </article>
+  } @else if (routeKey === 'public/articles') {
+    <section class="article-list-region" [attr.aria-busy]="loading">
+      @if (loading && !items.length && !error) {
+        <div class="article-skeleton" role="status" [attr.aria-label]="language.t.loading">
+          @for (_ of articleSkeletons; track $index) {
+            <div class="article-skeleton-card" aria-hidden="true">
+              <span class="article-skeleton-title"></span>
+              <span class="article-skeleton-meta"></span>
+            </div>
+          }
+        </div>
+      }
+      @if (hasTagFilter()) {
+        <a class="clear-filter ui-outline" [routerLink]="['/public/articles']">
+          {{ language.t.clearFilter }}
+        </a>
+      }
+      @if (!loading && !error && !items.length) {
+        <p class="empty">{{ language.t.empty }}</p>
+      }
+      @if (items.length) {
+        <ul class="items">
+          @for (row of items; track id(row)) {
+            <li>
+              <a class="row-title" [routerLink]="['/public/articles', id(row)]">{{ title(row) }}</a>
+              <span class="meta"
+                >{{ author(row) }} · {{ dateValue(row) | date: 'yyyy-MM-dd' }}</span
+              >
+            </li>
+          }
+        </ul>
+      }
+    </section>
   } @else if (!loading && !error) {
-    @if (hasTagFilter()) {
-      <a class="clear-filter ui-outline" [routerLink]="['/public/articles']">
-        {{ language.t.clearFilter }}
-      </a>
-    }
     @if (!items.length) {
       <p class="empty">{{ language.t.empty }}</p>
     }
     <ul class="items">
       @for (row of items; track id(row)) {
         <li>
-          @if (routeKey === 'public/articles') {
-            <a class="row-title" [routerLink]="['/public/articles', id(row)]">{{ title(row) }}</a>
-            <span class="meta">{{ author(row) }} · {{ dateValue(row) | date: 'yyyy-MM-dd' }}</span>
-          } @else {
-            <a
-              class="tag-pill-link"
-              [routerLink]="['/public/articles']"
-              [queryParams]="tagQuery(row)"
-            >
-              {{ title(row) }}
-            </a>
-          }
+          <a
+            class="tag-pill-link"
+            [routerLink]="['/public/articles']"
+            [queryParams]="tagQuery(row)"
+          >
+            {{ title(row) }}
+          </a>
         </li>
       }
     </ul>
-    @if (items.length && totalPages > 0) {
-      <nav class="pagination" [attr.aria-label]="language.t.page">
-        <button
-          class="page-btn nav-jump"
-          type="button"
-          (click)="goToPage(0)"
-          [disabled]="page === 0"
-          title="First page"
-          aria-label="First page"
-        >
-          &laquo;
-        </button>
-        <button
-          class="page-btn nav-jump"
-          type="button"
-          (click)="previousPage()"
-          [disabled]="page === 0"
-          title="Previous page"
-          aria-label="Previous page"
-        >
-          &lsaquo;
-        </button>
-        <div class="page-numbers">
-          @for (p of pageNumbers; track $index) {
-            @if (p === -1) {
-              <span class="page-ellipsis">&hellip;</span>
-            } @else {
-              <button
-                type="button"
-                class="page-btn"
-                [class.is-active]="p === page"
-                [attr.aria-current]="p === page ? 'page' : null"
-                (click)="goToPage(p)"
-              >
-                {{ p + 1 }}
-              </button>
-            }
+  }
+  @if (
+    !error &&
+    items.length &&
+    totalPages > 0 &&
+    (routeKey === 'public/articles' || (routeKey === 'public/tags' && !loading))
+  ) {
+    <nav class="pagination" [attr.aria-label]="language.t.page">
+      <button
+        class="page-btn nav-jump"
+        type="button"
+        (click)="goToPage(0)"
+        [disabled]="page === 0"
+        title="First page"
+        aria-label="First page"
+      >
+        &laquo;
+      </button>
+      <button
+        class="page-btn nav-jump"
+        type="button"
+        (click)="previousPage()"
+        [disabled]="page === 0"
+        title="Previous page"
+        aria-label="Previous page"
+      >
+        &lsaquo;
+      </button>
+      <div class="page-numbers">
+        @for (p of pageNumbers; track $index) {
+          @if (p === -1) {
+            <span class="page-ellipsis">&hellip;</span>
+          } @else {
+            <button
+              type="button"
+              class="page-btn"
+              [class.is-active]="p === page"
+              [attr.aria-current]="p === page ? 'page' : null"
+              (click)="goToPage(p)"
+            >
+              {{ p + 1 }}
+            </button>
           }
-        </div>
-        <button
-          class="page-btn nav-jump"
-          type="button"
-          (click)="nextPage()"
-          [disabled]="page + 1 >= totalPages"
-          title="Next page"
-          aria-label="Next page"
-        >
-          &rsaquo;
-        </button>
-        <button
-          class="page-btn nav-jump"
-          type="button"
-          (click)="goToPage(totalPages - 1)"
-          [disabled]="page + 1 >= totalPages"
-          title="Last page"
-          aria-label="Last page"
-        >
-          &raquo;
-        </button>
-        <span class="page-indicator" aria-live="polite"
-          >{{ language.t.page }} {{ page + 1 }} {{ language.t.of }} {{ totalPages }}
-          {{ language.t.pageSuffix }}</span
-        >
-      </nav>
-    }
+        }
+      </div>
+      <button
+        class="page-btn nav-jump"
+        type="button"
+        (click)="nextPage()"
+        [disabled]="page + 1 >= totalPages"
+        title="Next page"
+        aria-label="Next page"
+      >
+        &rsaquo;
+      </button>
+      <button
+        class="page-btn nav-jump"
+        type="button"
+        (click)="goToPage(totalPages - 1)"
+        [disabled]="page + 1 >= totalPages"
+        title="Last page"
+        aria-label="Last page"
+      >
+        &raquo;
+      </button>
+      <span class="page-indicator" aria-live="polite"
+        >{{ language.t.page }} {{ page + 1 }} {{ language.t.of }} {{ totalPages }}
+        {{ language.t.pageSuffix }}</span
+      >
+    </nav>
   }
 </app-shell>
