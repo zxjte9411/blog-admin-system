@@ -1,5 +1,16 @@
 import { ChromeSession } from "./chrome-session.mjs";
 
+const responsiveViewports = [
+  { width: 360, height: 800 },
+  { width: 375, height: 812 },
+  { width: 390, height: 844 },
+  { width: 430, height: 932 },
+  { width: 768, height: 1024 },
+  { width: 1280, height: 800 },
+];
+const responsiveToken = "responsive-token-".repeat(8);
+const responsiveEmail = `responsive.${"long-email-".repeat(8)}@example.com`;
+
 async function runAudit() {
   console.log("=== Starting Chrome DevTools E2E & PRD Acceptance Audit ===");
   const session = await ChromeSession.getActivePage();
@@ -33,7 +44,7 @@ async function runAudit() {
     );
 
     // Check language toggle & persistence across navigation
-    await session.click(".app-shell-header button");
+    await session.click(".app-shell-header button.ui-ghost");
     let headingAfterToggle = await session.eval(
       'document.querySelector("h1")?.textContent',
     );
@@ -57,6 +68,98 @@ async function runAudit() {
       tagsHeading?.includes(expectedTagsHeading),
       `Tags heading: ${tagsHeading}, expected: ${expectedTagsHeading}`,
     );
+
+    async function auditResponsiveRoutes(routes) {
+      for (const viewport of responsiveViewports) {
+        await session.send("Emulation.setDeviceMetricsOverride", {
+          width: viewport.width,
+          height: viewport.height,
+          deviceScaleFactor: 1,
+          mobile: false,
+        });
+
+        for (const route of routes) {
+          await session.send("Page.navigate", {
+            url: `http://localhost:4200${route.url ?? route.path}`,
+          });
+          await new Promise((r) => setTimeout(r, 500));
+          const result = await session.eval(`(() => ({
+            path: window.location.pathname,
+            rendered: Boolean(document.querySelector("h1")),
+            contentWidth: document.body.scrollWidth,
+            viewportWidth: window.innerWidth,
+            clientWidth: document.documentElement.clientWidth,
+            visibleRects: (() => [...document.body.querySelectorAll("*")]
+              .map((element) => ({
+                rect: element.getBoundingClientRect(),
+                style: getComputedStyle(element),
+              }))
+              .filter(
+                ({ rect, style }) =>
+                  rect.width > 0 &&
+                  rect.height > 0 &&
+                  style.display !== "none" &&
+                  style.visibility !== "hidden",
+              )
+              .map(({ rect }) => ({ left: rect.left, right: rect.right })))(),
+          }))()`);
+
+          const minLeft = result?.visibleRects?.length
+            ? Math.min(...result.visibleRects.map((rect) => rect.left))
+            : 0;
+          const maxRight = result?.visibleRects?.length
+            ? Math.max(...result.visibleRects.map((rect) => rect.right))
+            : 0;
+          const descendantsWithinBounds =
+            result?.visibleRects?.every(
+              (rect) => rect.left >= -1 && rect.right <= result.clientWidth + 1,
+            ) ?? false;
+
+          check(
+            `Responsive ${route.category} ${route.path} @ ${viewport.width}x${viewport.height}`,
+            result?.path === route.path &&
+              result.rendered &&
+              result.contentWidth <= result.clientWidth &&
+              descendantsWithinBounds,
+            `path: ${result?.path}, rendered: ${result?.rendered}, content: ${result?.contentWidth}, viewport: ${result?.viewportWidth}, client: ${result?.clientWidth}, minLeft: ${minLeft}, maxRight: ${maxRight}`,
+          );
+        }
+      }
+    }
+
+    // Responsive audit for public and auth routes while unauthenticated.
+    await auditResponsiveRoutes([
+      { category: "Public", path: "/public/articles" },
+      { category: "Public", path: "/public/tags" },
+      { category: "Auth", path: "/login" },
+      { category: "Auth", path: "/register" },
+      {
+        category: "Auth",
+        path: "/verify-email",
+        url: `/verify-email?token=${encodeURIComponent(responsiveToken)}`,
+      },
+      {
+        category: "Auth",
+        path: "/verify/resend",
+        url: `/verify/resend?email=${encodeURIComponent(responsiveEmail)}`,
+      },
+      {
+        category: "Auth",
+        path: "/password-reset",
+        url: `/password-reset?email=${encodeURIComponent(responsiveEmail)}`,
+      },
+      {
+        category: "Auth",
+        path: "/reset-password",
+        url: `/reset-password?token=${encodeURIComponent(responsiveToken)}`,
+      },
+      {
+        category: "Invitation",
+        path: "/invite",
+        url: `/invite?token=${encodeURIComponent(responsiveToken)}`,
+      },
+    ]);
+    await session.send("Emulation.clearDeviceMetricsOverride");
 
     // 2. Check Login Page Validation & Auth (PRD 1)
     console.log("\n--- 2. Login Page & Form Validations (PRD 1) ---");
@@ -114,6 +217,21 @@ async function runAudit() {
       `Token present: ${Boolean(token)}`,
     );
 
+    const refreshResult = await session.eval(`fetch("/api/v1/auth/refresh", {
+      method: "POST",
+      credentials: "include"
+    }).then(async (response) => ({
+      status: response.status,
+      accessToken: (await response.json().catch(() => null))?.accessToken
+    })).catch((error) => ({ status: 0, error: String(error) }))`);
+    check(
+      "Refresh Session endpoint returns a new access token",
+      refreshResult?.status >= 200 &&
+        refreshResult.status < 300 &&
+        Boolean(refreshResult.accessToken),
+      `Status: ${refreshResult?.status}, access token present: ${Boolean(refreshResult?.accessToken)}`,
+    );
+
     // 4. Articles Management List & Headers (PRD 2)
     console.log("\n--- 4. Articles Management List (PRD 2) ---");
     await session.navigate("http://localhost:4200/articles");
@@ -135,25 +253,32 @@ async function runAudit() {
     // 5. Create Article with Reactive Form (PRD 3)
     console.log("\n--- 5. Create Article with Reactive Form (PRD 3) ---");
     await session.navigate("http://localhost:4200/articles/new");
-    const testTitle = "E2E Acceptance Test " + Date.now();
+    const testTitle =
+      "E2E responsive viewport article title validates wrapping across public and protected layouts while preserving article lifecycle coverage " +
+      Date.now();
+    const testTagNames =
+      "e2e, responsive, viewport, wrap, public, auth, article, user, invite, account, e2e, responsive";
     await session.type("#field-title", testTitle);
     await session.type(
       "#field-content",
       "Comprehensive E2E automated test content for blog admin acceptance.",
     );
-    await session.type("#field-tagNames", "e2e-audit, acceptance");
+    await session.type("#field-tagNames", testTagNames);
     await session.click("#status-published");
 
     // Verify form fields
     let formValues = await session.eval(`(() => ({
       title: document.querySelector('#field-title')?.value,
       content: document.querySelector('#field-content')?.value,
-      status: document.querySelector('input[name="status"]:checked')?.value
+      tagNames: document.querySelector('#field-tagNames')?.value,
+      status: document.querySelector('#status-published:checked')?.value
     }))()`);
     check(
       "Reactive form captures title, content, and published status",
       formValues.title === testTitle &&
         Boolean(formValues.content) &&
+        formValues.tagNames === testTagNames &&
+        formValues.tagNames.split(",").length === 12 &&
         formValues.status === "PUBLISHED",
       `Values: ${JSON.stringify(formValues)}`,
     );
@@ -199,7 +324,7 @@ async function runAudit() {
       'document.querySelector("#field-content")?.value',
     );
     let editStatusVal = await session.eval(
-      "document.querySelector(\"input[name='status']:checked\")?.value",
+      'document.querySelector("#status-published:checked")?.value',
     );
     check(
       "Edit form prefills existing article data correctly",
@@ -342,6 +467,20 @@ async function runAudit() {
       `Sessions: ${sessionsCount}`,
     );
 
+    // Responsive audit for protected routes after authentication.
+    await auditResponsiveRoutes([
+      { category: "Article", path: "/articles" },
+      { category: "Article", path: "/articles/new" },
+      { category: "Article", path: "/articles/deleted" },
+      { category: "User", path: "/admin/users" },
+      { category: "Invitation", path: "/admin/invitations" },
+      { category: "Account", path: "/account/profile" },
+      { category: "Account", path: "/account/password" },
+      { category: "Account", path: "/account/email" },
+      { category: "Account", path: "/account/sessions" },
+      { category: "Settings", path: "/admin/settings/password" },
+    ]);
+
     // 11. User Logout Flow (Revoke current session)
     console.log("\n--- 11. User Logout Flow ---");
     let logoutBtnSelector = "header button.logout-btn";
@@ -359,6 +498,7 @@ async function runAudit() {
   } catch (err) {
     console.error("Audit encountered an error:", err);
   } finally {
+    await session.send("Emulation.clearDeviceMetricsOverride");
     session.close();
     console.log("\n=== Audit Complete ===");
     const passed = findings.filter((f) => f.passed).length;
