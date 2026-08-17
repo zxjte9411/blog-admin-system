@@ -271,6 +271,9 @@ h1 {
   padding: 0.45rem 0.75rem;
   font-size: 0.85rem;
 }
+.deleted-articles-table td {
+  overflow-wrap: anywhere;
+}
 .danger-btn {
   border-color: #b33b2d;
   background: #b33b2d;
@@ -319,6 +322,92 @@ h1 {
 
   .table-wrap {
     overflow-x: visible;
+  }
+
+  .deleted-articles-table {
+    min-width: 0;
+  }
+
+  .deleted-articles-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .deleted-articles-table,
+  .deleted-articles-table tbody,
+  .deleted-articles-table tr,
+  .deleted-articles-table td {
+    display: block;
+  }
+
+  .deleted-articles-table tr {
+    margin-block: 0.75rem;
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: 0.55rem;
+    background: var(--paper);
+    box-shadow: 0 0.25rem 0.8rem #1716140d;
+  }
+
+  .deleted-articles-table td {
+    display: grid;
+    grid-template-columns: minmax(6rem, 36%) minmax(0, 1fr);
+    gap: 0.75rem;
+    min-inline-size: 0;
+    padding: 0.55rem 0;
+    border-bottom: 0;
+
+    &::before {
+      content: attr(data-label);
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+  }
+
+  .deleted-articles-table .row-actions {
+    align-items: start;
+  }
+
+  .deleted-articles-pagination {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  .deleted-articles-pagination .previous-page {
+    grid-column: 1;
+  }
+
+  .deleted-articles-pagination .next-page {
+    grid-column: 2;
+  }
+
+  .deleted-articles-pagination .page-numbers,
+  .deleted-articles-pagination .page-indicator {
+    grid-column: 1 / -1;
+  }
+
+  .deleted-articles-pagination .page-numbers {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .deleted-articles-pagination .page-indicator {
+    margin-inline-start: 0;
+    text-align: center;
+  }
+
+  .deleted-articles-pagination .page-btn {
+    min-inline-size: 2.75rem;
+    min-block-size: 2.75rem;
+    height: auto;
   }
 
   .data-table {

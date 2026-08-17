@@ -6,11 +6,13 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 1.25rem;
   align-items: end;
+  min-inline-size: 0;
   margin: 1.5rem 0;
 }
 .field {
   display: grid;
   gap: 0.45rem;
+  min-inline-size: 0;
   color: #514c45;
   font-size: 0.875rem;
   font-weight: 700;
@@ -36,6 +38,7 @@ td {
   border-bottom: 1px solid var(--line);
   padding: 1rem 0.75rem;
   vertical-align: top;
+  overflow-wrap: anywhere;
 }
 th {
   border-top: 2px solid var(--ink);
@@ -90,7 +93,8 @@ th {
     grid-template-columns: 1fr;
   }
   .search button {
-    justify-self: start;
+    inline-size: 100%;
+    justify-self: stretch;
   }
 }
 @media (max-width: 640px) {
@@ -119,8 +123,12 @@ th {
   }
 
   .data-table tr {
-    padding: 0.5rem 0;
-    border-bottom: 1px solid var(--line);
+    margin-block: 0.75rem;
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: 0.55rem;
+    background: var(--paper);
+    box-shadow: 0 0.25rem 0.8rem #1716140d;
   }
 
   .data-table td {
@@ -129,6 +137,7 @@ th {
     gap: 0.75rem;
     border-bottom: 0;
     padding: 0.55rem 0;
+    min-inline-size: 0;
   }
 
   .data-table td::before {
@@ -138,6 +147,45 @@ th {
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
+  }
+
+  .pagination {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  .pagination .edge-jump {
+    display: none;
+  }
+
+  .pagination .previous-page {
+    grid-column: 1;
+  }
+
+  .pagination .next-page {
+    grid-column: 2;
+  }
+
+  .pagination .page-numbers,
+  .pagination .page-indicator {
+    grid-column: 1 / -1;
+  }
+
+  .pagination .page-numbers {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .pagination .page-indicator {
+    margin-inline-start: 0;
+    text-align: center;
+  }
+
+  .pagination .page-btn {
+    min-inline-size: 2.75rem;
+    min-block-size: 2.75rem;
+    height: auto;
   }
 }
 @media (prefers-reduced-motion: reduce) {

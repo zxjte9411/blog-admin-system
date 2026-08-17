@@ -295,6 +295,35 @@ describe('article use-case pages', () => {
     expect(fixture.nativeElement.querySelector('app-article-management-list')).toBeTruthy();
   });
 
+  it('keeps article management semantic and labels its search and pagination controls', async () => {
+    await setup(ArticleListPage, 'articles');
+    const language = TestBed.inject(Language);
+    language.usePreferred('en');
+    const fixture = TestBed.createComponent(ArticleListPage);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/articles?page=0')
+      .flush({ content: [{ id: 'a1', title: 'Title' }], page: { totalPages: 3 } });
+    fixture.detectChanges();
+
+    const list = fixture.nativeElement.querySelector('app-article-management-list') as HTMLElement;
+    expect(list.querySelectorAll('table')).toHaveLength(1);
+    expect(list.querySelectorAll('.article-card')).toHaveLength(0);
+    expect(list.querySelector('label[for="article-search"]')?.textContent).toContain(
+      language.t.searchAction,
+    );
+
+    const previous = list.querySelector(
+      `button[aria-label="${language.t.previous}"]`,
+    ) as HTMLButtonElement;
+    const next = list.querySelector(`button[aria-label="${language.t.next}"]`) as HTMLButtonElement;
+    expect(previous?.textContent?.trim()).toBe(language.t.previous);
+    expect(next?.textContent?.trim()).toBe(language.t.next);
+    expect(previous.disabled).toBe(true);
+    expect(next.disabled).toBe(false);
+    expect(list.querySelector('button[aria-current="page"]')?.classList).toContain('is-active');
+  });
+
   it("prevents an author from opening another author's article editor", async () => {
     await setup(ArticleEditPage, 'articles/:id/edit', 'article-1');
     const fixture = TestBed.createComponent(ArticleEditPage);
@@ -624,6 +653,33 @@ describe('article use-case pages', () => {
     http
       .expectOne('/api/v1/articles/deleted?page=1')
       .flush({ content: [], page: { totalPages: 3 } });
+  });
+
+  it('keeps deleted articles in one labelled semantic table with readable pagination', async () => {
+    await setup(DeletedArticlesPage, 'articles/deleted');
+    const language = TestBed.inject(Language);
+    language.usePreferred('en');
+    const fixture = TestBed.createComponent(DeletedArticlesPage);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/articles/deleted?page=0')
+      .flush({ content: [{ id: 'a1', title: 'Deleted' }], page: { totalPages: 3 } });
+    fixture.detectChanges();
+
+    const table = fixture.nativeElement.querySelector('.deleted-articles-table') as HTMLElement;
+    expect(fixture.nativeElement.querySelectorAll('.deleted-articles-table')).toHaveLength(1);
+    expect(table.querySelector('[data-label="Title"]')?.textContent).toContain('Deleted');
+    expect(
+      fixture.nativeElement.querySelector(
+        `.deleted-articles-pagination button[aria-label="${language.t.previous}"]`,
+      )?.textContent,
+    ).toContain(language.t.previous);
+    expect(
+      fixture.nativeElement.querySelector(
+        `.deleted-articles-pagination button[aria-label="${language.t.next}"]`,
+      )?.textContent,
+    ).toContain(language.t.next);
+    expect(fixture.nativeElement.querySelector('button[aria-current="page"]')).toBeTruthy();
   });
 
   it.each([401, 403, 409])('maps article editor load status %s', async (status) => {

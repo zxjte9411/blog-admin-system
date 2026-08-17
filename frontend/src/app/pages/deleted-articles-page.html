@@ -24,7 +24,7 @@
   }
   @if (items.length) {
     <div class="table-wrap">
-      <table class="data-table">
+      <table class="data-table deleted-articles-table">
         <caption>
           {{
             language.t.data
@@ -39,8 +39,8 @@
         <tbody>
           @for (article of items; track article.id) {
             <tr [attr.aria-busy]="isPending(article) ? 'true' : null">
-              <td>{{ article.title }}</td>
-              <td>
+              <td [attr.data-label]="language.t.field.title">{{ article.title }}</td>
+              <td [attr.data-label]="language.t.actions">
                 <div class="row-actions" [attr.aria-busy]="isPending(article) ? 'true' : null">
                   <button
                     class="ui-outline compact-btn restore-action"
@@ -88,15 +88,15 @@
       </table>
     </div>
     @if (totalPages > 1) {
-      <nav class="pagination" [attr.aria-label]="language.t.data">
+      <nav class="pagination deleted-articles-pagination" [attr.aria-label]="language.t.data">
         <button
-          class="page-btn"
+          class="page-btn previous-page"
           type="button"
           (click)="previousPage()"
           [disabled]="loading || page === 0"
-          aria-label="Previous page"
+          [attr.aria-label]="language.t.previous"
         >
-          &lsaquo;
+          {{ language.t.previous }}
         </button>
         @for (p of pageNumbers; track p) {
           <button
@@ -104,6 +104,7 @@
             type="button"
             [class.is-active]="p === page"
             [attr.aria-current]="p === page ? 'page' : null"
+            [attr.aria-label]="language.t.page + ' ' + (p + 1)"
             [disabled]="loading"
             (click)="goToPage(p)"
           >
@@ -111,13 +112,13 @@
           </button>
         }
         <button
-          class="page-btn"
+          class="page-btn next-page"
           type="button"
           (click)="nextPage()"
           [disabled]="loading || page + 1 >= totalPages"
-          aria-label="Next page"
+          [attr.aria-label]="language.t.next"
         >
-          &rsaquo;
+          {{ language.t.next }}
         </button>
         <span class="page-indicator" aria-live="polite"
           >{{ language.t.page }} {{ page + 1 }} {{ language.t.of }} {{ totalPages }}</span

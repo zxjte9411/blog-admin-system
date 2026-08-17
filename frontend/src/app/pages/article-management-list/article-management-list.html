@@ -86,7 +86,7 @@
     </div>
     <nav class="pagination" [attr.aria-label]="caption">
       <button
-        class="page-btn nav-jump"
+        class="page-btn nav-jump edge-jump"
         type="button"
         (click)="selectPage.emit(0)"
         [disabled]="page === 0"
@@ -96,14 +96,13 @@
         &laquo;
       </button>
       <button
-        class="page-btn nav-jump"
+        class="page-btn nav-jump previous-page"
         type="button"
         (click)="previousPage.emit()"
         [disabled]="page === 0"
-        title="Previous page"
-        aria-label="Previous page"
+        [attr.aria-label]="previousLabel"
       >
-        &lsaquo;
+        {{ previousLabel }}
       </button>
       <div class="page-numbers">
         @for (p of pageNumbers; track $index) {
@@ -115,6 +114,7 @@
               class="page-btn"
               [class.is-active]="p === page"
               [attr.aria-current]="p === page ? 'page' : null"
+              [attr.aria-label]="pageLabel + ' ' + (p + 1)"
               (click)="selectPage.emit(p)"
             >
               {{ p + 1 }}
@@ -123,17 +123,16 @@
         }
       </div>
       <button
-        class="page-btn nav-jump"
+        class="page-btn nav-jump next-page"
         type="button"
         (click)="nextPage.emit()"
         [disabled]="page + 1 >= totalPages"
-        title="Next page"
-        aria-label="Next page"
+        [attr.aria-label]="nextLabel"
       >
-        &rsaquo;
+        {{ nextLabel }}
       </button>
       <button
-        class="page-btn nav-jump"
+        class="page-btn nav-jump edge-jump"
         type="button"
         (click)="selectPage.emit(totalPages - 1)"
         [disabled]="page + 1 >= totalPages"
