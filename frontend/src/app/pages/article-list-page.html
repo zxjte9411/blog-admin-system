@@ -50,12 +50,16 @@
     [pageLabel]="language.t.page"
     [ofLabel]="language.t.of"
     [pageSuffix]="language.t.pageSuffix"
+    [pageSize]="pageSize"
+    [pageSizeOptions]="pageSizeOptions"
+    [pageSizeLabel]="language.t.pageSize"
     (searchChange)="search($event)"
     (open)="open($event)"
     (delete)="deleteArticle($event.row, $event.trigger)"
     (previousPage)="previousPage()"
     (nextPage)="nextPage()"
     (selectPage)="goToPage($event)"
+    (pageSizeChange)="changePageSize($event)"
   />
   <dialog #confirmDialog class="confirm-dialog" (close)="closeModal()">
     @if (modalState) {

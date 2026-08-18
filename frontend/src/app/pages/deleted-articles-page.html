@@ -125,6 +125,21 @@
         <span class="page-indicator" aria-live="polite"
           >{{ language.t.page }} {{ page + 1 }} {{ language.t.of }} {{ totalPages }}</span
         >
+        <label class="page-size-control" for="deleted-articles-page-size">
+          {{ language.t.pageSize }}
+          <select
+            id="deleted-articles-page-size"
+            class="control"
+            [value]="pageSize"
+            [attr.aria-label]="language.t.pageSize"
+            [disabled]="loading"
+            (change)="changePageSize(+$any($event.target).value)"
+          >
+            @for (size of pageSizeOptions; track size) {
+              <option [value]="size">{{ size }}</option>
+            }
+          </select>
+        </label>
       </nav>
     }
   }

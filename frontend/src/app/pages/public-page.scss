@@ -161,6 +161,8 @@ button:disabled {
   }
 
   .pagination {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     justify-content: space-between;
     gap: 0.5rem;
   }
@@ -170,5 +172,17 @@ button:disabled {
   .pagination .last-page,
   .pagination .edge-jump {
     display: none;
+  }
+
+  .pagination .page-indicator {
+    grid-column: 1 / -1;
+    margin-inline-start: 0;
+    text-align: center;
+  }
+
+  .pagination .page-size-control {
+    grid-column: 1 / -1;
+    justify-self: center;
+    margin-inline-start: 0;
   }
 }

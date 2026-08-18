@@ -13,6 +13,9 @@ import {
   RegistrationRequest,
   UserApi,
 } from './api';
+import { PAGE_SIZE_OPTIONS } from './pagination';
+
+const pageSizes = PAGE_SIZE_OPTIONS;
 
 describe('ArticleApi', () => {
   let http: HttpTestingController;
@@ -75,12 +78,26 @@ describe('ArticleApi', () => {
     req.flush(page);
   });
 
-  it('sends the fixed page size for deleted article pagination', () => {
+  it.each(pageSizes)('sends caller page size %s for article lists', (size) => {
+    api.list({ page: 1, size }).subscribe();
+
+    const req = http.expectOne(`/api/v1/articles?page=1&size=${size}`);
+    expect(req.request.params.get('size')).toBe(String(size));
+    req.flush({ content: [], totalPages: 0 });
+  });
+
+  it('defaults deleted article pagination to ten items', () => {
     api.deleted(2).subscribe();
 
     const req = http.expectOne('/api/v1/articles/deleted?page=2&size=10');
-    expect(req.request.params.get('page')).toBe('2');
-    expect(req.request.params.get('size')).toBe('10');
+    req.flush({ content: [], totalPages: 0 });
+  });
+
+  it.each(pageSizes)('sends caller page size %s for deleted articles', (size) => {
+    api.deleted(2, size).subscribe();
+
+    const req = http.expectOne(`/api/v1/articles/deleted?page=2&size=${size}`);
+    expect(req.request.params.get('size')).toBe(String(size));
     req.flush({ content: [], totalPages: 0 });
   });
 });
@@ -99,12 +116,19 @@ describe('PublicArticleApi pagination contract', () => {
 
   afterEach(() => http.verify());
 
-  it('sends page and the fixed page size for public tag pagination', () => {
+  it.each(pageSizes)('sends caller page size %s for public tags', (size) => {
+    api.tags(3, size).subscribe();
+
+    const req = http.expectOne(`/api/v1/public/tags?page=3&size=${size}`);
+    expect(req.request.params.get('page')).toBe('3');
+    expect(req.request.params.get('size')).toBe(String(size));
+    req.flush({ content: [], totalPages: 0 });
+  });
+
+  it('defaults public tag pagination to ten items', () => {
     api.tags(3).subscribe();
 
     const req = http.expectOne('/api/v1/public/tags?page=3&size=10');
-    expect(req.request.params.get('page')).toBe('3');
-    expect(req.request.params.get('size')).toBe('10');
     req.flush({ content: [], totalPages: 0 });
   });
 });

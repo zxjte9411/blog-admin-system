@@ -175,6 +175,21 @@
   font-size: 0.85rem;
   font-weight: 500;
 }
+.page-size-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-inline-start: auto;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.page-size-control .control {
+  width: auto;
+  min-height: 2.75rem;
+  padding-block: 0.4rem;
+}
 :where(a, button, input, textarea, select):focus-visible {
   outline: 3px solid var(--amber);
   outline-offset: 3px;

@@ -144,6 +144,21 @@
       <span class="page-indicator" aria-live="polite"
         >{{ pageLabel }} {{ page + 1 }} {{ ofLabel }} {{ totalPages || 1 }} {{ pageSuffix }}</span
       >
+      <label class="page-size-control" for="article-page-size">
+        {{ pageSizeLabel }}
+        <select
+          id="article-page-size"
+          class="control"
+          [value]="pageSize"
+          [attr.aria-label]="pageSizeLabel"
+          [disabled]="loading"
+          (change)="changePageSize($any($event.target).value)"
+        >
+          @for (size of pageSizeOptions; track size) {
+            <option [value]="size">{{ size }}</option>
+          }
+        </select>
+      </label>
     </nav>
   }
 </section>

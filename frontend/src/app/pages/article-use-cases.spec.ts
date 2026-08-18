@@ -307,6 +307,49 @@ describe('article use-case pages', () => {
     ).toBe('1');
   });
 
+  it('changes management page size, keeps the title filter, and resets once', async () => {
+    await setup(ArticleListPage, 'articles');
+    const fixture = TestBed.createComponent(ArticleListPage);
+    TestBed.inject(Language).usePreferred('en');
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/articles?page=0&size=10').flush({
+      content: [{ id: 'a1', title: 'Title' }],
+      page: { totalPages: 3 },
+    });
+    fixture.componentInstance.search('needle');
+    http.expectOne('/api/v1/articles?page=0&size=10&title=needle').flush({
+      content: [{ id: 'a1', title: 'Title' }],
+      page: { totalPages: 3 },
+    });
+    fixture.componentInstance.nextPage();
+    http.expectOne('/api/v1/articles?page=1&size=10&title=needle').flush({
+      content: [{ id: 'a2', title: 'Second' }],
+      page: { totalPages: 3 },
+    });
+    fixture.detectChanges();
+
+    const list = fixture.nativeElement.querySelector('app-article-management-list') as HTMLElement;
+    const select = list.querySelector('select#article-page-size') as HTMLSelectElement;
+    expect(select).toBeTruthy();
+    expect(select.getAttribute('aria-label')).toBe('Items per page');
+    expect([...select.options].map((option) => Number(option.value))).toEqual([10, 20, 50, 100]);
+
+    select.value = '20';
+    select.dispatchEvent(new Event('change'));
+    const requests = http.match('/api/v1/articles?page=0&size=20&title=needle');
+    expect(requests).toHaveLength(1);
+    requests[0].flush({
+      content: [{ id: 'a3', title: 'Compact result' }],
+      page: { totalPages: 1 },
+    });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.page).toBe(0);
+    expect(fixture.componentInstance.totalPages).toBe(1);
+    expect(list.querySelector('button[aria-current="page"]')?.textContent?.trim()).toBe('1');
+  });
+
   it('allows authors to manage only their own articles', async () => {
     await setup(ArticleListPage, 'articles');
     const page = TestBed.createComponent(ArticleListPage).componentInstance;
@@ -720,6 +763,38 @@ describe('article use-case pages', () => {
       )?.textContent,
     ).toContain(language.t.next);
     expect(fixture.nativeElement.querySelector('button[aria-current="page"]')).toBeTruthy();
+  });
+
+  it('changes deleted page size, resets to page one, and updates total pages once', async () => {
+    await setup(DeletedArticlesPage, 'articles/deleted');
+    const fixture = TestBed.createComponent(DeletedArticlesPage);
+    TestBed.inject(Language).usePreferred('en');
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/articles/deleted?page=0&size=10').flush({
+      content: [{ id: 'a1', title: 'Deleted' }],
+      page: { totalPages: 3 },
+    });
+    fixture.componentInstance.nextPage();
+    http.expectOne('/api/v1/articles/deleted?page=1&size=10').flush({
+      content: [{ id: 'a2', title: 'Second' }],
+      page: { totalPages: 3 },
+    });
+    fixture.detectChanges();
+
+    const select = fixture.nativeElement.querySelector(
+      'select#deleted-articles-page-size',
+    ) as HTMLSelectElement;
+    expect(select.getAttribute('aria-label')).toBe('Items per page');
+    select.value = '50';
+    select.dispatchEvent(new Event('change'));
+    const requests = http.match('/api/v1/articles/deleted?page=0&size=50');
+    expect(requests).toHaveLength(1);
+    requests[0].flush({ content: [], page: { totalPages: 1 } });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.page).toBe(0);
+    expect(fixture.componentInstance.totalPages).toBe(1);
   });
 
   it.each([401, 403, 409])('maps article editor load status %s', async (status) => {

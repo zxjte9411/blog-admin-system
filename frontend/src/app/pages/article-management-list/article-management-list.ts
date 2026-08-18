@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { getPageNumbers } from '../../core/pagination';
+import { getPageNumbers, PAGE_SIZE, PAGE_SIZE_OPTIONS, PageSize } from '../../core/pagination';
 import { Article } from '../../core/api';
 
 export type LegacyArticleRow = {
@@ -48,6 +48,9 @@ export class ArticleManagementList {
   @Input() pageLabel = '';
   @Input() ofLabel = '';
   @Input() pageSuffix = '';
+  @Input() pageSize: PageSize = PAGE_SIZE;
+  @Input() pageSizeOptions: readonly PageSize[] = PAGE_SIZE_OPTIONS;
+  @Input() pageSizeLabel = '';
 
   @Output() searchChange = new EventEmitter<string>();
   @Output() open = new EventEmitter<ManagementRow>();
@@ -55,11 +58,16 @@ export class ArticleManagementList {
   @Output() previousPage = new EventEmitter<void>();
   @Output() nextPage = new EventEmitter<void>();
   @Output() selectPage = new EventEmitter<number>();
+  @Output() pageSizeChange = new EventEmitter<number>();
 
   readonly dateFormat = 'yyyy-MM-dd';
 
   get pageNumbers(): number[] {
     return getPageNumbers(this.page, this.totalPages);
+  }
+
+  changePageSize(value: string) {
+    this.pageSizeChange.emit(Number(value));
   }
 
   rowId(row: ManagementRow) {

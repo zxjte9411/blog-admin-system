@@ -23,8 +23,14 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Language } from '../core/language';
 import { AppShell } from '../layouts/app-shell';
-import { getPageNumbers } from '../core/pagination';
-import { PAGE_SIZE, Page, PublicArticle, PublicArticleApi, PublicTag } from '../core/api';
+import {
+  getPageNumbers,
+  isPageSize,
+  PAGE_SIZE,
+  PAGE_SIZE_OPTIONS,
+  PageSize,
+} from '../core/pagination';
+import { Page, PublicArticle, PublicArticleApi, PublicTag } from '../core/api';
 
 @Component({
   selector: 'app-public-page',
@@ -39,13 +45,19 @@ export class PublicPage implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly articleRequests = new Subject<{ tagId: string; page: number }>();
+  private readonly articleRequests = new Subject<{
+    tagId: string;
+    page: number;
+    pageSize: PageSize;
+  }>();
   readonly language = inject(Language);
   routeKey = '';
   private tagId = '';
   items: (PublicArticle | PublicTag)[] = [];
   detail: PublicArticle | null = null;
   page = 0;
+  pageSize: PageSize = PAGE_SIZE;
+  readonly pageSizeOptions = PAGE_SIZE_OPTIONS;
   totalPages = 0;
   loading = false;
   readonly articleSkeletons = [0, 1, 2];
@@ -82,12 +94,15 @@ export class PublicPage implements OnInit {
 
   private watchArticles() {
     const tagRequests = (this.route.queryParamMap ?? of(this.route.snapshot.queryParamMap)).pipe(
-      map((params) => ({ tagId: params.get('tagId') ?? '', page: 0 })),
+      map((params) => ({ tagId: params.get('tagId') ?? '', page: 0, pageSize: this.pageSize })),
     );
     merge(tagRequests, this.articleRequests)
       .pipe(
         distinctUntilChanged(
-          (previous, current) => previous.tagId === current.tagId && previous.page === current.page,
+          (previous, current) =>
+            previous.tagId === current.tagId &&
+            previous.page === current.page &&
+            previous.pageSize === current.pageSize,
         ),
         tap(({ tagId, page }) => {
           this.tagId = tagId;
@@ -96,8 +111,8 @@ export class PublicPage implements OnInit {
           this.errorKey = '';
           this.cdr.markForCheck();
         }),
-        switchMap(({ tagId, page }) =>
-          this.api.list({ page, size: PAGE_SIZE, ...(tagId ? { tagId } : {}) }).pipe(
+        switchMap(({ tagId, page, pageSize }) =>
+          this.api.list({ page, size: pageSize, ...(tagId ? { tagId } : {}) }).pipe(
             catchError((e: HttpErrorResponse) => {
               this.fail(e.status);
               return EMPTY;
@@ -116,14 +131,26 @@ export class PublicPage implements OnInit {
       this.updateItems(value);
     const fail = (e: HttpErrorResponse) => this.fail(e.status);
     if (this.routeKey === 'public/tags')
-      this.api.tags(this.page, PAGE_SIZE).subscribe({ next, error: fail });
+      this.api.tags(this.page, this.pageSize).subscribe({ next, error: fail });
     else
       this.api
-        .list({ page: this.page, size: PAGE_SIZE, ...(this.tagId ? { tagId: this.tagId } : {}) })
+        .list({
+          page: this.page,
+          size: this.pageSize,
+          ...(this.tagId ? { tagId: this.tagId } : {}),
+        })
         .subscribe({
           next,
           error: fail,
         });
+  }
+
+  changePageSize(value: number) {
+    if (this.loading || !isPageSize(value) || value === this.pageSize) return;
+    this.pageSize = value;
+    this.page = 0;
+    if (this.routeKey === 'public/articles') this.requestArticlePage(0);
+    else this.read();
   }
 
   private updateItems(value: Page<PublicArticle | PublicTag> | (PublicArticle | PublicTag)[]) {
@@ -177,7 +204,7 @@ export class PublicPage implements OnInit {
   }
 
   private requestArticlePage(page: number) {
-    this.articleRequests.next({ tagId: this.tagId, page });
+    this.articleRequests.next({ tagId: this.tagId, page, pageSize: this.pageSize });
   }
   get pageNumbers(): number[] {
     return getPageNumbers(this.page, this.totalPages);

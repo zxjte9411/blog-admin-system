@@ -1,11 +1,12 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { DEFAULT_PAGE_SIZE } from './pagination';
 
 export type UserRole = 'AUTHOR' | 'ADMIN';
 export type PreferredLanguage = 'zh-TW' | 'en';
 export type PublicationStatus = 'DRAFT' | 'PUBLISHED';
-export const PAGE_SIZE = 10;
+export { DEFAULT_PAGE_SIZE, PAGE_SIZE, PAGE_SIZE_OPTIONS } from './pagination';
 
 export interface Page<T> {
   content: T[];
@@ -194,7 +195,7 @@ export class ArticleApi {
   }
   list(options: ArticleQuery = {}): Observable<Page<Article>> {
     return this.http.get<Page<Article>>('/api/v1/articles', {
-      params: query({ ...options, size: options.size ?? PAGE_SIZE }),
+      params: query({ ...options, size: options.size ?? DEFAULT_PAGE_SIZE }),
     });
   }
   get(id: string): Observable<Article> {
@@ -206,7 +207,7 @@ export class ArticleApi {
   delete(id: string): Observable<void> {
     return this.http.delete<void>(`/api/v1/articles/${id}`);
   }
-  deleted(page?: number, size = PAGE_SIZE): Observable<Page<Article>> {
+  deleted(page?: number, size = DEFAULT_PAGE_SIZE): Observable<Page<Article>> {
     return this.http.get<Page<Article>>('/api/v1/articles/deleted', {
       params: query({ page, size }),
     });
@@ -224,13 +225,13 @@ export class PublicArticleApi {
   private readonly http = inject(HttpClient);
   list(options: PublicArticleQuery = {}): Observable<Page<PublicArticle>> {
     return this.http.get<Page<PublicArticle>>('/api/v1/public/articles', {
-      params: query({ ...options, size: options.size ?? PAGE_SIZE }),
+      params: query({ ...options, size: options.size ?? DEFAULT_PAGE_SIZE }),
     });
   }
   get(id: string): Observable<PublicArticle> {
     return this.http.get<PublicArticle>(`/api/v1/public/articles/${id}`);
   }
-  tags(page?: number, size = PAGE_SIZE): Observable<Page<PublicTag>> {
+  tags(page?: number, size = DEFAULT_PAGE_SIZE): Observable<Page<PublicTag>> {
     return this.http.get<Page<PublicTag>>('/api/v1/public/tags', { params: query({ page, size }) });
   }
 }

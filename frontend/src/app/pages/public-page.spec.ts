@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { PublicPage } from './public-page';
+import { Language } from '../core/language';
 
 describe('PublicPage', () => {
   beforeEach(() => {
@@ -84,6 +85,57 @@ describe('PublicPage', () => {
     fixture.detectChanges();
 
     http.expectOne('/api/v1/public/tags?page=1&size=10');
+  });
+
+  it('changes public tag page size, resets to page one, and updates controls', async () => {
+    await TestBed.configureTestingModule({
+      imports: [PublicPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'public/tags' },
+              paramMap: { get: () => null },
+              queryParamMap: { get: () => null },
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(PublicPage);
+    TestBed.inject(Language).usePreferred('en');
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/public/tags?page=0&size=10').flush({
+      content: [{ id: 'tag-1', name: 'News' }],
+      page: { totalPages: 3 },
+    });
+    fixture.componentInstance.nextPage();
+    http.expectOne('/api/v1/public/tags?page=1&size=10').flush({
+      content: [{ id: 'tag-2', name: 'Spring' }],
+      page: { totalPages: 3 },
+    });
+    fixture.detectChanges();
+
+    const select = fixture.nativeElement.querySelector(
+      'select#public-page-size',
+    ) as HTMLSelectElement;
+    expect(select.getAttribute('aria-label')).toBe('Items per page');
+    select.value = '100';
+    select.dispatchEvent(new Event('change'));
+    const requests = http.match('/api/v1/public/tags?page=0&size=100');
+    expect(requests).toHaveLength(1);
+    requests[0].flush({ content: [{ id: 'tag-3', name: 'Release' }], page: { totalPages: 1 } });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.page).toBe(0);
+    expect(fixture.componentInstance.totalPages).toBe(1);
+    expect(fixture.nativeElement.querySelector('.page-indicator')?.textContent).toContain('1');
   });
 
   it('removes article skeletons and shows the empty state after an empty response', async () => {
@@ -197,6 +249,57 @@ describe('PublicPage', () => {
       fixture.nativeElement.querySelector('.article-list-region').getAttribute('aria-busy'),
     ).toBe('true');
     http.expectOne('/api/v1/public/articles?page=1&size=10&tagId=tag-1');
+  });
+
+  it('changes filtered public article page size, keeps tagId, and sends one reset request', async () => {
+    await TestBed.configureTestingModule({
+      imports: [PublicPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'public/articles' },
+              paramMap: { get: () => null },
+              queryParamMap: { get: (key: string) => (key === 'tagId' ? 'tag-1' : null) },
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(PublicPage);
+    TestBed.inject(Language).usePreferred('en');
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/public/articles?page=0&size=10&tagId=tag-1').flush({
+      content: [{ id: 'one', title: 'First article', authorAttribution: 'By Ada' }],
+      page: { totalPages: 3 },
+    });
+    fixture.componentInstance.nextPage();
+    http.expectOne('/api/v1/public/articles?page=1&size=10&tagId=tag-1').flush({
+      content: [{ id: 'two', title: 'Second article', authorAttribution: 'By Ada' }],
+      page: { totalPages: 3 },
+    });
+    fixture.detectChanges();
+
+    const select = fixture.nativeElement.querySelector(
+      'select#public-page-size',
+    ) as HTMLSelectElement;
+    expect(select).toBeTruthy();
+    expect(select.getAttribute('aria-label')).toBe('Items per page');
+    select.value = '20';
+    select.dispatchEvent(new Event('change'));
+    const requests = http.match('/api/v1/public/articles?page=0&size=20&tagId=tag-1');
+    expect(requests).toHaveLength(1);
+    requests[0].flush({ content: [], page: { totalPages: 1 } });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.page).toBe(0);
+    expect(fixture.componentInstance.totalPages).toBe(1);
   });
 
   it('renders public content without account or administration actions', async () => {

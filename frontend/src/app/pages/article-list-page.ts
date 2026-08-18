@@ -9,10 +9,16 @@ import {
   inject,
 } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { Article, ArticleApi, PAGE_SIZE } from '../core/api';
+import { Article, ArticleApi } from '../core/api';
 import { Auth } from '../core/auth';
 import { Language } from '../core/language';
-import { getPageNumbers } from '../core/pagination';
+import {
+  getPageNumbers,
+  isPageSize,
+  PAGE_SIZE,
+  PAGE_SIZE_OPTIONS,
+  PageSize,
+} from '../core/pagination';
 import { AppShell } from '../layouts/app-shell';
 import { ArticleManagementList } from './article-management-list/article-management-list';
 import { ManagementRow } from './article-management-list/article-management-list';
@@ -33,6 +39,8 @@ export class ArticleListPage implements OnInit {
   private readonly cdr = inject(ChangeDetectorRef);
   items: Article[] = [];
   page = 0;
+  pageSize: PageSize = PAGE_SIZE;
+  readonly pageSizeOptions = PAGE_SIZE_OPTIONS;
   totalPages = 0;
   searchTitle = '';
   loading = false;
@@ -51,6 +59,12 @@ export class ArticleListPage implements OnInit {
   }
   search(value: string) {
     this.searchTitle = value;
+    this.page = 0;
+    this.read();
+  }
+  changePageSize(value: number) {
+    if (this.loading || !isPageSize(value) || value === this.pageSize) return;
+    this.pageSize = value;
     this.page = 0;
     this.read();
   }
@@ -120,7 +134,7 @@ export class ArticleListPage implements OnInit {
     this.api
       .list({
         page: this.page,
-        size: PAGE_SIZE,
+        size: this.pageSize,
         ...(this.searchTitle ? { title: this.searchTitle } : {}),
       })
       .subscribe({

@@ -420,6 +420,52 @@ class ArticleApiIntegrationTest extends AbstractPostgresIntegrationTest {
         100,
         0,
         13);
+
+    for (int size : List.of(20, 50, 100)) {
+      assertPage(
+          exchange("/api/v1/articles?page=0&size=" + size, HttpMethod.GET, token, null, Map.class)
+              .getBody(),
+          13,
+          1,
+          size,
+          0,
+          13);
+      assertPage(
+          exchange(
+                  "/api/v1/articles/deleted?page=0&size=" + size,
+                  HttpMethod.GET,
+                  token,
+                  null,
+                  Map.class)
+              .getBody(),
+          11,
+          1,
+          size,
+          0,
+          11);
+      assertPage(
+          exchange(
+                  "/api/v1/public/articles?page=0&size=" + size,
+                  HttpMethod.GET,
+                  token,
+                  null,
+                  Map.class)
+              .getBody(),
+          12,
+          1,
+          size,
+          0,
+          12);
+      assertPage(
+          exchange(
+                  "/api/v1/public/tags?page=0&size=" + size, HttpMethod.GET, token, null, Map.class)
+              .getBody(),
+          13,
+          1,
+          size,
+          0,
+          13);
+    }
   }
 
   @Test

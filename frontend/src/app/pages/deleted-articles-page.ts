@@ -9,11 +9,17 @@ import {
   inject,
   ViewChild,
 } from '@angular/core';
-import { Article, ArticleApi, PAGE_SIZE } from '../core/api';
+import { Article, ArticleApi } from '../core/api';
 import { Language } from '../core/language';
 import { Auth } from '../core/auth';
 import { AppShell } from '../layouts/app-shell';
-import { getPageNumbers } from '../core/pagination';
+import {
+  getPageNumbers,
+  isPageSize,
+  PAGE_SIZE,
+  PAGE_SIZE_OPTIONS,
+  PageSize,
+} from '../core/pagination';
 
 type PendingAction = 'restore' | 'purge';
 
@@ -32,6 +38,8 @@ export class DeletedArticlesPage implements OnInit {
   private readonly cdr = inject(ChangeDetectorRef);
   items: Article[] = [];
   page = 0;
+  pageSize: PageSize = PAGE_SIZE;
+  readonly pageSizeOptions = PAGE_SIZE_OPTIONS;
   totalPages = 0;
   loading = false;
   error = '';
@@ -111,6 +119,12 @@ export class DeletedArticlesPage implements OnInit {
       this.read();
     }
   }
+  changePageSize(value: number) {
+    if (this.loading || !isPageSize(value) || value === this.pageSize) return;
+    this.pageSize = value;
+    this.page = 0;
+    this.read();
+  }
   get pageNumbers() {
     return getPageNumbers(this.page, this.totalPages);
   }
@@ -134,7 +148,7 @@ export class DeletedArticlesPage implements OnInit {
     this.loading = true;
     this.error = '';
     this.cdr.markForCheck();
-    this.api.deleted(this.page, PAGE_SIZE).subscribe({
+    this.api.deleted(this.page, this.pageSize).subscribe({
       next: (r) => {
         this.items = r.content;
         this.totalPages = r.page?.totalPages ?? r.totalPages;
