@@ -4,10 +4,23 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  DestroyRef,
   OnInit,
   inject,
 } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import {
+  EMPTY,
+  Subject,
+  catchError,
+  distinctUntilChanged,
+  map,
+  merge,
+  of,
+  switchMap,
+  tap,
+} from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Language } from '../core/language';
 import { AppShell } from '../layouts/app-shell';
 import { getPageNumbers } from '../core/pagination';
@@ -25,8 +38,11 @@ export class PublicPage implements OnInit {
   private readonly api = inject(PublicArticleApi);
   private readonly route = inject(ActivatedRoute);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly articleRequests = new Subject<{ tagId: string; page: number }>();
   readonly language = inject(Language);
   routeKey = '';
+  private tagId = '';
   items: (PublicArticle | PublicTag)[] = [];
   detail: PublicArticle | null = null;
   page = 0;
@@ -44,6 +60,7 @@ export class PublicPage implements OnInit {
     if (this.routeKey === 'forbidden' || this.routeKey === '**') {
       this.errorKey = this.routeKey === 'forbidden' ? 'forbidden' : 'notFound';
     } else if (this.routeKey === 'public/articles/:id') this.readDetail();
+    else if (this.routeKey === 'public/articles') this.watchArticles();
     else this.read();
   }
 
@@ -60,32 +77,63 @@ export class PublicPage implements OnInit {
   }
 
   hasTagFilter() {
-    return (
-      this.routeKey === 'public/articles' && Boolean(this.route.snapshot.queryParamMap.get('tagId'))
+    return this.routeKey === 'public/articles' && Boolean(this.tagId);
+  }
+
+  private watchArticles() {
+    const tagRequests = (this.route.queryParamMap ?? of(this.route.snapshot.queryParamMap)).pipe(
+      map((params) => ({ tagId: params.get('tagId') ?? '', page: 0 })),
     );
+    merge(tagRequests, this.articleRequests)
+      .pipe(
+        distinctUntilChanged(
+          (previous, current) => previous.tagId === current.tagId && previous.page === current.page,
+        ),
+        tap(({ tagId, page }) => {
+          this.tagId = tagId;
+          this.page = page;
+          this.loading = true;
+          this.errorKey = '';
+          this.cdr.markForCheck();
+        }),
+        switchMap(({ tagId, page }) =>
+          this.api.list({ page, size: PAGE_SIZE, ...(tagId ? { tagId } : {}) }).pipe(
+            catchError((e: HttpErrorResponse) => {
+              this.fail(e.status);
+              return EMPTY;
+            }),
+          ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((value) => this.updateItems(value));
   }
 
   private read() {
     this.loading = true;
     if (this.routeKey === 'public/articles') this.cdr.markForCheck();
-    const tagId = this.route.snapshot.queryParamMap.get('tagId');
-    const next = (value: Page<PublicArticle | PublicTag> | (PublicArticle | PublicTag)[]) => {
-      const response: Page<PublicArticle | PublicTag> = Array.isArray(value)
-        ? { content: value, totalPages: 1 }
-        : value;
-      this.items = response.content;
-      this.totalPages = response.page?.totalPages ?? response.totalPages;
-      this.loading = false;
-      this.cdr.markForCheck();
-    };
+    const next = (value: Page<PublicArticle | PublicTag> | (PublicArticle | PublicTag)[]) =>
+      this.updateItems(value);
     const fail = (e: HttpErrorResponse) => this.fail(e.status);
     if (this.routeKey === 'public/tags')
       this.api.tags(this.page, PAGE_SIZE).subscribe({ next, error: fail });
     else
-      this.api.list({ page: this.page, size: PAGE_SIZE, ...(tagId ? { tagId } : {}) }).subscribe({
-        next,
-        error: fail,
-      });
+      this.api
+        .list({ page: this.page, size: PAGE_SIZE, ...(this.tagId ? { tagId: this.tagId } : {}) })
+        .subscribe({
+          next,
+          error: fail,
+        });
+  }
+
+  private updateItems(value: Page<PublicArticle | PublicTag> | (PublicArticle | PublicTag)[]) {
+    const response: Page<PublicArticle | PublicTag> = Array.isArray(value)
+      ? { content: value, totalPages: 1 }
+      : value;
+    this.items = response.content;
+    this.totalPages = response.page?.totalPages ?? response.totalPages;
+    this.loading = false;
+    this.cdr.markForCheck();
   }
 
   private readDetail() {
@@ -102,21 +150,34 @@ export class PublicPage implements OnInit {
 
   previousPage() {
     if (this.page > 0) {
-      this.page--;
-      this.read();
+      if (this.routeKey === 'public/articles') this.requestArticlePage(this.page - 1);
+      else {
+        this.page--;
+        this.read();
+      }
     }
   }
   nextPage() {
     if (this.page + 1 < this.totalPages) {
-      this.page++;
-      this.read();
+      if (this.routeKey === 'public/articles') this.requestArticlePage(this.page + 1);
+      else {
+        this.page++;
+        this.read();
+      }
     }
   }
   goToPage(targetPage: number) {
     if (targetPage >= 0 && targetPage < this.totalPages && targetPage !== this.page) {
-      this.page = targetPage;
-      this.read();
+      if (this.routeKey === 'public/articles') this.requestArticlePage(targetPage);
+      else {
+        this.page = targetPage;
+        this.read();
+      }
     }
+  }
+
+  private requestArticlePage(page: number) {
+    this.articleRequests.next({ tagId: this.tagId, page });
   }
   get pageNumbers(): number[] {
     return getPageNumbers(this.page, this.totalPages);

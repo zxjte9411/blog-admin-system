@@ -1,10 +1,15 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { BehaviorSubject } from 'rxjs';
 import { PublicPage } from './public-page';
 
 describe('PublicPage', () => {
+  beforeEach(() => {
+    localStorage.removeItem('blog-admin-token');
+  });
+
   it('shows three accessible article skeletons while the initial empty list is pending', async () => {
     await TestBed.configureTestingModule({
       imports: [PublicPage],
@@ -348,5 +353,153 @@ describe('PublicPage', () => {
 
     expect(fixture.nativeElement.querySelector('article').textContent).toContain('Story');
     expect(fixture.nativeElement.querySelector('button[aria-label="Delete"]')).toBeNull();
+  });
+
+  it('reloads articles from reactive tag changes and resets to the first page', async () => {
+    const queryParamMap = new BehaviorSubject(convertToParamMap({}));
+    await TestBed.configureTestingModule({
+      imports: [PublicPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'public/articles' },
+              paramMap: { get: () => null },
+              queryParamMap: queryParamMap.value,
+            },
+            queryParamMap: queryParamMap.asObservable(),
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(PublicPage);
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    http.expectOne('/api/v1/public/articles?page=0&size=10').flush({
+      content: [{ id: 'one', title: 'First article', authorAttribution: 'By Ada' }],
+      page: { totalPages: 3 },
+    });
+    fixture.componentInstance.nextPage();
+    http.expectOne('/api/v1/public/articles?page=1&size=10').flush({
+      content: [{ id: 'two', title: 'Second article', authorAttribution: 'By Ada' }],
+      page: { totalPages: 3 },
+    });
+
+    queryParamMap.next(convertToParamMap({ tagId: 'tag-a' }));
+    http.expectOne('/api/v1/public/articles?page=0&size=10&tagId=tag-a').flush({
+      content: [{ id: 'tag-a-article', title: 'Tag A article', authorAttribution: 'By Ada' }],
+      page: { totalPages: 2 },
+    });
+    queryParamMap.next(convertToParamMap({ tagId: 'tag-a' }));
+    http.expectNone('/api/v1/public/articles?page=0&size=10&tagId=tag-a');
+    fixture.componentInstance.nextPage();
+    http.expectOne('/api/v1/public/articles?page=1&size=10&tagId=tag-a').flush({
+      content: [{ id: 'tag-a-second', title: 'Tag A second', authorAttribution: 'By Ada' }],
+      page: { totalPages: 2 },
+    });
+
+    queryParamMap.next(convertToParamMap({ tagId: 'tag-b' }));
+    http.expectOne('/api/v1/public/articles?page=0&size=10&tagId=tag-b').flush({
+      content: [{ id: 'tag-b-article', title: 'Tag B article', authorAttribution: 'By Ada' }],
+      page: { totalPages: 1 },
+    });
+
+    queryParamMap.next(convertToParamMap({}));
+    http.expectOne('/api/v1/public/articles?page=0&size=10').flush({
+      content: [{ id: 'unfiltered', title: 'Unfiltered article', authorAttribution: 'By Ada' }],
+      page: { totalPages: 1 },
+    });
+
+    expect(fixture.componentInstance.page).toBe(0);
+    fixture.destroy();
+    queryParamMap.next(convertToParamMap({ tagId: 'tag-c' }));
+    http.expectNone('/api/v1/public/articles?page=0&size=10&tagId=tag-c');
+    http.verify();
+  });
+
+  it('cancels a pending page request when the tag changes', async () => {
+    const queryParamMap = new BehaviorSubject(convertToParamMap({}));
+    await TestBed.configureTestingModule({
+      imports: [PublicPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'public/articles' },
+              paramMap: { get: () => null },
+              queryParamMap: queryParamMap.value,
+            },
+            queryParamMap: queryParamMap.asObservable(),
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(PublicPage);
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    http.expectOne('/api/v1/public/articles?page=0&size=10').flush({
+      content: [{ id: 'one', title: 'First article', authorAttribution: 'By Ada' }],
+      page: { totalPages: 2 },
+    });
+    fixture.componentInstance.nextPage();
+    const pendingPage = http.expectOne('/api/v1/public/articles?page=1&size=10');
+
+    queryParamMap.next(convertToParamMap({ tagId: 'tag-a' }));
+    expect(pendingPage.cancelled).toBe(true);
+    http.expectOne('/api/v1/public/articles?page=0&size=10&tagId=tag-a').flush({
+      content: [{ id: 'tag-a-article', title: 'Tag A article', authorAttribution: 'By Ada' }],
+      page: { totalPages: 1 },
+    });
+
+    expect(fixture.componentInstance.items[0].id).toBe('tag-a-article');
+    http.verify();
+  });
+
+  it('cancels a pending page request when the page is destroyed', async () => {
+    const queryParamMap = new BehaviorSubject(convertToParamMap({}));
+    await TestBed.configureTestingModule({
+      imports: [PublicPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'public/articles' },
+              paramMap: { get: () => null },
+              queryParamMap: queryParamMap.value,
+            },
+            queryParamMap: queryParamMap.asObservable(),
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(PublicPage);
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    http.expectOne('/api/v1/public/articles?page=0&size=10').flush({
+      content: [{ id: 'one', title: 'First article', authorAttribution: 'By Ada' }],
+      page: { totalPages: 2 },
+    });
+    fixture.componentInstance.nextPage();
+    const pendingPage = http.expectOne('/api/v1/public/articles?page=1&size=10');
+
+    fixture.destroy();
+
+    expect(pendingPage.cancelled).toBe(true);
+    http.verify();
   });
 });
