@@ -237,7 +237,7 @@ h1 {
 }
 .data-table {
   width: 100%;
-  min-width: 34rem;
+  min-width: 0;
   margin-top: 1.5rem;
   border-collapse: collapse;
   text-align: left;
@@ -312,7 +312,7 @@ h1 {
     animation: none;
   }
 }
-@media (max-width: 800px) {
+@media (max-width: 767px) {
   .admin-form {
     grid-template-columns: 1fr;
   }
@@ -399,9 +399,10 @@ h1 {
     grid-column: 1 / -1;
   }
 
-  .deleted-articles-pagination .page-numbers {
-    justify-content: center;
-    flex-wrap: wrap;
+  .deleted-articles-pagination .page-numbers,
+  .deleted-articles-pagination .first-page,
+  .deleted-articles-pagination .last-page {
+    display: none;
   }
 
   .deleted-articles-pagination .page-indicator {

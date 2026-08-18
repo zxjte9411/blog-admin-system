@@ -157,7 +157,7 @@ form {
 }
 .data-table {
   width: 100%;
-  min-width: 30rem;
+  min-width: 0;
   border-collapse: collapse;
   text-align: left;
 
@@ -209,7 +209,7 @@ form {
   gap: 1rem;
   padding-top: 1.5rem;
 }
-@media (max-width: 800px) {
+@media (max-width: 767px) {
   .table-wrap {
     overflow-x: visible;
   }
@@ -268,22 +268,22 @@ form {
     gap: 0.5rem;
   }
 
-  .pagination .nav-jump:first-child {
+  .pagination .first-page,
+  .pagination .last-page,
+  .pagination .page-numbers {
+    display: none;
+  }
+
+  .pagination .previous-page {
     grid-column: 1;
   }
 
-  .pagination .nav-jump:nth-child(2) {
+  .pagination .next-page {
     grid-column: 2;
   }
 
-  .pagination .page-numbers,
   .pagination .page-indicator {
     grid-column: 1 / -1;
-  }
-
-  .pagination .page-numbers {
-    justify-content: center;
-    flex-wrap: wrap;
   }
 
   .pagination .page-indicator {

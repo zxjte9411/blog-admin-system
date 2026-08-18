@@ -23,7 +23,7 @@
 }
 .data-table {
   width: 100%;
-  min-width: 44rem;
+  min-width: 0;
   border-collapse: collapse;
   text-align: left;
 }
@@ -97,7 +97,7 @@ th {
     justify-self: stretch;
   }
 }
-@media (max-width: 800px) {
+@media (max-width: 767px) {
   .table-wrap {
     overflow-x: visible;
   }
@@ -159,6 +159,10 @@ th {
     display: none;
   }
 
+  .pagination .page-numbers {
+    display: none;
+  }
+
   .pagination .previous-page {
     grid-column: 1;
   }
@@ -170,11 +174,6 @@ th {
   .pagination .page-numbers,
   .pagination .page-indicator {
     grid-column: 1 / -1;
-  }
-
-  .pagination .page-numbers {
-    justify-content: center;
-    flex-wrap: wrap;
   }
 
   .pagination .page-indicator {

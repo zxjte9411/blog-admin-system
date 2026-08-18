@@ -153,7 +153,7 @@ button:disabled {
   opacity: 0.45;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 767px) {
   .page-intro {
     align-items: start;
     flex-direction: column;
@@ -163,5 +163,12 @@ button:disabled {
   .pagination {
     justify-content: space-between;
     gap: 0.5rem;
+  }
+
+  .pagination .page-numbers,
+  .pagination .first-page,
+  .pagination .last-page,
+  .pagination .edge-jump {
+    display: none;
   }
 }

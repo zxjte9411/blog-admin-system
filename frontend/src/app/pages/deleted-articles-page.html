@@ -87,7 +87,7 @@
         </tbody>
       </table>
     </div>
-    @if (totalPages > 1) {
+    @if (totalPages > 0) {
       <nav class="pagination deleted-articles-pagination" [attr.aria-label]="language.t.data">
         <button
           class="page-btn previous-page"
@@ -98,19 +98,21 @@
         >
           {{ language.t.previous }}
         </button>
-        @for (p of pageNumbers; track p) {
-          <button
-            class="page-btn"
-            type="button"
-            [class.is-active]="p === page"
-            [attr.aria-current]="p === page ? 'page' : null"
-            [attr.aria-label]="language.t.page + ' ' + (p + 1)"
-            [disabled]="loading"
-            (click)="goToPage(p)"
-          >
-            {{ p + 1 }}
-          </button>
-        }
+        <div class="page-numbers">
+          @for (p of pageNumbers; track p) {
+            <button
+              class="page-btn"
+              type="button"
+              [class.is-active]="p === page"
+              [attr.aria-current]="p === page ? 'page' : null"
+              [attr.aria-label]="language.t.page + ' ' + (p + 1)"
+              [disabled]="loading"
+              (click)="goToPage(p)"
+            >
+              {{ p + 1 }}
+            </button>
+          }
+        </div>
         <button
           class="page-btn next-page"
           type="button"

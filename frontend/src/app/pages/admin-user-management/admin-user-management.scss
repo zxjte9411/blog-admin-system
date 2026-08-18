@@ -22,7 +22,7 @@
 }
 .data-table {
   width: 100%;
-  min-width: 44rem;
+  min-width: 0;
   border-collapse: collapse;
   text-align: left;
 }
@@ -144,7 +144,7 @@ th {
     color: #8f291e;
   }
 }
-@media (max-width: 800px) {
+@media (max-width: 767px) {
   .table-wrap {
     overflow-x: visible;
   }

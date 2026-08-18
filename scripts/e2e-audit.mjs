@@ -69,8 +69,11 @@ async function runAudit() {
       `Tags heading: ${tagsHeading}, expected: ${expectedTagsHeading}`,
     );
 
-    async function auditResponsiveRoutes(routes) {
-      for (const viewport of responsiveViewports) {
+    async function auditResponsiveRoutes(
+      routes,
+      viewports = responsiveViewports,
+    ) {
+      for (const viewport of viewports) {
         await session.send("Emulation.setDeviceMetricsOverride", {
           width: viewport.width,
           height: viewport.height,
@@ -83,6 +86,8 @@ async function runAudit() {
             url: `http://localhost:4200${route.url ?? route.path}`,
           });
           await new Promise((r) => setTimeout(r, 500));
+          if (route.pagination)
+            await session.waitFor(".pagination", 5000).catch(() => {});
           const result = await session.eval(`(() => ({
             path: window.location.pathname,
             rendered: Boolean(document.querySelector("h1")),
@@ -102,6 +107,32 @@ async function runAudit() {
                   style.visibility !== "hidden",
               )
               .map(({ rect }) => ({ left: rect.left, right: rect.right })))(),
+            pagination: (() => {
+              const nav = document.querySelector(".pagination");
+              if (!nav) return null;
+              const visible = (element) => {
+                if (!element) return false;
+                const rect = element.getBoundingClientRect();
+                const style = getComputedStyle(element);
+                return (
+                  rect.width > 0 &&
+                  rect.height > 0 &&
+                  style.display !== "none" &&
+                  style.visibility !== "hidden"
+                );
+              };
+              const edgeControls = [
+                ...nav.querySelectorAll(".first-page, .last-page, .edge-jump"),
+              ];
+              return {
+                previous: visible(nav.querySelector(".previous-page")),
+                next: visible(nav.querySelector(".next-page")),
+                indicator: visible(nav.querySelector(".page-indicator")),
+                pageNumbers: visible(nav.querySelector(".page-numbers")),
+                visibleEdgeControls: edgeControls.filter(visible).length,
+                edgeControlCount: edgeControls.length,
+              };
+            })(),
           }))()`);
 
           const minLeft = result?.visibleRects?.length
@@ -114,14 +145,27 @@ async function runAudit() {
             result?.visibleRects?.every(
               (rect) => rect.left >= -1 && rect.right <= result.clientWidth + 1,
             ) ?? false;
+          const paginationMatches = route.pagination
+            ? result?.pagination &&
+              result.pagination.previous &&
+              result.pagination.next &&
+              result.pagination.indicator &&
+              (viewport.width < 768
+                ? !result.pagination.pageNumbers &&
+                  result.pagination.visibleEdgeControls === 0
+                : result.pagination.pageNumbers &&
+                  result.pagination.visibleEdgeControls ===
+                    result.pagination.edgeControlCount)
+            : true;
 
           check(
             `Responsive ${route.category} ${route.path} @ ${viewport.width}x${viewport.height}`,
             result?.path === route.path &&
               result.rendered &&
               result.contentWidth <= result.clientWidth &&
-              descendantsWithinBounds,
-            `path: ${result?.path}, rendered: ${result?.rendered}, content: ${result?.contentWidth}, viewport: ${result?.viewportWidth}, client: ${result?.clientWidth}, minLeft: ${minLeft}, maxRight: ${maxRight}`,
+              descendantsWithinBounds &&
+              paginationMatches,
+            `path: ${result?.path}, rendered: ${result?.rendered}, content: ${result?.contentWidth}, viewport: ${result?.viewportWidth}, client: ${result?.clientWidth}, minLeft: ${minLeft}, maxRight: ${maxRight}, pagination: ${JSON.stringify(result?.pagination)}`,
           );
         }
       }
@@ -129,7 +173,7 @@ async function runAudit() {
 
     // Responsive audit for public and auth routes while unauthenticated.
     await auditResponsiveRoutes([
-      { category: "Public", path: "/public/articles" },
+      { category: "Public", path: "/public/articles", pagination: true },
       { category: "Public", path: "/public/tags" },
       { category: "Auth", path: "/login" },
       { category: "Auth", path: "/register" },
@@ -395,6 +439,11 @@ async function runAudit() {
       `Count: ${deletedRowsCount}`,
     );
 
+    await auditResponsiveRoutes(
+      [{ category: "Article", path: "/articles/deleted", pagination: true }],
+      responsiveViewports.filter(({ width }) => width === 360 || width === 768),
+    );
+
     await session.click("tbody tr button.danger");
     await new Promise((r) => setTimeout(r, 600));
 
@@ -469,7 +518,7 @@ async function runAudit() {
 
     // Responsive audit for protected routes after authentication.
     await auditResponsiveRoutes([
-      { category: "Article", path: "/articles" },
+      { category: "Article", path: "/articles", pagination: true },
       { category: "Article", path: "/articles/new" },
       { category: "Article", path: "/articles/deleted" },
       { category: "User", path: "/admin/users" },
@@ -477,7 +526,7 @@ async function runAudit() {
       { category: "Account", path: "/account/profile" },
       { category: "Account", path: "/account/password" },
       { category: "Account", path: "/account/email" },
-      { category: "Account", path: "/account/sessions" },
+      { category: "Account", path: "/account/sessions", pagination: true },
       { category: "Settings", path: "/admin/settings/password" },
     ]);
 

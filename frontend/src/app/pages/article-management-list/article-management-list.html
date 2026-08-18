@@ -86,7 +86,7 @@
     </div>
     <nav class="pagination" [attr.aria-label]="caption">
       <button
-        class="page-btn nav-jump edge-jump"
+        class="page-btn nav-jump edge-jump first-page"
         type="button"
         (click)="selectPage.emit(0)"
         [disabled]="page === 0"
@@ -132,7 +132,7 @@
         {{ nextLabel }}
       </button>
       <button
-        class="page-btn nav-jump edge-jump"
+        class="page-btn nav-jump edge-jump last-page"
         type="button"
         (click)="selectPage.emit(totalPages - 1)"
         [disabled]="page + 1 >= totalPages"
