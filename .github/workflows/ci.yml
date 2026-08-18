@@ -28,7 +28,7 @@ jobs:
         run: ./mvnw --batch-mode verify
       - name: Upload JaCoCo report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: jacoco-report
           path: backend/target/site/jacoco
@@ -78,7 +78,7 @@ jobs:
         run: npm test -- --coverage --coverage-reporters=lcov --coverage-reporters=html
       - name: Upload frontend coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-coverage
           path: frontend/coverage
@@ -141,7 +141,7 @@ jobs:
         run: docker compose logs --no-color > compose-logs.txt
       - name: Upload diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: compose-smoke-diagnostics
           path: |
