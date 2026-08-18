@@ -5,6 +5,7 @@ import { Observable } from 'rxjs';
 export type UserRole = 'AUTHOR' | 'ADMIN';
 export type PreferredLanguage = 'zh-TW' | 'en';
 export type PublicationStatus = 'DRAFT' | 'PUBLISHED';
+export const PAGE_SIZE = 10;
 
 export interface Page<T> {
   content: T[];
@@ -192,7 +193,9 @@ export class ArticleApi {
     return this.http.post<Article>('/api/v1/articles', request);
   }
   list(options: ArticleQuery = {}): Observable<Page<Article>> {
-    return this.http.get<Page<Article>>('/api/v1/articles', { params: query(options) });
+    return this.http.get<Page<Article>>('/api/v1/articles', {
+      params: query({ ...options, size: options.size ?? PAGE_SIZE }),
+    });
   }
   get(id: string): Observable<Article> {
     return this.http.get<Article>(`/api/v1/articles/${id}`);
@@ -203,7 +206,7 @@ export class ArticleApi {
   delete(id: string): Observable<void> {
     return this.http.delete<void>(`/api/v1/articles/${id}`);
   }
-  deleted(page?: number, size?: number): Observable<Page<Article>> {
+  deleted(page?: number, size = PAGE_SIZE): Observable<Page<Article>> {
     return this.http.get<Page<Article>>('/api/v1/articles/deleted', {
       params: query({ page, size }),
     });
@@ -221,13 +224,13 @@ export class PublicArticleApi {
   private readonly http = inject(HttpClient);
   list(options: PublicArticleQuery = {}): Observable<Page<PublicArticle>> {
     return this.http.get<Page<PublicArticle>>('/api/v1/public/articles', {
-      params: query(options),
+      params: query({ ...options, size: options.size ?? PAGE_SIZE }),
     });
   }
   get(id: string): Observable<PublicArticle> {
     return this.http.get<PublicArticle>(`/api/v1/public/articles/${id}`);
   }
-  tags(page?: number, size?: number): Observable<Page<PublicTag>> {
+  tags(page?: number, size = PAGE_SIZE): Observable<Page<PublicTag>> {
     return this.http.get<Page<PublicTag>>('/api/v1/public/tags', { params: query({ page, size }) });
   }
 }

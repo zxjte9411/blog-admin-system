@@ -57,7 +57,7 @@ describe('article use-case pages', () => {
     await setup(ArticleEditorPage, 'articles/new');
     const fixture = TestBed.createComponent(ArticleEditorPage);
     fixture.detectChanges();
-    TestBed.inject(HttpTestingController).expectOne('/api/v1/public/tags?size=100').flush([]);
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/public/tags?page=0&size=10').flush([]);
 
     const submits = fixture.nativeElement.querySelectorAll('button[type="submit"]');
     expect(submits).toHaveLength(1);
@@ -69,7 +69,7 @@ describe('article use-case pages', () => {
     const fixture = TestBed.createComponent(ArticleCreatePage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
-    http.expectOne('/api/v1/public/tags?size=100').flush([]);
+    http.expectOne('/api/v1/public/tags?page=0&size=10').flush([]);
     fixture.componentInstance.submit();
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.field-error')).toBeTruthy();
@@ -85,7 +85,7 @@ describe('article use-case pages', () => {
     const fixture = TestBed.createComponent(ArticleCreatePage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
-    const tags = http.expectOne('/api/v1/public/tags?size=100');
+    const tags = http.expectOne('/api/v1/public/tags?page=0&size=10');
     const tagField = fixture.nativeElement.querySelector('.tag-field') as HTMLElement;
 
     expect(tagField.getAttribute('aria-busy')).toBe('true');
@@ -99,13 +99,37 @@ describe('article use-case pages', () => {
     expect(tagField.textContent).toContain('Angular');
   });
 
+  it('loads every public tag page so all tags remain available', async () => {
+    await setup(ArticleCreatePage, 'articles/new');
+    const fixture = TestBed.createComponent(ArticleCreatePage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+
+    http.expectOne('/api/v1/public/tags?page=0&size=10').flush({
+      content: [{ id: 'tag-1', name: 'Angular' }],
+      page: { totalPages: 2 },
+    });
+    const secondPage = http.expectOne('/api/v1/public/tags?page=1&size=10');
+    secondPage.flush({
+      content: [{ id: 'tag-2', name: 'Spring' }],
+      page: { totalPages: 2 },
+    });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.availableTags.map((tag) => tag.name)).toEqual([
+      'Angular',
+      'Spring',
+    ]);
+    expect(fixture.nativeElement.querySelectorAll('.tag-checkbox')).toHaveLength(2);
+  });
+
   it('shows the existing error alert when tags fail to load', async () => {
     await setup(ArticleCreatePage, 'articles/new');
     const fixture = TestBed.createComponent(ArticleCreatePage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
     http
-      .expectOne('/api/v1/public/tags?size=100')
+      .expectOne('/api/v1/public/tags?page=0&size=10')
       .flush('error', { status: 500, statusText: 'Server error' });
     fixture.detectChanges();
 
@@ -120,7 +144,7 @@ describe('article use-case pages', () => {
     const fixture = TestBed.createComponent(ArticleEditPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
-    http.expectOne('/api/v1/public/tags?size=100').flush([]);
+    http.expectOne('/api/v1/public/tags?page=0&size=10').flush([]);
     http.expectOne('/api/v1/articles/article-1').flush({
       title: 'Old',
       content: 'Body',
@@ -141,7 +165,7 @@ describe('article use-case pages', () => {
     const fixture = TestBed.createComponent(ArticleEditPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
-    http.expectOne('/api/v1/public/tags?size=100').flush({
+    http.expectOne('/api/v1/public/tags?page=0&size=10').flush({
       content: [
         { id: 'tag-1', name: 'Angular' },
         { id: 'tag-2', name: 'Spring' },
@@ -172,7 +196,7 @@ describe('article use-case pages', () => {
     await setup(ArticleCreatePage, 'articles/new');
     const fixture = TestBed.createComponent(ArticleCreatePage);
     fixture.detectChanges();
-    TestBed.inject(HttpTestingController).expectOne('/api/v1/public/tags?size=100').flush([]);
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/public/tags?page=0&size=10').flush([]);
 
     const radios = fixture.nativeElement.querySelectorAll('input[type="radio"]');
     expect(radios).toHaveLength(2);
@@ -187,7 +211,7 @@ describe('article use-case pages', () => {
     const fixture = TestBed.createComponent(ArticleCreatePage);
     fixture.detectChanges();
     TestBed.inject(HttpTestingController)
-      .expectOne('/api/v1/public/tags?size=100')
+      .expectOne('/api/v1/public/tags?page=0&size=10')
       .flush({ content: [{ id: 'tag-1', name: 'Tech' }] });
     fixture.detectChanges();
 
@@ -213,7 +237,7 @@ describe('article use-case pages', () => {
     const fixture = TestBed.createComponent(ArticleEditPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
-    http.expectOne('/api/v1/public/tags?size=100').flush({
+    http.expectOne('/api/v1/public/tags?page=0&size=10').flush({
       content: [
         { id: 'tag-1', name: 'Angular' },
         { id: 'tag-2', name: 'Spring' },
@@ -253,13 +277,15 @@ describe('article use-case pages', () => {
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
     http
-      .expectOne('/api/v1/articles?page=0')
+      .expectOne('/api/v1/articles?page=0&size=10')
       .flush({ content: [{ id: 'a1', title: 'Title' }], page: { totalPages: 3 } });
     expect(fixture.componentInstance.totalPages).toBe(3);
     fixture.componentInstance.deleteArticle({ id: 'a1', title: 'Title' } as never);
     fixture.componentInstance.confirmModal();
     http.expectOne('/api/v1/articles/a1').flush(null);
-    http.expectOne('/api/v1/articles?page=0').flush({ content: [], page: { totalPages: 0 } });
+    http
+      .expectOne('/api/v1/articles?page=0&size=10')
+      .flush({ content: [], page: { totalPages: 0 } });
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[role="status"]')).toBeTruthy();
   });
@@ -269,14 +295,16 @@ describe('article use-case pages', () => {
     const fixture = TestBed.createComponent(ArticleListPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
-    http.expectOne('/api/v1/articles?page=0').flush({ content: [], totalPages: 2 });
+    http.expectOne('/api/v1/articles?page=0&size=10').flush({ content: [], totalPages: 2 });
 
     fixture.componentInstance.search('needle');
-    http.expectOne('/api/v1/articles?page=0&title=needle').flush({ content: [], totalPages: 2 });
+    http
+      .expectOne('/api/v1/articles?page=0&size=10&title=needle')
+      .flush({ content: [], totalPages: 2 });
     fixture.componentInstance.nextPage();
-    expect(http.expectOne('/api/v1/articles?page=1&title=needle').request.params.get('page')).toBe(
-      '1',
-    );
+    expect(
+      http.expectOne('/api/v1/articles?page=1&size=10&title=needle').request.params.get('page'),
+    ).toBe('1');
   });
 
   it('allows authors to manage only their own articles', async () => {
@@ -300,7 +328,7 @@ describe('article use-case pages', () => {
     const fixture = TestBed.createComponent(ArticleListPage);
     fixture.detectChanges();
     TestBed.inject(HttpTestingController)
-      .expectOne('/api/v1/articles?page=0')
+      .expectOne('/api/v1/articles?page=0&size=10')
       .flush({ content: [], totalPages: 0 });
     fixture.detectChanges();
 
@@ -314,7 +342,7 @@ describe('article use-case pages', () => {
     const fixture = TestBed.createComponent(ArticleListPage);
     fixture.detectChanges();
     TestBed.inject(HttpTestingController)
-      .expectOne('/api/v1/articles?page=0')
+      .expectOne('/api/v1/articles?page=0&size=10')
       .flush({ content: [{ id: 'a1', title: 'Title' }], page: { totalPages: 3 } });
     fixture.detectChanges();
 
@@ -347,7 +375,7 @@ describe('article use-case pages', () => {
     };
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
-    http.expectOne('/api/v1/public/tags?size=100').flush([]);
+    http.expectOne('/api/v1/public/tags?page=0&size=10').flush([]);
     http.expectOne('/api/v1/articles/article-1').flush({ owner: 'author-2' });
     fixture.detectChanges();
 
@@ -359,7 +387,7 @@ describe('article use-case pages', () => {
     const fixture = TestBed.createComponent(ArticleListPage);
     fixture.detectChanges();
     TestBed.inject(HttpTestingController)
-      .expectOne('/api/v1/articles?page=0')
+      .expectOne('/api/v1/articles?page=0&size=10')
       .flush('error', { status, statusText: 'error' });
     const language = TestBed.inject(Language);
     const expected =
@@ -378,7 +406,7 @@ describe('article use-case pages', () => {
     const fixture = TestBed.createComponent(DeletedArticlesPage);
     fixture.detectChanges();
     TestBed.inject(HttpTestingController)
-      .expectOne('/api/v1/articles/deleted?page=0')
+      .expectOne('/api/v1/articles/deleted?page=0&size=10')
       .flush('error', { status, statusText: 'error' });
     const language = TestBed.inject(Language);
     const expected =
@@ -396,7 +424,7 @@ describe('article use-case pages', () => {
     await setup(ArticleCreatePage, 'articles/new');
     const fixture = TestBed.createComponent(ArticleCreatePage);
     fixture.detectChanges();
-    TestBed.inject(HttpTestingController).expectOne('/api/v1/public/tags?size=100').flush([]);
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/public/tags?page=0&size=10').flush([]);
     const language = TestBed.inject(Language);
     expect(fixture.nativeElement.querySelector('#field-title').getAttribute('placeholder')).toBe(
       language.t.titlePlaceholder,
@@ -424,7 +452,7 @@ describe('article use-case pages', () => {
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
     http
-      .expectOne('/api/v1/articles?page=0')
+      .expectOne('/api/v1/articles?page=0&size=10')
       .flush({ content: [{ id: 'a1', title: 'Title' }], page: { totalPages: 1 } });
     fixture.detectChanges();
     const dialog = fixture.nativeElement.querySelector('dialog') as HTMLDialogElement;
@@ -455,18 +483,18 @@ describe('article use-case pages', () => {
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
     http
-      .expectOne('/api/v1/articles/deleted?page=0')
+      .expectOne('/api/v1/articles/deleted?page=0&size=10')
       .flush({ content: [{ id: 'a1', title: 'Deleted' }], page: { totalPages: 1 } });
     fixture.componentInstance.restore(fixture.componentInstance.items[0]);
     http.expectOne('/api/v1/articles/a1/restore').flush({});
     http
-      .expectOne('/api/v1/articles/deleted?page=0')
+      .expectOne('/api/v1/articles/deleted?page=0&size=10')
       .flush({ content: [], page: { totalPages: 0 } });
     fixture.componentInstance.purge({ id: 'a2', title: 'Gone' } as never);
     fixture.componentInstance.confirmModal();
     http.expectOne('/api/v1/articles/deleted/a2').flush(null);
     http
-      .expectOne('/api/v1/articles/deleted?page=0')
+      .expectOne('/api/v1/articles/deleted?page=0&size=10')
       .flush({ content: [], page: { totalPages: 0 } });
   });
 
@@ -485,7 +513,7 @@ describe('article use-case pages', () => {
     expect(fixture.nativeElement.querySelector('.loading-bar')).toBeTruthy();
     expect(fixture.nativeElement.querySelector('.skeleton')).toBeTruthy();
 
-    http.expectOne('/api/v1/articles/deleted?page=0').flush({
+    http.expectOne('/api/v1/articles/deleted?page=0&size=10').flush({
       content: [
         { id: 'a1', title: 'First' },
         { id: 'a2', title: 'Second' },
@@ -498,7 +526,7 @@ describe('article use-case pages', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.loading-bar')).toBeTruthy();
     expect(fixture.nativeElement.querySelectorAll('tbody tr')).toHaveLength(2);
-    http.expectOne('/api/v1/articles/deleted?page=1').flush({
+    http.expectOne('/api/v1/articles/deleted?page=1&size=10').flush({
       content: [
         { id: 'b1', title: 'Third' },
         { id: 'b2', title: 'Fourth' },
@@ -523,7 +551,7 @@ describe('article use-case pages', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.loading-bar')).toBeTruthy();
     expect(fixture.nativeElement.querySelectorAll('tbody tr')).toHaveLength(3);
-    http.expectOne('/api/v1/articles/deleted?page=1').flush({
+    http.expectOne('/api/v1/articles/deleted?page=1&size=10').flush({
       content: [
         { id: 'b2', title: 'Fourth' },
         { id: 'b3', title: 'Fifth' },
@@ -564,7 +592,7 @@ describe('article use-case pages', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.loading-bar')).toBeTruthy();
     expect(fixture.nativeElement.querySelectorAll('tbody tr')).toHaveLength(2);
-    http.expectOne('/api/v1/articles/deleted?page=1').flush({
+    http.expectOne('/api/v1/articles/deleted?page=1&size=10').flush({
       content: [{ id: 'b3', title: 'Fifth' }],
       page: { totalPages: 2 },
     });
@@ -579,7 +607,7 @@ describe('article use-case pages', () => {
     const fixture = TestBed.createComponent(DeletedArticlesPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
-    http.expectOne('/api/v1/articles/deleted?page=0').flush({
+    http.expectOne('/api/v1/articles/deleted?page=0&size=10').flush({
       content: [{ id: 'a1', title: 'Deleted' }],
       page: { totalPages: 3 },
     });
@@ -597,10 +625,10 @@ describe('article use-case pages', () => {
     fixture.componentInstance.goToPage(2);
     fixture.componentInstance.previousPage();
     expect(fixture.componentInstance.page).toBe(1);
-    expect(http.match('/api/v1/articles/deleted?page=0')).toHaveLength(0);
-    expect(http.match('/api/v1/articles/deleted?page=2')).toHaveLength(0);
+    expect(http.match('/api/v1/articles/deleted?page=0&size=10')).toHaveLength(0);
+    expect(http.match('/api/v1/articles/deleted?page=2&size=10')).toHaveLength(0);
 
-    http.expectOne('/api/v1/articles/deleted?page=1').flush({
+    http.expectOne('/api/v1/articles/deleted?page=1&size=10').flush({
       content: [],
       page: { totalPages: 3 },
     });
@@ -618,7 +646,7 @@ describe('article use-case pages', () => {
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
     http
-      .expectOne('/api/v1/articles/deleted?page=0')
+      .expectOne('/api/v1/articles/deleted?page=0&size=10')
       .flush({ content: [{ id: 'a1', title: 'Gone' }], page: { totalPages: 1 } });
     fixture.detectChanges();
     const dialog = fixture.nativeElement.querySelector('dialog') as HTMLDialogElement;
@@ -641,7 +669,7 @@ describe('article use-case pages', () => {
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
     http
-      .expectOne('/api/v1/articles/deleted?page=0')
+      .expectOne('/api/v1/articles/deleted?page=0&size=10')
       .flush({ content: [{ id: 'a1', title: 'Deleted' }], page: { totalPages: 3 } });
     const page = fixture.componentInstance as DeletedArticlesPage & {
       totalPages: number;
@@ -655,15 +683,15 @@ describe('article use-case pages', () => {
     );
     page.nextPage();
     http
-      .expectOne('/api/v1/articles/deleted?page=1')
+      .expectOne('/api/v1/articles/deleted?page=1&size=10')
       .flush({ content: [], page: { totalPages: 3 } });
     page.goToPage(2);
     http
-      .expectOne('/api/v1/articles/deleted?page=2')
+      .expectOne('/api/v1/articles/deleted?page=2&size=10')
       .flush({ content: [], page: { totalPages: 3 } });
     page.previousPage();
     http
-      .expectOne('/api/v1/articles/deleted?page=1')
+      .expectOne('/api/v1/articles/deleted?page=1&size=10')
       .flush({ content: [], page: { totalPages: 3 } });
   });
 
@@ -674,7 +702,7 @@ describe('article use-case pages', () => {
     const fixture = TestBed.createComponent(DeletedArticlesPage);
     fixture.detectChanges();
     TestBed.inject(HttpTestingController)
-      .expectOne('/api/v1/articles/deleted?page=0')
+      .expectOne('/api/v1/articles/deleted?page=0&size=10')
       .flush({ content: [{ id: 'a1', title: 'Deleted' }], page: { totalPages: 3 } });
     fixture.detectChanges();
 
@@ -699,7 +727,7 @@ describe('article use-case pages', () => {
     const fixture = TestBed.createComponent(ArticleEditPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
-    http.expectOne('/api/v1/public/tags?size=100').flush([]);
+    http.expectOne('/api/v1/public/tags?page=0&size=10').flush([]);
     http.expectOne('/api/v1/articles/article-1').flush('error', { status, statusText: 'error' });
     fixture.detectChanges();
     const language = TestBed.inject(Language);
@@ -717,7 +745,7 @@ describe('article use-case pages', () => {
     const fixture = TestBed.createComponent(ArticleEditPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
-    const tags = http.expectOne('/api/v1/public/tags?size=100');
+    const tags = http.expectOne('/api/v1/public/tags?page=0&size=10');
     const article = http.expectOne('/api/v1/articles/article-1');
 
     tags.flush('error', { status: 500, statusText: 'Server error' });
@@ -755,7 +783,7 @@ describe('article use-case pages', () => {
     const fixture = TestBed.createComponent(ArticleCreatePage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
-    http.expectOne('/api/v1/public/tags?size=100').flush([]);
+    http.expectOne('/api/v1/public/tags?page=0&size=10').flush([]);
     fixture.componentInstance.form.patchValue({ title: 'Title', content: 'Content' });
     fixture.componentInstance.submit();
     http.expectOne('/api/v1/articles').flush('error', { status, statusText: 'error' });

@@ -11,7 +11,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Language } from '../core/language';
 import { AppShell } from '../layouts/app-shell';
 import { getPageNumbers } from '../core/pagination';
-import { Page, PublicArticle, PublicArticleApi, PublicTag } from '../core/api';
+import { PAGE_SIZE, Page, PublicArticle, PublicArticleApi, PublicTag } from '../core/api';
 
 @Component({
   selector: 'app-public-page',
@@ -79,9 +79,10 @@ export class PublicPage implements OnInit {
       this.cdr.markForCheck();
     };
     const fail = (e: HttpErrorResponse) => this.fail(e.status);
-    if (this.routeKey === 'public/tags') this.api.tags(this.page).subscribe({ next, error: fail });
+    if (this.routeKey === 'public/tags')
+      this.api.tags(this.page, PAGE_SIZE).subscribe({ next, error: fail });
     else
-      this.api.list({ page: this.page, ...(tagId ? { tagId } : {}) }).subscribe({
+      this.api.list({ page: this.page, size: PAGE_SIZE, ...(tagId ? { tagId } : {}) }).subscribe({
         next,
         error: fail,
       });

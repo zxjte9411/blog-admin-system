@@ -9,6 +9,7 @@ import {
   InvitationUser,
   LoginResponse,
   Page,
+  PublicArticleApi,
   RegistrationRequest,
   UserApi,
 } from './api';
@@ -69,9 +70,42 @@ describe('ArticleApi', () => {
       expect(result).toEqual(page);
     });
 
-    const req = http.expectOne('/api/v1/articles?title=needle&status=PUBLISHED');
+    const req = http.expectOne('/api/v1/articles?title=needle&status=PUBLISHED&size=10');
     expect(req.request.method).toBe('GET');
     req.flush(page);
+  });
+
+  it('sends the fixed page size for deleted article pagination', () => {
+    api.deleted(2).subscribe();
+
+    const req = http.expectOne('/api/v1/articles/deleted?page=2&size=10');
+    expect(req.request.params.get('page')).toBe('2');
+    expect(req.request.params.get('size')).toBe('10');
+    req.flush({ content: [], totalPages: 0 });
+  });
+});
+
+describe('PublicArticleApi pagination contract', () => {
+  let http: HttpTestingController;
+  let api: PublicArticleApi;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    http = TestBed.inject(HttpTestingController);
+    api = TestBed.inject(PublicArticleApi);
+  });
+
+  afterEach(() => http.verify());
+
+  it('sends page and the fixed page size for public tag pagination', () => {
+    api.tags(3).subscribe();
+
+    const req = http.expectOne('/api/v1/public/tags?page=3&size=10');
+    expect(req.request.params.get('page')).toBe('3');
+    expect(req.request.params.get('size')).toBe('10');
+    req.flush({ content: [], totalPages: 0 });
   });
 });
 

@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -268,6 +269,160 @@ class ArticleApiIntegrationTest extends AbstractPostgresIntegrationTest {
   }
 
   @Test
+  void collectionEndpointsFollowTenItemPaginationContract() {
+    createUser(UserRole.ADMIN, "pagination-admin");
+    String token = login("pagination-admin");
+    UUID commonTagId = UUID.randomUUID();
+    tagRepository.saveAndFlush(new Tag(commonTagId, "pagination-common"));
+
+    for (int index = 1; index <= 12; index++) {
+      UUID tagId = UUID.randomUUID();
+      tagRepository.saveAndFlush(new Tag(tagId, "pagination-tag-" + index));
+      createArticle(token, "Pagination " + index, "PUBLISHED", Set.of(commonTagId, tagId));
+    }
+    createArticle(token, "Other", "DRAFT", Set.of());
+
+    List<String> deletedArticleIds =
+        IntStream.rangeClosed(1, 11)
+            .mapToObj(index -> createArticle(token, "Deleted " + index, "DRAFT", Set.of()))
+            .toList();
+    deletedArticleIds.forEach(
+        id ->
+            assertThat(
+                    exchange("/api/v1/articles/" + id, HttpMethod.DELETE, token, null, Void.class)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.NO_CONTENT));
+
+    Map<String, Object> managementFirst =
+        exchange("/api/v1/articles?page=0", HttpMethod.GET, token, null, Map.class).getBody();
+    Map<String, Object> managementSecond =
+        exchange("/api/v1/articles?page=1", HttpMethod.GET, token, null, Map.class).getBody();
+    Map<String, Object> managementTooLarge =
+        exchange("/api/v1/articles?page=0&size=101", HttpMethod.GET, token, null, Map.class)
+            .getBody();
+    assertPage(managementFirst, 13, 2, 10, 0, 10);
+    assertPage(managementSecond, 13, 2, 10, 1, 3);
+    assertPage(managementTooLarge, 13, 1, 100, 0, 13);
+    assertPage(
+        exchange(
+                "/api/v1/articles?title=Pagination&page=0&size=101",
+                HttpMethod.GET,
+                token,
+                null,
+                Map.class)
+            .getBody(),
+        12,
+        1,
+        100,
+        0,
+        12);
+    assertPage(
+        exchange(
+                "/api/v1/articles?status=PUBLISHED&page=0&size=101",
+                HttpMethod.GET,
+                token,
+                null,
+                Map.class)
+            .getBody(),
+        12,
+        1,
+        100,
+        0,
+        12);
+    assertPage(
+        exchange(
+                "/api/v1/articles?tagId=" + commonTagId + "&page=0&size=101",
+                HttpMethod.GET,
+                token,
+                null,
+                Map.class)
+            .getBody(),
+        12,
+        1,
+        100,
+        0,
+        12);
+
+    assertPage(
+        exchange("/api/v1/articles/deleted?page=0", HttpMethod.GET, token, null, Map.class)
+            .getBody(),
+        11,
+        2,
+        10,
+        0,
+        10);
+    assertPage(
+        exchange("/api/v1/articles/deleted?page=1", HttpMethod.GET, token, null, Map.class)
+            .getBody(),
+        11,
+        2,
+        10,
+        1,
+        1);
+    assertPage(
+        exchange("/api/v1/articles/deleted?page=0&size=101", HttpMethod.GET, token, null, Map.class)
+            .getBody(),
+        11,
+        1,
+        100,
+        0,
+        11);
+
+    assertPage(
+        exchange("/api/v1/public/articles?page=0", HttpMethod.GET, token, null, Map.class)
+            .getBody(),
+        12,
+        2,
+        10,
+        0,
+        10);
+    assertPage(
+        exchange("/api/v1/public/articles?page=1", HttpMethod.GET, token, null, Map.class)
+            .getBody(),
+        12,
+        2,
+        10,
+        1,
+        2);
+    assertPage(
+        exchange(
+                "/api/v1/public/articles?title=Pagination&tagId=" + commonTagId + "&size=101",
+                HttpMethod.GET,
+                token,
+                null,
+                Map.class)
+            .getBody(),
+        12,
+        1,
+        100,
+        0,
+        12);
+
+    assertPage(
+        exchange("/api/v1/public/tags?page=0", HttpMethod.GET, token, null, Map.class).getBody(),
+        13,
+        2,
+        10,
+        0,
+        10);
+    assertPage(
+        exchange("/api/v1/public/tags?page=1", HttpMethod.GET, token, null, Map.class).getBody(),
+        13,
+        2,
+        10,
+        1,
+        3);
+    assertPage(
+        exchange("/api/v1/public/tags?page=0&size=101", HttpMethod.GET, token, null, Map.class)
+            .getBody(),
+        13,
+        1,
+        100,
+        0,
+        13);
+  }
+
+  @Test
   void adminCanUpdateAndDeleteAnotherAuthorsArticle() {
     createUser(UserRole.AUTHOR, "owned");
     createUser(UserRole.ADMIN, "admin");
@@ -320,6 +475,35 @@ class ArticleApiIntegrationTest extends AbstractPostgresIntegrationTest {
     user.changeRole(role);
     userRepository.saveAndFlush(user);
     return id;
+  }
+
+  private String createArticle(String token, String title, String status, Set<UUID> tagIds) {
+    ResponseEntity<Map> response =
+        exchange(
+            "/api/v1/articles",
+            HttpMethod.POST,
+            token,
+            Map.of("title", title, "content", "Content", "status", status, "tagIds", tagIds),
+            Map.class);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    return response.getBody().get("id").toString();
+  }
+
+  @SuppressWarnings("unchecked")
+  private void assertPage(
+      Map<String, Object> response,
+      int totalElements,
+      int totalPages,
+      int size,
+      int number,
+      int contentSize) {
+    assertThat(response).containsKey("page");
+    assertThat((Map<String, Object>) response.get("page"))
+        .containsEntry("totalElements", totalElements)
+        .containsEntry("totalPages", totalPages)
+        .containsEntry("size", size)
+        .containsEntry("number", number);
+    assertThat((List<Map<String, Object>>) response.get("content")).hasSize(contentSize);
   }
 
   private String login(String name) {

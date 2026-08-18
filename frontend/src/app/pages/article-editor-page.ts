@@ -12,6 +12,7 @@ import { ActivatedRoute, CanDeactivateFn, Router } from '@angular/router';
 import {
   ArticleApi,
   CreateArticleRequest,
+  PAGE_SIZE,
   PublicArticleApi,
   PublicTag,
   UpdateArticleRequest,
@@ -53,9 +54,19 @@ export class ArticleEditorPage implements OnInit {
   ngOnInit() {
     this.edit = this.route.snapshot.routeConfig?.path === 'articles/:id/edit';
     this.tagsLoading = true;
-    this.tagsApi.tags(undefined, 100).subscribe({
+    this.loadTags();
+    if (this.edit) this.load();
+  }
+  private loadTags(page = 0, tags: PublicTag[] = []) {
+    this.tagsApi.tags(page, PAGE_SIZE).subscribe({
       next: (r) => {
-        this.availableTags = r.content ?? [];
+        const allTags = [...tags, ...(r.content ?? [])];
+        const totalPages = r.page?.totalPages ?? r.totalPages ?? 1;
+        if (page + 1 < totalPages) {
+          this.loadTags(page + 1, allTags);
+          return;
+        }
+        this.availableTags = allTags;
         this.tagsLoading = false;
         this.cdr.markForCheck();
       },
@@ -64,7 +75,6 @@ export class ArticleEditorPage implements OnInit {
         this.fail(e.status, false);
       },
     });
-    if (this.edit) this.load();
   }
   toggleTag(id: string, event: Event) {
     if ((event.target as HTMLInputElement).checked) this.selectedTagIds.add(id);

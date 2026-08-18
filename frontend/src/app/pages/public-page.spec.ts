@@ -68,7 +68,7 @@ describe('PublicPage', () => {
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
     expect(fixture.nativeElement.querySelector('.article-skeleton')).toBeNull();
-    http.expectOne('/api/v1/public/tags?page=0').flush({
+    http.expectOne('/api/v1/public/tags?page=0&size=10').flush({
       content: [{ id: 'tag-1', name: 'News' }],
       page: { totalPages: 2 },
     });
@@ -78,7 +78,7 @@ describe('PublicPage', () => {
     fixture.componentInstance.nextPage();
     fixture.detectChanges();
 
-    http.expectOne('/api/v1/public/tags?page=1');
+    http.expectOne('/api/v1/public/tags?page=1&size=10');
   });
 
   it('removes article skeletons and shows the empty state after an empty response', async () => {
@@ -104,7 +104,7 @@ describe('PublicPage', () => {
     const fixture = TestBed.createComponent(PublicPage);
     fixture.detectChanges();
     TestBed.inject(HttpTestingController)
-      .expectOne('/api/v1/public/articles?page=0')
+      .expectOne('/api/v1/public/articles?page=0&size=10')
       .flush({ content: [], page: { totalPages: 0 } });
     fixture.detectChanges();
 
@@ -138,7 +138,7 @@ describe('PublicPage', () => {
     const fixture = TestBed.createComponent(PublicPage);
     fixture.detectChanges();
     TestBed.inject(HttpTestingController)
-      .expectOne('/api/v1/public/articles?page=0')
+      .expectOne('/api/v1/public/articles?page=0&size=10')
       .flush({}, { status: 500, statusText: 'Server Error' });
     fixture.detectChanges();
 
@@ -173,7 +173,7 @@ describe('PublicPage', () => {
     const fixture = TestBed.createComponent(PublicPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
-    http.expectOne('/api/v1/public/articles?page=0&tagId=tag-1').flush({
+    http.expectOne('/api/v1/public/articles?page=0&size=10&tagId=tag-1').flush({
       content: [{ id: 'one', title: 'First article', authorAttribution: 'By Ada' }],
       page: { totalPages: 2 },
     });
@@ -191,7 +191,7 @@ describe('PublicPage', () => {
     expect(
       fixture.nativeElement.querySelector('.article-list-region').getAttribute('aria-busy'),
     ).toBe('true');
-    http.expectOne('/api/v1/public/articles?page=1&tagId=tag-1');
+    http.expectOne('/api/v1/public/articles?page=1&size=10&tagId=tag-1');
   });
 
   it('renders public content without account or administration actions', async () => {
@@ -217,7 +217,7 @@ describe('PublicPage', () => {
     const fixture = TestBed.createComponent(PublicPage);
     fixture.detectChanges();
     TestBed.inject(HttpTestingController)
-      .expectOne('/api/v1/public/articles?page=0')
+      .expectOne('/api/v1/public/articles?page=0&size=10')
       .flush([{ id: 'public-1', title: 'Public article' }]);
     fixture.detectChanges();
 
@@ -252,7 +252,7 @@ describe('PublicPage', () => {
     const fixture = TestBed.createComponent(PublicPage);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
-    http.expectOne('/api/v1/public/articles?page=0').flush({
+    http.expectOne('/api/v1/public/articles?page=0&size=10').flush({
       content: [{ id: 'one', title: 'First article', authorAttribution: 'By Ada' }],
       page: { totalPages: 1 },
     });
@@ -284,7 +284,7 @@ describe('PublicPage', () => {
     const fixture = TestBed.createComponent(PublicPage);
     fixture.detectChanges();
     TestBed.inject(HttpTestingController)
-      .expectOne('/api/v1/public/articles?page=0')
+      .expectOne('/api/v1/public/articles?page=0&size=10')
       .flush({ content: [], page: { totalPages: 4 } });
     expect(fixture.componentInstance.totalPages).toBe(4);
   });
@@ -312,7 +312,7 @@ describe('PublicPage', () => {
     const fixture = TestBed.createComponent(PublicPage);
     fixture.detectChanges();
     TestBed.inject(HttpTestingController)
-      .expectOne('/api/v1/public/articles?page=0&tagId=tag-1')
+      .expectOne('/api/v1/public/articles?page=0&size=10&tagId=tag-1')
       .flush([]);
     fixture.detectChanges();
 

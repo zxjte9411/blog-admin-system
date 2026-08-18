@@ -9,7 +9,7 @@ import {
   inject,
   ViewChild,
 } from '@angular/core';
-import { Article, ArticleApi } from '../core/api';
+import { Article, ArticleApi, PAGE_SIZE } from '../core/api';
 import { Language } from '../core/language';
 import { Auth } from '../core/auth';
 import { AppShell } from '../layouts/app-shell';
@@ -134,7 +134,7 @@ export class DeletedArticlesPage implements OnInit {
     this.loading = true;
     this.error = '';
     this.cdr.markForCheck();
-    this.api.deleted(this.page).subscribe({
+    this.api.deleted(this.page, PAGE_SIZE).subscribe({
       next: (r) => {
         this.items = r.content;
         this.totalPages = r.page?.totalPages ?? r.totalPages;

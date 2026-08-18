@@ -9,7 +9,7 @@ import {
   inject,
 } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { Article, ArticleApi } from '../core/api';
+import { Article, ArticleApi, PAGE_SIZE } from '../core/api';
 import { Auth } from '../core/auth';
 import { Language } from '../core/language';
 import { getPageNumbers } from '../core/pagination';
@@ -118,7 +118,11 @@ export class ArticleListPage implements OnInit {
     this.loading = true;
     this.error = '';
     this.api
-      .list({ page: this.page, ...(this.searchTitle ? { title: this.searchTitle } : {}) })
+      .list({
+        page: this.page,
+        size: PAGE_SIZE,
+        ...(this.searchTitle ? { title: this.searchTitle } : {}),
+      })
       .subscribe({
         next: (result) => {
           this.items = result.content;

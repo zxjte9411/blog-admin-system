@@ -9,6 +9,11 @@ spring:
     banner-mode: "off"
   jackson:
     time-zone: UTC
+  data:
+    web:
+      pageable:
+        default-page-size: 10
+        max-page-size: 100
   datasource:
     url: ${SPRING_DATASOURCE_URL:${DATABASE_URL:jdbc:postgresql://localhost:5432/blog_admin}}
     username: ${SPRING_DATASOURCE_USERNAME:${DATABASE_USERNAME:blog_admin}}
