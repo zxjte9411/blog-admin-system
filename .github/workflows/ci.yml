@@ -1,8 +1,12 @@
-name: Backend
+name: CI
 
 on:
   push:
   pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -146,85 +150,6 @@ jobs:
       - name: Stop Compose
         if: always()
         run: docker compose down --volumes
-
-  build-push:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [verify, frontend-verify, compose-smoke]
-    runs-on: ubuntu-latest
-    outputs:
-      backend_image_digest: ${{ steps.backend_build.outputs.digest }}
-      frontend_image_digest: ${{ steps.frontend_build.outputs.digest }}
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
-      - name: Log in to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push backend image
-        id: backend_build
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
-        with:
-          context: ./backend
-          push: true
-          tags: ghcr.io/${{ github.repository }}-backend:${{ github.sha }}
-      - name: Build and push frontend image
-        id: frontend_build
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
-        with:
-          context: ./frontend
-          push: true
-          tags: ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}
-
-  deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [verify, frontend-verify, compose-smoke, build-push]
-    runs-on: ubuntu-latest
-    environment: production
-    concurrency:
-      group: production-deploy
-      cancel-in-progress: false
-    steps:
-      - name: Prepare SSH credentials
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          VM_SSH_KNOWN_HOSTS: ${{ vars.VM_SSH_KNOWN_HOSTS }}
-        run: |
-          ssh_key="$RUNNER_TEMP/blog-admin-system-ssh-key"
-          known_hosts="$RUNNER_TEMP/blog-admin-system-known-hosts"
-          printf '%s\n' "$SSH_PRIVATE_KEY" > "$ssh_key"
-          printf '%s\n' "$VM_SSH_KNOWN_HOSTS" > "$known_hosts"
-          chmod 600 "$ssh_key" "$known_hosts"
-      - name: Deploy to production VM
-        env:
-          VM_HOST: ${{ secrets.VM_HOST }}
-          VM_USER: ${{ secrets.VM_USER }}
-          BACKEND_IMAGE_DIGEST: ${{ needs.build-push.outputs.backend_image_digest }}
-          FRONTEND_IMAGE_DIGEST: ${{ needs.build-push.outputs.frontend_image_digest }}
-          DEPLOY_SHA: ${{ github.sha }}
-        run: |
-          ssh_key="$RUNNER_TEMP/blog-admin-system-ssh-key"
-          known_hosts="$RUNNER_TEMP/blog-admin-system-known-hosts"
-          trap 'rm -f "$ssh_key" "$known_hosts"' EXIT
-          ssh \
-            -i "$ssh_key" \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$known_hosts" \
-            "$VM_USER@$VM_HOST" \
-            "DEPLOY_SHA='$DEPLOY_SHA' BACKEND_IMAGE_DIGEST='$BACKEND_IMAGE_DIGEST' FRONTEND_IMAGE_DIGEST='$FRONTEND_IMAGE_DIGEST' bash -s" <<'REMOTE'
-          set -eu
-          cd /opt/blog-admin-system
-          git fetch --depth=1 origin "$DEPLOY_SHA"
-          git checkout --force --detach "$DEPLOY_SHA"
-          test -f .env
-          chmod 600 .env
-          BACKEND_IMAGE_DIGEST="$BACKEND_IMAGE_DIGEST" FRONTEND_IMAGE_DIGEST="$FRONTEND_IMAGE_DIGEST" ./deploy/deploy.sh
-          REMOTE
 
   jacoco-pages:
     if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
