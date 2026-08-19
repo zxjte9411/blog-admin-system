@@ -17,9 +17,60 @@
     <article class="article-detail">
       <h2>{{ detail['title'] }}</h2>
       <p>{{ detail['content'] }}</p>
+      @if (detail.tags.length) {
+        <ul class="article-tags" [attr.aria-label]="language.t.nav.tags">
+          @for (tag of detail.tags; track tag.id) {
+            <li>
+              <a
+                class="tag-pill-link"
+                [class.is-active]="isActiveTag(tag)"
+                [attr.aria-current]="isActiveTag(tag) ? 'page' : null"
+                [routerLink]="['/public/articles']"
+                [queryParams]="articleTagQuery(tag)"
+              >
+                {{ tag.name }}
+              </a>
+            </li>
+          }
+        </ul>
+      }
     </article>
   } @else if (routeKey === 'public/articles') {
     <section class="article-list-region" [attr.aria-busy]="loading">
+      <form
+        class="article-search"
+        method="get"
+        (submit)="$event.preventDefault(); search(searchInput.value)"
+      >
+        <label for="public-article-search">{{ language.t.search }}</label>
+        <div class="search-controls">
+          <input
+            #searchInput
+            id="public-article-search"
+            type="text"
+            name="title"
+            [value]="searchTitle"
+            [placeholder]="language.t.searchPlaceholder"
+            autocomplete="off"
+            enterkeyhint="search"
+          />
+          <button type="submit">{{ language.t.searchAction }}</button>
+        </div>
+      </form>
+      @if (searchTitle || hasTagFilter()) {
+        <div class="active-filters">
+          @if (searchTitle) {
+            <button class="clear-filter ui-outline" type="button" (click)="clearSearch()">
+              {{ language.t.clearSearch }}
+            </button>
+          }
+          @if (hasTagFilter()) {
+            <button class="clear-filter ui-outline" type="button" (click)="clearTagFilter()">
+              {{ language.t.clearTagFilter }}
+            </button>
+          }
+        </div>
+      }
       @if (loading && !items.length && !error) {
         <div class="article-skeleton" role="status" [attr.aria-label]="language.t.loading">
           @for (_ of articleSkeletons; track $index) {
@@ -30,11 +81,6 @@
           }
         </div>
       }
-      @if (hasTagFilter()) {
-        <a class="clear-filter ui-outline" [routerLink]="['/public/articles']">
-          {{ language.t.clearFilter }}
-        </a>
-      }
       @if (!loading && !error && !items.length) {
         <p class="empty">{{ language.t.empty }}</p>
       }
@@ -42,10 +88,33 @@
         <ul class="items">
           @for (row of items; track id(row)) {
             <li>
-              <a class="row-title" [routerLink]="['/public/articles', id(row)]">{{ title(row) }}</a>
+              <a
+                class="row-title"
+                [routerLink]="['/public/articles', id(row)]"
+                [queryParams]="detailQuery()"
+              >
+                {{ title(row) }}
+              </a>
               <span class="meta"
                 >{{ author(row) }} · {{ dateValue(row) | date: 'yyyy-MM-dd' }}</span
               >
+              @if ('tags' in row && row.tags.length) {
+                <ul class="article-tags" [attr.aria-label]="language.t.nav.tags">
+                  @for (tag of row.tags; track tag.id) {
+                    <li>
+                      <a
+                        class="tag-pill-link"
+                        [class.is-active]="isActiveTag(tag)"
+                        [attr.aria-current]="isActiveTag(tag) ? 'page' : null"
+                        [routerLink]="['/public/articles']"
+                        [queryParams]="articleTagQuery(tag)"
+                      >
+                        {{ tag.name }}
+                      </a>
+                    </li>
+                  }
+                </ul>
+              }
             </li>
           }
         </ul>

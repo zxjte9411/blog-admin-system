@@ -1,10 +1,20 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
+import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import {
+  ActivatedRoute,
+  Router,
+  RouterOutlet,
+  convertToParamMap,
+  provideRouter,
+} from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { PublicPage } from './public-page';
 import { Language } from '../core/language';
+
+@Component({ standalone: true, imports: [RouterOutlet], template: '<router-outlet />' })
+class RouterHost {}
 
 describe('PublicPage', () => {
   beforeEach(() => {
@@ -333,7 +343,7 @@ describe('PublicPage', () => {
       'Public article',
     );
     expect(fixture.nativeElement.querySelector('app-article-management-list')).toBeNull();
-    expect(fixture.nativeElement.querySelector('form')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.article-search')).toBeTruthy();
     expect(fixture.nativeElement.querySelector('button[aria-label="Delete"]')).toBeNull();
   });
 
@@ -361,13 +371,24 @@ describe('PublicPage', () => {
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
     http.expectOne('/api/v1/public/articles?page=0&size=10').flush({
-      content: [{ id: 'one', title: 'First article', authorAttribution: 'By Ada' }],
+      content: [
+        {
+          id: 'one',
+          title: 'First article',
+          authorAttribution: 'By Ada',
+          tags: [{ id: 'tag-1', name: 'News' }],
+        },
+      ],
       page: { totalPages: 1 },
     });
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('First article');
     expect(fixture.nativeElement.querySelector('a[href="/public/articles/one"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.article-tags')).toBeTruthy();
+    expect(
+      fixture.nativeElement.querySelector('.article-tags .tag-pill-link')?.getAttribute('href'),
+    ).toContain('tagId=tag-1');
   });
 
   it('uses nested Page metadata for public article pagination', async () => {
@@ -451,10 +472,15 @@ describe('PublicPage', () => {
     fixture.detectChanges();
     TestBed.inject(HttpTestingController)
       .expectOne('/api/v1/public/articles/article-1')
-      .flush({ title: 'Public title', content: 'Story' });
+      .flush({
+        title: 'Public title',
+        content: 'Story',
+        tags: [{ id: 'tag-1', name: 'News' }],
+      });
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('article').textContent).toContain('Story');
+    expect(fixture.nativeElement.querySelector('.article-tags')).toBeTruthy();
     expect(fixture.nativeElement.querySelector('button[aria-label="Delete"]')).toBeNull();
   });
 
@@ -604,5 +630,309 @@ describe('PublicPage', () => {
 
     expect(pendingPage.cancelled).toBe(true);
     http.verify();
+  });
+
+  it('loads public article filters and one-based page state from the initial URL', async () => {
+    await TestBed.configureTestingModule({
+      imports: [PublicPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'public/articles' },
+              paramMap: { get: () => null },
+              queryParamMap: convertToParamMap({
+                title: 'Angular',
+                tagId: 'tag-1',
+                page: '3',
+                pageSize: '20',
+              }),
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(PublicPage);
+    fixture.detectChanges();
+
+    const request = TestBed.inject(HttpTestingController).expectOne(
+      (req) => req.url === '/api/v1/public/articles',
+    );
+    expect(request.request.params.get('title')).toBe('Angular');
+    expect(request.request.params.get('tagId')).toBe('tag-1');
+    expect(request.request.params.get('page')).toBe('2');
+    expect(request.request.params.get('size')).toBe('20');
+  });
+
+  it('submits trimmed search and keeps filters while resetting URL pagination', async () => {
+    await TestBed.configureTestingModule({
+      imports: [PublicPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'public/articles' },
+              paramMap: { get: () => null },
+              queryParamMap: convertToParamMap({ tagId: 'tag-1', page: '2', pageSize: '20' }),
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(PublicPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/public/articles?page=1&size=20&tagId=tag-1').flush({
+      content: [{ id: 'one', title: 'Old', authorAttribution: 'By Ada' }],
+      page: { totalPages: 3 },
+    });
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const input = fixture.nativeElement.querySelector('#public-article-search') as HTMLInputElement;
+    input.value = '  Angular  ';
+    (fixture.nativeElement.querySelector('.article-search') as HTMLFormElement).requestSubmit();
+
+    const searchRequest = http.expectOne(
+      '/api/v1/public/articles?page=0&size=20&title=Angular&tagId=tag-1',
+    );
+    expect(searchRequest.request.params.get('title')).toBe('Angular');
+    expect(navigate).toHaveBeenLastCalledWith(
+      [],
+      expect.objectContaining({
+        queryParams: { title: 'Angular', page: null },
+        queryParamsHandling: 'merge',
+      }),
+    );
+    searchRequest.flush({ content: [], page: { totalPages: 0 } });
+
+    fixture.componentInstance.clearSearch();
+    http.expectOne('/api/v1/public/articles?page=0&size=20&tagId=tag-1').flush({
+      content: [],
+      page: { totalPages: 0 },
+    });
+    fixture.componentInstance.clearTagFilter();
+    http.expectOne('/api/v1/public/articles?page=0&size=20').flush({
+      content: [],
+      page: { totalPages: 0 },
+    });
+    expect(navigate).toHaveBeenLastCalledWith(
+      [],
+      expect.objectContaining({ queryParams: { page: null, tagId: null } }),
+    );
+  });
+
+  it('corrects an out-of-range URL page with replaceUrl and keeps filters', async () => {
+    await TestBed.configureTestingModule({
+      imports: [PublicPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'public/articles' },
+              paramMap: { get: () => null },
+              queryParamMap: convertToParamMap({
+                title: 'Angular',
+                tagId: 'tag-1',
+                page: '5',
+                pageSize: '20',
+                keep: 'yes',
+              }),
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const fixture = TestBed.createComponent(PublicPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/public/articles?page=4&size=20&title=Angular&tagId=tag-1').flush({
+      content: [],
+      page: { totalPages: 2 },
+    });
+
+    expect(navigate).toHaveBeenLastCalledWith(
+      [],
+      expect.objectContaining({
+        queryParams: { page: 2 },
+        queryParamsHandling: 'merge',
+        replaceUrl: true,
+      }),
+    );
+    http.expectOne('/api/v1/public/articles?page=1&size=20&title=Angular&tagId=tag-1').flush({
+      content: [{ id: 'last', title: 'Last page', authorAttribution: 'By Ada' }],
+      page: { totalPages: 2 },
+    });
+    expect(fixture.componentInstance.items[0].id).toBe('last');
+    http.verify();
+  });
+
+  it('reads detail URL state and preserves it in detail tag navigation', async () => {
+    await TestBed.configureTestingModule({
+      imports: [PublicPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'public/articles/:id' },
+              paramMap: { get: (key: string) => (key === 'id' ? 'article-1' : null) },
+              queryParamMap: convertToParamMap({
+                title: 'Angular',
+                tagId: 'tag-1',
+                page: '3',
+                pageSize: '20',
+              }),
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(PublicPage);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/public/articles/article-1')
+      .flush({
+        title: 'Public title',
+        content: 'Story',
+        tags: [{ id: 'tag-2', name: 'News' }],
+      });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.searchTitle).toBe('Angular');
+    expect(fixture.componentInstance.isActiveTag({ id: 'tag-1', name: 'Current' })).toBe(true);
+    expect(fixture.componentInstance.page).toBe(2);
+    expect(fixture.componentInstance.pageSize).toBe(20);
+    expect(fixture.componentInstance.detailQuery()).toEqual({
+      title: 'Angular',
+      tagId: 'tag-1',
+      page: 3,
+      pageSize: 20,
+    });
+    const detailTagHref = fixture.nativeElement
+      .querySelector('.article-detail .tag-pill-link')
+      ?.getAttribute('href');
+    expect(detailTagHref).toContain('title=Angular');
+    expect(detailTagHref).toContain('tagId=tag-2');
+    expect(detailTagHref).toContain('pageSize=20');
+    expect(detailTagHref).not.toContain('page=');
+  });
+
+  it('does not duplicate the request when router navigation re-emits the same query state', async () => {
+    await TestBed.configureTestingModule({
+      imports: [RouterHost],
+      providers: [
+        provideRouter([{ path: 'public/articles', component: PublicPage }]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+      ],
+    }).compileComponents();
+
+    const host = TestBed.createComponent(RouterHost);
+    const router = TestBed.inject(Router);
+    const http = TestBed.inject(HttpTestingController);
+    host.detectChanges();
+    await router.navigateByUrl('/public/articles?title=Angular&page=2&pageSize=20');
+    host.detectChanges();
+    http.expectOne('/api/v1/public/articles?page=1&size=20&title=Angular').flush({
+      content: [{ id: 'one', title: 'First', authorAttribution: 'By Ada' }],
+      page: { totalPages: 2 },
+    });
+
+    const input = host.nativeElement.querySelector('#public-article-search') as HTMLInputElement;
+    input.value = 'Angular';
+    (host.nativeElement.querySelector('.article-search') as HTMLFormElement).requestSubmit();
+    const requests = http.match('/api/v1/public/articles?page=0&size=20&title=Angular');
+    expect(requests).toHaveLength(1);
+    requests[0].flush({ content: [], page: { totalPages: 0 } });
+    await host.whenStable();
+    http.expectNone('/api/v1/public/articles?page=0&size=20&title=Angular');
+  });
+
+  it('falls back invalid URL pagination without rewriting it and does not correct empty pages', async () => {
+    await TestBed.configureTestingModule({
+      imports: [PublicPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'public/articles' },
+              paramMap: { get: () => null },
+              queryParamMap: convertToParamMap({ page: 'invalid', pageSize: '15' }),
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigate');
+    const fixture = TestBed.createComponent(PublicPage);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/public/articles?page=0&size=10')
+      .flush({ content: [], page: { totalPages: 0 } });
+
+    expect(fixture.componentInstance.page).toBe(0);
+    expect(fixture.componentInstance.pageSize).toBe(10);
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('keeps title and page size in tag directory links while removing page', async () => {
+    await TestBed.configureTestingModule({
+      imports: [PublicPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'public/tags' },
+              paramMap: { get: () => null },
+              queryParamMap: convertToParamMap({ title: 'Angular', page: '1', pageSize: '20' }),
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(PublicPage);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/public/tags?page=0&size=20')
+      .flush({ content: [{ id: 'tag-2', name: 'News' }], page: { totalPages: 1 } });
+    fixture.detectChanges();
+
+    const href = fixture.nativeElement
+      .querySelector('.tag-pill-link')
+      ?.getAttribute('href') as string;
+    expect(href).toContain('title=Angular');
+    expect(href).toContain('tagId=tag-2');
+    expect(href).toContain('pageSize=20');
+    expect(href).not.toContain('page=');
   });
 });
