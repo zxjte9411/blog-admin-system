@@ -9,18 +9,7 @@ import {
   inject,
 } from '@angular/core';
 import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
-import {
-  EMPTY,
-  Observable,
-  Subject,
-  catchError,
-  distinctUntilChanged,
-  map,
-  merge,
-  of,
-  switchMap,
-  tap,
-} from 'rxjs';
+import { EMPTY, Observable, catchError, distinctUntilChanged, map, of, switchMap, tap } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Language } from '../core/language';
 import { AppShell } from '../layouts/app-shell';
@@ -54,7 +43,6 @@ export class PublicPage implements OnInit {
   private readonly router = inject(Router);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly stateRequests = new Subject<PublicListState>();
   readonly language = inject(Language);
   routeKey = '';
   private tagId = '';
@@ -82,7 +70,7 @@ export class PublicPage implements OnInit {
       this.readDetail();
     } else if (this.routeKey === 'public/articles' || this.routeKey === 'public/tags')
       this.watchList();
-    else this.read();
+    else this.errorKey = 'notFound';
   }
 
   get heading() {
@@ -105,7 +93,7 @@ export class PublicPage implements OnInit {
     const queryRequests = (this.route.queryParamMap ?? of(this.route.snapshot.queryParamMap)).pipe(
       map((params) => this.stateFromParams(params)),
     );
-    merge(queryRequests, this.stateRequests)
+    queryRequests
       .pipe(
         distinctUntilChanged(
           (previous, current) =>
@@ -147,9 +135,10 @@ export class PublicPage implements OnInit {
   private stateFromParams(params: ParamMap): PublicListState {
     const page = Number(params.get('page'));
     const pageSize = Number(params.get('pageSize'));
+    const isTags = this.routeKey === 'public/tags';
     return {
-      title: params.get('title') ?? '',
-      tagId: params.get('tagId') ?? '',
+      title: isTags ? '' : (params.get('title') ?? ''),
+      tagId: isTags ? '' : (params.get('tagId') ?? ''),
       page: Number.isInteger(page) && page > 0 ? page - 1 : 0,
       pageSize: isPageSize(pageSize) ? pageSize : PAGE_SIZE,
     };
@@ -162,33 +151,13 @@ export class PublicPage implements OnInit {
     this.pageSize = state.pageSize;
   }
 
-  private read() {
-    this.loading = true;
-    if (this.routeKey === 'public/articles') this.cdr.markForCheck();
-    const next = (value: Page<PublicArticle | PublicTag> | (PublicArticle | PublicTag)[]) =>
-      this.updateItems(value);
-    const fail = (e: HttpErrorResponse) => this.fail(e.status);
-    if (this.routeKey === 'public/tags')
-      this.api.tags(this.page, this.pageSize).subscribe({ next, error: fail });
-    else
-      this.api
-        .list({
-          page: this.page,
-          size: this.pageSize,
-          ...(this.tagId ? { tagId: this.tagId } : {}),
-        })
-        .subscribe({
-          next,
-          error: fail,
-        });
-  }
-
   changePageSize(value: number) {
     if (!isPageSize(value) || value === this.pageSize) return;
-    this.navigateQuery(
-      { page: null, pageSize: value === PAGE_SIZE ? null : value },
-      { page: 0, pageSize: value },
-    );
+    this.navigateQuery({
+      page: null,
+      pageSize: value === PAGE_SIZE ? null : value,
+      ...(this.routeKey === 'public/tags' ? { title: null, tagId: null } : {}),
+    });
   }
 
   private updateItems(value: Page<PublicArticle | PublicTag> | (PublicArticle | PublicTag)[]) {
@@ -199,8 +168,10 @@ export class PublicPage implements OnInit {
     if (this.totalPages > 0 && this.page >= this.totalPages) {
       const lastPage = this.totalPages - 1;
       this.navigateQuery(
-        { page: lastPage === 0 ? null : lastPage + 1 },
-        { page: lastPage, pageSize: this.pageSize },
+        {
+          page: lastPage === 0 ? null : lastPage + 1,
+          ...(this.routeKey === 'public/tags' ? { title: null, tagId: null } : {}),
+        },
         true,
       );
       return;
@@ -239,7 +210,10 @@ export class PublicPage implements OnInit {
   }
 
   private navigatePage(page: number) {
-    this.navigateQuery({ page: page === 0 ? null : page + 1 }, { page, pageSize: this.pageSize });
+    this.navigateQuery({
+      page: page === 0 ? null : page + 1,
+      ...(this.routeKey === 'public/tags' ? { title: null, tagId: null } : {}),
+    });
   }
 
   private navigateQuery(
@@ -249,29 +223,21 @@ export class PublicPage implements OnInit {
       title?: string | null;
       tagId?: string | null;
     },
-    fallback: { page: number; pageSize: PageSize; title?: string; tagId?: string },
     replaceUrl = false,
   ) {
-    void this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams,
-      queryParamsHandling: 'merge',
-      replaceUrl,
-    });
-    this.stateRequests.next({
-      title: fallback.title ?? this.searchTitle,
-      tagId: fallback.tagId ?? this.tagId,
-      page: fallback.page,
-      pageSize: fallback.pageSize,
-    });
+    void this.router
+      .navigate([], {
+        relativeTo: this.route,
+        queryParams,
+        queryParamsHandling: 'merge',
+        replaceUrl,
+      })
+      .catch(() => undefined);
   }
 
   search(title: string) {
     const value = title.trim();
-    this.navigateQuery(
-      { title: value || null, page: null },
-      { page: 0, pageSize: this.pageSize, title: value },
-    );
+    this.navigateQuery({ title: value || null, page: null });
   }
 
   clearSearch() {
@@ -279,16 +245,17 @@ export class PublicPage implements OnInit {
   }
 
   clearTagFilter() {
-    this.navigateQuery(
-      { page: null, tagId: null },
-      { page: 0, pageSize: this.pageSize, tagId: '' },
-    );
+    this.navigateQuery({ page: null, tagId: null });
   }
   get pageNumbers(): number[] {
     return getPageNumbers(this.page, this.totalPages);
   }
   tagQuery(row: PublicArticle | PublicTag) {
-    return this.articleTagQuery(row as PublicTag);
+    return {
+      tagId: row.id,
+      page: null,
+      ...(this.pageSize !== PAGE_SIZE ? { pageSize: this.pageSize } : {}),
+    };
   }
   isActiveTag(tag: PublicTag) {
     return this.tagId === tag.id;

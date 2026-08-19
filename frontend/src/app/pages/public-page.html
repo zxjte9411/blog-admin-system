@@ -24,7 +24,6 @@
               <a
                 class="tag-pill-link"
                 [class.is-active]="isActiveTag(tag)"
-                [attr.aria-current]="isActiveTag(tag) ? 'page' : null"
                 [routerLink]="['/public/articles']"
                 [queryParams]="articleTagQuery(tag)"
               >
@@ -105,7 +104,6 @@
                       <a
                         class="tag-pill-link"
                         [class.is-active]="isActiveTag(tag)"
-                        [attr.aria-current]="isActiveTag(tag) ? 'page' : null"
                         [routerLink]="['/public/articles']"
                         [queryParams]="articleTagQuery(tag)"
                       >

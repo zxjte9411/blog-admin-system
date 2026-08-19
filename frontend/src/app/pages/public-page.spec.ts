@@ -61,6 +61,7 @@ describe('PublicPage', () => {
   });
 
   it('keeps public tag pagination without showing article skeletons', async () => {
+    const queryParamMap = new BehaviorSubject(convertToParamMap({}));
     await TestBed.configureTestingModule({
       imports: [PublicPage],
       providers: [
@@ -73,8 +74,9 @@ describe('PublicPage', () => {
             snapshot: {
               routeConfig: { path: 'public/tags' },
               paramMap: { get: () => null },
-              queryParamMap: { get: () => null },
+              queryParamMap: queryParamMap.value,
             },
+            queryParamMap: queryParamMap.asObservable(),
           },
         },
       ],
@@ -92,12 +94,14 @@ describe('PublicPage', () => {
 
     expect(fixture.nativeElement.querySelector('.pagination')).toBeTruthy();
     fixture.componentInstance.nextPage();
+    queryParamMap.next(convertToParamMap({ page: '2' }));
     fixture.detectChanges();
 
     http.expectOne('/api/v1/public/tags?page=1&size=10');
   });
 
   it('changes public tag page size, resets to page one, and updates controls', async () => {
+    const queryParamMap = new BehaviorSubject(convertToParamMap({}));
     await TestBed.configureTestingModule({
       imports: [PublicPage],
       providers: [
@@ -110,8 +114,9 @@ describe('PublicPage', () => {
             snapshot: {
               routeConfig: { path: 'public/tags' },
               paramMap: { get: () => null },
-              queryParamMap: { get: () => null },
+              queryParamMap: queryParamMap.value,
             },
+            queryParamMap: queryParamMap.asObservable(),
           },
         },
       ],
@@ -126,6 +131,7 @@ describe('PublicPage', () => {
       page: { totalPages: 3 },
     });
     fixture.componentInstance.nextPage();
+    queryParamMap.next(convertToParamMap({ page: '2' }));
     http.expectOne('/api/v1/public/tags?page=1&size=10').flush({
       content: [{ id: 'tag-2', name: 'Spring' }],
       page: { totalPages: 3 },
@@ -138,6 +144,7 @@ describe('PublicPage', () => {
     expect(select.getAttribute('aria-label')).toBe('Items per page');
     select.value = '100';
     select.dispatchEvent(new Event('change'));
+    queryParamMap.next(convertToParamMap({ pageSize: '100' }));
     const requests = http.match('/api/v1/public/tags?page=0&size=100');
     expect(requests).toHaveLength(1);
     requests[0].flush({ content: [{ id: 'tag-3', name: 'Release' }], page: { totalPages: 1 } });
@@ -218,6 +225,7 @@ describe('PublicPage', () => {
   });
 
   it('keeps rendered articles while a filtered pagination request is pending', async () => {
+    const queryParamMap = new BehaviorSubject(convertToParamMap({ tagId: 'tag-1' }));
     await TestBed.configureTestingModule({
       imports: [PublicPage],
       providers: [
@@ -230,8 +238,9 @@ describe('PublicPage', () => {
             snapshot: {
               routeConfig: { path: 'public/articles' },
               paramMap: { get: () => null },
-              queryParamMap: { get: (key: string) => (key === 'tagId' ? 'tag-1' : null) },
+              queryParamMap: queryParamMap.value,
             },
+            queryParamMap: queryParamMap.asObservable(),
           },
         },
       ],
@@ -247,6 +256,7 @@ describe('PublicPage', () => {
     fixture.detectChanges();
 
     fixture.componentInstance.nextPage();
+    queryParamMap.next(convertToParamMap({ tagId: 'tag-1', page: '2' }));
     fixture.detectChanges();
 
     expect(fixture.componentInstance.loading).toBe(true);
@@ -262,6 +272,7 @@ describe('PublicPage', () => {
   });
 
   it('changes filtered public article page size, keeps tagId, and sends one reset request', async () => {
+    const queryParamMap = new BehaviorSubject(convertToParamMap({ tagId: 'tag-1' }));
     await TestBed.configureTestingModule({
       imports: [PublicPage],
       providers: [
@@ -274,8 +285,9 @@ describe('PublicPage', () => {
             snapshot: {
               routeConfig: { path: 'public/articles' },
               paramMap: { get: () => null },
-              queryParamMap: { get: (key: string) => (key === 'tagId' ? 'tag-1' : null) },
+              queryParamMap: queryParamMap.value,
             },
+            queryParamMap: queryParamMap.asObservable(),
           },
         },
       ],
@@ -290,6 +302,7 @@ describe('PublicPage', () => {
       page: { totalPages: 3 },
     });
     fixture.componentInstance.nextPage();
+    queryParamMap.next(convertToParamMap({ tagId: 'tag-1', page: '2' }));
     http.expectOne('/api/v1/public/articles?page=1&size=10&tagId=tag-1').flush({
       content: [{ id: 'two', title: 'Second article', authorAttribution: 'By Ada' }],
       page: { totalPages: 3 },
@@ -303,6 +316,7 @@ describe('PublicPage', () => {
     expect(select.getAttribute('aria-label')).toBe('Items per page');
     select.value = '20';
     select.dispatchEvent(new Event('change'));
+    queryParamMap.next(convertToParamMap({ tagId: 'tag-1', pageSize: '20' }));
     const requests = http.match('/api/v1/public/articles?page=0&size=20&tagId=tag-1');
     expect(requests).toHaveLength(1);
     requests[0].flush({ content: [], page: { totalPages: 1 } });
@@ -514,6 +528,7 @@ describe('PublicPage', () => {
       page: { totalPages: 3 },
     });
     fixture.componentInstance.nextPage();
+    queryParamMap.next(convertToParamMap({ page: '2' }));
     http.expectOne('/api/v1/public/articles?page=1&size=10').flush({
       content: [{ id: 'two', title: 'Second article', authorAttribution: 'By Ada' }],
       page: { totalPages: 3 },
@@ -527,6 +542,7 @@ describe('PublicPage', () => {
     queryParamMap.next(convertToParamMap({ tagId: 'tag-a' }));
     http.expectNone('/api/v1/public/articles?page=0&size=10&tagId=tag-a');
     fixture.componentInstance.nextPage();
+    queryParamMap.next(convertToParamMap({ tagId: 'tag-a', page: '2' }));
     http.expectOne('/api/v1/public/articles?page=1&size=10&tagId=tag-a').flush({
       content: [{ id: 'tag-a-second', title: 'Tag A second', authorAttribution: 'By Ada' }],
       page: { totalPages: 2 },
@@ -581,6 +597,7 @@ describe('PublicPage', () => {
       page: { totalPages: 2 },
     });
     fixture.componentInstance.nextPage();
+    queryParamMap.next(convertToParamMap({ page: '2' }));
     const pendingPage = http.expectOne('/api/v1/public/articles?page=1&size=10');
 
     queryParamMap.next(convertToParamMap({ tagId: 'tag-a' }));
@@ -624,6 +641,7 @@ describe('PublicPage', () => {
       page: { totalPages: 2 },
     });
     fixture.componentInstance.nextPage();
+    queryParamMap.next(convertToParamMap({ page: '2' }));
     const pendingPage = http.expectOne('/api/v1/public/articles?page=1&size=10');
 
     fixture.destroy();
@@ -670,6 +688,9 @@ describe('PublicPage', () => {
   });
 
   it('submits trimmed search and keeps filters while resetting URL pagination', async () => {
+    const queryParamMap = new BehaviorSubject(
+      convertToParamMap({ tagId: 'tag-1', page: '2', pageSize: '20' }),
+    );
     await TestBed.configureTestingModule({
       imports: [PublicPage],
       providers: [
@@ -682,8 +703,9 @@ describe('PublicPage', () => {
             snapshot: {
               routeConfig: { path: 'public/articles' },
               paramMap: { get: () => null },
-              queryParamMap: convertToParamMap({ tagId: 'tag-1', page: '2', pageSize: '20' }),
+              queryParamMap: queryParamMap.value,
             },
+            queryParamMap: queryParamMap.asObservable(),
           },
         },
       ],
@@ -700,6 +722,7 @@ describe('PublicPage', () => {
     const input = fixture.nativeElement.querySelector('#public-article-search') as HTMLInputElement;
     input.value = '  Angular  ';
     (fixture.nativeElement.querySelector('.article-search') as HTMLFormElement).requestSubmit();
+    queryParamMap.next(convertToParamMap({ title: 'Angular', tagId: 'tag-1', pageSize: '20' }));
 
     const searchRequest = http.expectOne(
       '/api/v1/public/articles?page=0&size=20&title=Angular&tagId=tag-1',
@@ -715,11 +738,13 @@ describe('PublicPage', () => {
     searchRequest.flush({ content: [], page: { totalPages: 0 } });
 
     fixture.componentInstance.clearSearch();
+    queryParamMap.next(convertToParamMap({ tagId: 'tag-1', pageSize: '20' }));
     http.expectOne('/api/v1/public/articles?page=0&size=20&tagId=tag-1').flush({
       content: [],
       page: { totalPages: 0 },
     });
     fixture.componentInstance.clearTagFilter();
+    queryParamMap.next(convertToParamMap({ pageSize: '20' }));
     http.expectOne('/api/v1/public/articles?page=0&size=20').flush({
       content: [],
       page: { totalPages: 0 },
@@ -731,6 +756,15 @@ describe('PublicPage', () => {
   });
 
   it('corrects an out-of-range URL page with replaceUrl and keeps filters', async () => {
+    const queryParamMap = new BehaviorSubject(
+      convertToParamMap({
+        title: 'Angular',
+        tagId: 'tag-1',
+        page: '5',
+        pageSize: '20',
+        keep: 'yes',
+      }),
+    );
     await TestBed.configureTestingModule({
       imports: [PublicPage],
       providers: [
@@ -743,14 +777,9 @@ describe('PublicPage', () => {
             snapshot: {
               routeConfig: { path: 'public/articles' },
               paramMap: { get: () => null },
-              queryParamMap: convertToParamMap({
-                title: 'Angular',
-                tagId: 'tag-1',
-                page: '5',
-                pageSize: '20',
-                keep: 'yes',
-              }),
+              queryParamMap: queryParamMap.value,
             },
+            queryParamMap: queryParamMap.asObservable(),
           },
         },
       ],
@@ -764,6 +793,9 @@ describe('PublicPage', () => {
       content: [],
       page: { totalPages: 2 },
     });
+    queryParamMap.next(
+      convertToParamMap({ title: 'Angular', tagId: 'tag-1', page: '2', pageSize: '20' }),
+    );
 
     expect(navigate).toHaveBeenLastCalledWith(
       [],
@@ -860,6 +892,7 @@ describe('PublicPage', () => {
     const input = host.nativeElement.querySelector('#public-article-search') as HTMLInputElement;
     input.value = 'Angular';
     (host.nativeElement.querySelector('.article-search') as HTMLFormElement).requestSubmit();
+    await host.whenStable();
     const requests = http.match('/api/v1/public/articles?page=0&size=20&title=Angular');
     expect(requests).toHaveLength(1);
     requests[0].flush({ content: [], page: { totalPages: 0 } });
@@ -900,7 +933,7 @@ describe('PublicPage', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it('keeps title and page size in tag directory links while removing page', async () => {
+  it('keeps only tag and page size in tag directory links', async () => {
     await TestBed.configureTestingModule({
       imports: [PublicPage],
       providers: [
@@ -930,9 +963,161 @@ describe('PublicPage', () => {
     const href = fixture.nativeElement
       .querySelector('.tag-pill-link')
       ?.getAttribute('href') as string;
-    expect(href).toContain('title=Angular');
     expect(href).toContain('tagId=tag-2');
     expect(href).toContain('pageSize=20');
+    expect(href).not.toContain('title=Angular');
+    expect(href).not.toContain('tagId=old');
     expect(href).not.toContain('page=');
+  });
+
+  it('does not request articles when pagination navigation fails', async () => {
+    await TestBed.configureTestingModule({
+      imports: [PublicPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'public/articles' },
+              paramMap: { get: () => null },
+              queryParamMap: convertToParamMap({}),
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(PublicPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/public/articles?page=0&size=10').flush({
+      content: [{ id: 'one', title: 'First', authorAttribution: 'By Ada' }],
+      page: { totalPages: 2 },
+    });
+    vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(false);
+    fixture.detectChanges();
+
+    (fixture.nativeElement.querySelector('.next-page') as HTMLButtonElement).click();
+
+    http.expectNone('/api/v1/public/articles?page=1&size=10');
+    http.verify();
+  });
+
+  it('does not request articles when search navigation fails', async () => {
+    await TestBed.configureTestingModule({
+      imports: [PublicPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'public/articles' },
+              paramMap: { get: () => null },
+              queryParamMap: convertToParamMap({}),
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(PublicPage);
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('/api/v1/public/articles?page=0&size=10').flush({
+      content: [{ id: 'one', title: 'First', authorAttribution: 'By Ada' }],
+      page: { totalPages: 1 },
+    });
+    vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(false);
+    const input = fixture.nativeElement.querySelector('#public-article-search') as HTMLInputElement;
+    input.value = 'Angular';
+
+    (fixture.nativeElement.querySelector('.article-search') as HTMLFormElement).requestSubmit();
+
+    http.expectNone('/api/v1/public/articles?page=0&size=10&title=Angular');
+    http.verify();
+  });
+
+  it('uses only the selected tag and page size in tag directory hrefs', async () => {
+    await TestBed.configureTestingModule({
+      imports: [PublicPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'public/tags' },
+              paramMap: { get: () => null },
+              queryParamMap: convertToParamMap({
+                title: 'Angular',
+                tagId: 'old',
+                pageSize: '20',
+              }),
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(PublicPage);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/public/tags?page=0&size=20')
+      .flush({ content: [{ id: 'new', name: 'News' }], page: { totalPages: 1 } });
+    fixture.detectChanges();
+
+    const href = fixture.nativeElement.querySelector('.tag-pill-link')?.getAttribute('href');
+    const query = new URL(href, document.baseURI).searchParams;
+    expect(Object.fromEntries(query.entries())).toEqual({ tagId: 'new', pageSize: '20' });
+  });
+
+  it('keeps active tag styling without aria-current on tag pills', async () => {
+    await TestBed.configureTestingModule({
+      imports: [PublicPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              routeConfig: { path: 'public/articles' },
+              paramMap: { get: () => null },
+              queryParamMap: convertToParamMap({ tagId: 'tag-1' }),
+            },
+          },
+        },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(PublicPage);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/public/articles?page=0&size=10&tagId=tag-1')
+      .flush({
+        content: [
+          {
+            id: 'article-1',
+            title: 'First',
+            authorAttribution: 'By Ada',
+            tags: [{ id: 'tag-1', name: 'News' }],
+          },
+        ],
+        page: { totalPages: 1 },
+      });
+    fixture.detectChanges();
+
+    const pill = fixture.nativeElement.querySelector('.article-tags .tag-pill-link') as HTMLElement;
+    expect(pill.classList.contains('is-active')).toBe(true);
+    expect(pill.getAttribute('aria-current')).toBeNull();
   });
 });
