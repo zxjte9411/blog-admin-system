@@ -101,6 +101,7 @@
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.m2,target=/root/.m2,type=bind,consistency=cached",
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/root/.gitconfig,type=bind,consistency=cached",
     "source=${localWorkspaceFolder}/.devcontainer/.zshrc,target=/root/.zshrc,type=bind,consistency=cached",
-    "source=/Users/bill/Documents/resume,target=/workspaces/resume,type=bind,consistency=cached"
+    "source=/Users/bill/Documents/resume,target=/workspaces/resume,type=bind,consistency=cached",
+    "source=/Users/bill/Documents/chatgpt/chatgpt-export-markdown,target=/workspaces/chatgpt-history,type=bind,consistency=cached"
   ]
 }
